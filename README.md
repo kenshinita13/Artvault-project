@@ -4,34 +4,27 @@ ArtVault is a modern, dark-themed, glassmorphic portfolio showcase web applicati
 
 ## 🚀 Key Features
 - **Global Art Showcase**: High-resolution gallery display with search bar filters.
-- **Maximized Lightbox Details Modal**: Beautiful double-column split details modal with support for click-to-zoom manual image enlargement.
+- **Maximized Lightbox details Modal**: Beautiful double-column split details modal with support for click-to-zoom manual image enlargement.
 - **Searchable Artists Directory**: Browse other registered creators, check their creation counts, and inspect their portfolios.
 - **Public Creator Portfolios**: Specific artist-focused showcases showcasing only their respective uploads.
 - **Artist & Admin Dashboards**: Role-based access control allowing creators to manage their own uploads, and admins to manage all users, uploads, database states, and descriptions.
-- **Self-Initializing SQLite Database**: No database server setup required! The database initializes and seeds itself automatically upon launch.
 
 ---
 
 ## 🛠️ Setup Instructions
 
-### 1. Clone the repository
-Clone this project directory to any folder on your machine:
-```bash
-git clone https://github.com/kenshinita13/Projects.git Artvaultv3
-```
+### Using XAMPP / Apache (Traditional)
+This option serves the project directly through XAMPP's built-in Apache server.
 
-### 2. Start the Server
-Navigate into the project directory and run:
-```bash
-npm start
-```
-*Note: The built-in launcher will automatically locate your PHP executable (from XAMPP or system path) and serve the application on `http://localhost:8000`.*
-
-### 3. Open the Browser
-Open your browser and navigate to:
-```
-http://localhost:8000/
-```
+1. **Clone the repository** inside your XAMPP `htdocs` folder:
+   - *Windows*: `C:\xampp\htdocs\Artvaultv3` (or your local custom XAMPP installation directory)
+   - *macOS*: `/Applications/XAMPP/xamppfiles/htdocs/Artvaultv3`
+   ```bash
+   git clone https://github.com/kenshinita13/Projects.git Artvaultv3
+   ```
+2. **Start Servers**: Start Apache and MySQL in your XAMPP Control Panel.
+3. **Import Database Schema**: Create a database named `users_db` in `http://localhost/phpmyadmin/` and import `users_db.sql`.
+4. **Open browser**: Visit `http://localhost/Artvaultv3/`.
 
 ---
 
