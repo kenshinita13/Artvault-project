@@ -96,6 +96,19 @@ Users can change their accounts' login passwords directly through a dedicated se
 #### 2. Layout Structure
 Renders inside a dedicated **"🔒 Change Password"** panel in the Settings view, containing a separate form and submit button to avoid collision with standard profile details updates.
 
+### F. Sleek Waffle Navigation Drawer & Profile Avatar Link
+Optimized the navigation architecture across all public gallery showcase pages (`home.php`, `profiles.php`, and `profile.php`) to introduce modern app-style controls.
+
+#### 1. Left-Side Waffle Menu Trigger & Drawer
+- **Waffle Grid Icon**: Appears on the left side of the navbar, triggering a 90-degree rotate animation on hover.
+- **Slide-Out Side Drawer**: Clicking the waffle icon slides in a sleek left navigation drawer (`left: 0` from `-320px`) with a backdrop blur overlay (`backdrop-filter: blur(4px)`).
+- **Navigation Shortcuts**: Provides direct items to the Global Showcase, Artists Directory, private Studio Dashboard, Profile Settings, Post New Artwork, and Logout.
+
+#### 2. Top-Right Profile Avatar Shortcut
+- **Interactive Avatar Button**: Replaced static buttons on the top right of the navbar with a circular avatar image.
+- **Initials Fallback**: Displays the first letter of the user's name styled on a dark background when no profile avatar is uploaded.
+- **Direct Redirection**: Clicking the avatar redirects the user immediately to their private Dashboard page (`user_page.php` or `admin_page.php`) where they can customize their profile picture, manage uploads, or update passwords.
+
 ---
 
 ## 🗄️ Database Schema Updates
