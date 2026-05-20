@@ -1013,7 +1013,10 @@ if ($total_artworks > 0) {
                 <h2 id="tab-title-text">Studio Gallery</h2>
                 <p>Manage and display your creative artworks</p>
             </div>
-            <div class="dashboard-actions">
+            <div class="dashboard-actions" style="display: flex; gap: 10px;">
+                <a href="home.php" class="btn btn-secondary" style="text-decoration: none;">
+                    🌐 View Gallery
+                </a>
                 <button class="btn btn-primary" onclick="openModal('uploadArtModal')">
                     📤 Upload New Art
                 </button>
@@ -1338,9 +1341,11 @@ if ($total_artworks > 0) {
             localStorage.setItem('activeArtistTab', tabId);
         }
 
-        // Restore active tab from localStorage on DOM load
+        // Restore active tab from query parameter or localStorage on DOM load
         document.addEventListener('DOMContentLoaded', () => {
-            const savedTab = localStorage.getItem('activeArtistTab') || 'studio';
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            const savedTab = tabParam || localStorage.getItem('activeArtistTab') || 'studio';
             const btn = document.querySelector(`.sidebar button[onclick*="${savedTab}"]`);
             if (btn) {
                 showTab(savedTab, btn);

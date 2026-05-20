@@ -97,19 +97,25 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
         }
 
         /* Nav Avatar Button styling */
+        .nav-avatar-container {
+            position: relative;
+            display: inline-block;
+        }
         .nav-avatar-btn {
+            background: none;
+            border: 2px solid var(--panel-border);
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
             width: 42px;
             height: 42px;
             border-radius: 50%;
             overflow: hidden;
-            border: 2px solid var(--panel-border);
-            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
             background: var(--input-bg);
-            text-decoration: none;
-            margin-left: 10px;
+            transition: all 0.3s ease;
         }
         .nav-avatar-btn:hover {
             border-color: var(--accent);
@@ -125,6 +131,76 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
             font-size: 15px;
             font-weight: 700;
             color: white;
+        }
+
+        /* Dropdown Menu */
+        .avatar-dropdown {
+            position: absolute;
+            top: 55px;
+            right: 0;
+            width: 240px;
+            background: rgba(18, 18, 24, 0.98);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            z-index: 100002;
+            display: none;
+            flex-direction: column;
+            padding: 8px 0;
+            backdrop-filter: blur(20px);
+            transform: translateY(10px);
+            opacity: 0;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .avatar-dropdown.open {
+            display: flex;
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .dropdown-header {
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 6px;
+            text-align: left;
+        }
+        .dropdown-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .dropdown-email {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            word-break: break-all;
+        }
+        .dropdown-item {
+            padding: 10px 18px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+        .dropdown-item:hover {
+            color: var(--text-primary);
+            background: rgba(168, 85, 247, 0.1);
+        }
+        .dropdown-item.logout {
+            color: #ef4444;
+        }
+        .dropdown-item.logout:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .dropdown-divider {
+            border: none;
+            border-top: 1px solid var(--panel-border);
+            margin: 6px 0;
         }
 
         /* Drawer Navigation styling */
@@ -526,13 +602,34 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
             <a href="home.php" class="btn btn-secondary">
                 🖼️ Gallery
             </a>
-            <a href="<?= $dashboard_url ?>" class="nav-avatar-btn" title="Go to My Studio Dashboard">
-                <?php if (!empty($currentUser['profile_pic']) && file_exists($currentUser['profile_pic'])): ?>
-                    <img src="<?= htmlspecialchars($currentUser['profile_pic']) ?>" alt="Avatar">
-                <?php else: ?>
-                    <span class="nav-avatar-initials"><?= $current_user_initial ?></span>
-                <?php endif; ?>
-            </a>
+            <div class="nav-avatar-container">
+                <button class="nav-avatar-btn" onclick="toggleAvatarDropdown(event)" title="Account Menu">
+                    <?php if (!empty($currentUser['profile_pic']) && file_exists($currentUser['profile_pic'])): ?>
+                        <img src="<?= htmlspecialchars($currentUser['profile_pic']) ?>" alt="Avatar">
+                    <?php else: ?>
+                        <span class="nav-avatar-initials"><?= $current_user_initial ?></span>
+                    <?php endif; ?>
+                </button>
+                <div id="avatar-dropdown" class="avatar-dropdown">
+                    <div class="dropdown-header">
+                        <span class="dropdown-name"><?= htmlspecialchars($currentUser['name'] ?? 'User') ?></span>
+                        <span class="dropdown-email"><?= htmlspecialchars($email) ?></span>
+                    </div>
+                    <a href="profile.php?id=<?= $current_user_id ?>" class="dropdown-item">
+                        👤 View Public Profile
+                    </a>
+                    <a href="<?= $dashboard_url ?>" class="dropdown-item">
+                        🛡️ Studio Dashboard
+                    </a>
+                    <a href="<?= $dashboard_url ?>?tab=settings" class="dropdown-item">
+                        ⚙️ Edit Profile / Settings
+                    </a>
+                    <hr class="dropdown-divider">
+                    <a href="logout.php" class="dropdown-item logout">
+                        🚪 Logout Session
+                    </a>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -623,6 +720,21 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
             document.getElementById('nav-drawer').classList.toggle('open');
             document.getElementById('drawer-overlay').classList.toggle('open');
         }
+
+        // Toggle avatar settings dropdown
+        function toggleAvatarDropdown(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('avatar-dropdown');
+            if (dd) {
+                dd.classList.toggle('open');
+            }
+        }
+        window.addEventListener('click', () => {
+            const dd = document.getElementById('avatar-dropdown');
+            if (dd && dd.classList.contains('open')) {
+                dd.classList.remove('open');
+            }
+        });
     </script>
 </body>
 </html>

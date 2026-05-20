@@ -1019,7 +1019,10 @@ $all_images = $conn->query("SELECT * FROM images ORDER BY id DESC");
                 <h2 id="tab-title-text">Dashboard Overview</h2>
                 <p>Real-time system state and operations</p>
             </div>
-            <div class="dashboard-actions">
+            <div class="dashboard-actions" style="display: flex; gap: 10px;">
+                <a href="home.php" class="btn btn-secondary" style="text-decoration: none;">
+                    🌐 View Gallery
+                </a>
                 <button class="btn btn-primary" onclick="openModal('addUserModal')">
                     ➕ Add User
                 </button>
@@ -1524,9 +1527,11 @@ $all_images = $conn->query("SELECT * FROM images ORDER BY id DESC");
             localStorage.setItem('activeAdminTab', tabId);
         }
 
-        // Restore active tab from localStorage on DOM load
+        // Restore active tab from query parameter or localStorage on DOM load
         document.addEventListener('DOMContentLoaded', () => {
-            const savedTab = localStorage.getItem('activeAdminTab') || 'overview';
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            const savedTab = tabParam || localStorage.getItem('activeAdminTab') || 'overview';
             const btn = document.querySelector(`.sidebar button[onclick*="${savedTab}"]`);
             if (btn) {
                 showTab(savedTab, btn);
