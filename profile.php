@@ -399,6 +399,7 @@ $profile_initial = strtoupper(substr($profile_name, 0, 1));
             cursor: zoom-in;
             position: relative;
             transition: all 0.3s ease;
+            overflow: hidden;
         }
 
         .lightbox-img-wrapper img {
@@ -406,6 +407,8 @@ $profile_initial = strtoupper(substr($profile_name, 0, 1));
             height: 100%;
             object-fit: contain;
             max-height: 100% !important;
+            user-select: none;
+            -webkit-user-drag: none;
         }
 
         /* Fullscreen Image Zoom Mode */
@@ -419,7 +422,8 @@ $profile_initial = strtoupper(substr($profile_name, 0, 1));
             max-height: 100vh !important;
             z-index: 100000;
             background: rgba(0, 0, 0, 0.96);
-            cursor: zoom-out;
+            cursor: grab;
+            overflow: hidden;
         }
 
         .lightbox-img-wrapper.fullscreen img {
@@ -777,14 +781,89 @@ $profile_initial = strtoupper(substr($profile_name, 0, 1));
             });
         }
 
+        // Zoom and Pan variables
+        let isZoomed = false;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let currentTranslateX = 0, currentTranslateY = 0;
+        let startTranslateX = 0, startTranslateY = 0;
+        let hasDragged = false;
+
+        const lightboxWrapper = document.querySelector('.lightbox-img-wrapper');
+        const lightboxImg = document.getElementById('lightbox-img');
+
+        function resetZoom() {
+            isZoomed = false;
+            isDragging = false;
+            currentTranslateX = 0;
+            currentTranslateY = 0;
+            if (lightboxImg) {
+                lightboxImg.style.transform = 'none';
+                lightboxImg.style.cursor = 'zoom-in';
+            }
+            if (lightboxWrapper) {
+                lightboxWrapper.classList.remove('fullscreen');
+            }
+        }
+
         function closeLightbox() {
             closeModal('lightbox-modal');
-            document.querySelector('.lightbox-img-wrapper').classList.remove('fullscreen');
+            resetZoom();
         }
 
         function toggleImageZoom(e) {
             e.stopPropagation();
-            document.querySelector('.lightbox-img-wrapper').classList.toggle('fullscreen');
+            if (isZoomed) {
+                if (hasDragged) {
+                    hasDragged = false;
+                    return;
+                }
+                resetZoom();
+            } else {
+                isZoomed = true;
+                if (lightboxWrapper) {
+                    lightboxWrapper.classList.add('fullscreen');
+                }
+                if (lightboxImg) {
+                    lightboxImg.style.transform = 'scale(2.5) translate(0px, 0px)';
+                    lightboxImg.style.cursor = 'grab';
+                }
+            }
+        }
+
+        // Mouse pan event handlers
+        if (lightboxWrapper && lightboxImg) {
+            lightboxWrapper.addEventListener('mousedown', (e) => {
+                if (!isZoomed) return;
+                if (e.button !== 0) return; // Left mouse click only
+                e.preventDefault();
+                isDragging = true;
+                hasDragged = false;
+                startX = e.clientX;
+                startY = e.clientY;
+                startTranslateX = currentTranslateX;
+                startTranslateY = currentTranslateY;
+                lightboxImg.style.cursor = 'grabbing';
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                if (Math.hypot(dx, dy) > 5) {
+                    hasDragged = true;
+                }
+                currentTranslateX = startTranslateX + dx;
+                currentTranslateY = startTranslateY + dy;
+                // Move image smoothly by correcting for scale factor
+                lightboxImg.style.transform = `scale(2.5) translate(${currentTranslateX / 2.5}px, ${currentTranslateY / 2.5}px)`;
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                lightboxImg.style.cursor = 'grab';
+            });
         }
 
         // Close modals on Escape key
