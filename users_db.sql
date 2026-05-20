@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` varchar(100) NOT NULL UNIQUE,
   `password` varchar(255) NOT NULL,
   `role` enum('user','admin') DEFAULT 'user',
+  `profile_pic` varchar(255) DEFAULT 'uploads/default_avatar.svg',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

@@ -560,8 +560,12 @@ $profile_initial = strtoupper(substr($profile_name, 0, 1));
         
         <!-- Header Profile Card -->
         <div class="studio-header-card">
-            <div class="studio-avatar">
-                <?= $profile_initial ?>
+            <div class="studio-avatar" style="overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center;">
+                <?php if (!empty($profile_user['profile_pic']) && file_exists($profile_user['profile_pic'])): ?>
+                    <img src="<?= htmlspecialchars($profile_user['profile_pic']) ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                <?php else: ?>
+                    <?= $profile_initial ?>
+                <?php endif; ?>
             </div>
             <div class="studio-meta">
                 <h1><?= htmlspecialchars($profile_name) ?></h1>

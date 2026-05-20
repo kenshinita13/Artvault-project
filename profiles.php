@@ -392,8 +392,12 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
                     $badge_class = ($role === 'admin') ? 'artist-badge admin-badge' : 'artist-badge';
             ?>
                 <div class="profile-card">
-                    <div class="avatar-placeholder">
-                        <?= $initial ?>
+                    <div class="avatar-placeholder" style="overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center;">
+                        <?php if (!empty($row['profile_pic']) && file_exists($row['profile_pic'])): ?>
+                            <img src="<?= htmlspecialchars($row['profile_pic']) ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                        <?php else: ?>
+                            <?= $initial ?>
+                        <?php endif; ?>
                     </div>
                     <div class="artist-name"><?= htmlspecialchars($name) ?></div>
                     <div class="artist-handle">@<?= htmlspecialchars($username) ?></div>

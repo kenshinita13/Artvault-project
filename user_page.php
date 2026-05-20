@@ -177,13 +177,54 @@ if (isset($_POST['update_profile'])) {
         exit();
     }
     
+    // Handle profile picture upload if selected
+    $profile_pic_path = null;
+    if (isset($_FILES['profile_pic']) && $_FILES['profile_pic']['error'] == 0) {
+        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'svg'];
+        $ext = strtolower(pathinfo($_FILES['profile_pic']['name'], PATHINFO_EXTENSION));
+        if (in_array($ext, $allowed)) {
+            // Check size (max 2MB)
+            if ($_FILES['profile_pic']['size'] <= 2 * 1024 * 1024) {
+                $new_avatar_name = "avatar_" . $user_id . "_" . time() . "." . $ext;
+                $upload_dir = "uploads/";
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0755, true);
+                }
+                $dest_path = $upload_dir . $new_avatar_name;
+                if (move_uploaded_file($_FILES['profile_pic']['tmp_name'], $dest_path)) {
+                    $profile_pic_path = $dest_path;
+                    // Delete old profile picture if not default
+                    if (!empty($currentUser['profile_pic']) && $currentUser['profile_pic'] !== 'uploads/default_avatar.svg' && file_exists($currentUser['profile_pic'])) {
+                        @unlink($currentUser['profile_pic']);
+                    }
+                }
+            } else {
+                header("Location: user_page.php?action=error&message=Profile picture exceeds maximum size of 2MB.");
+                exit();
+            }
+        } else {
+            header("Location: user_page.php?action=error&message=Invalid file type for profile picture.");
+            exit();
+        }
+    }
+    
     if (!empty($prof_pass)) {
         $hashed_pass = password_hash($prof_pass, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, password = ? WHERE id = ?");
-        $stmt->bind_param("ssssi", $prof_name, $prof_username, $prof_email, $hashed_pass, $user_id);
+        if ($profile_pic_path) {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, password = ?, profile_pic = ? WHERE id = ?");
+            $stmt->bind_param("sssssi", $prof_name, $prof_username, $prof_email, $hashed_pass, $profile_pic_path, $user_id);
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, password = ? WHERE id = ?");
+            $stmt->bind_param("ssssi", $prof_name, $prof_username, $prof_email, $hashed_pass, $user_id);
+        }
     } else {
-        $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ? WHERE id = ?");
-        $stmt->bind_param("sssi", $prof_name, $prof_username, $prof_email, $user_id);
+        if ($profile_pic_path) {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, profile_pic = ? WHERE id = ?");
+            $stmt->bind_param("ssssi", $prof_name, $prof_username, $prof_email, $profile_pic_path, $user_id);
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ? WHERE id = ?");
+            $stmt->bind_param("sssi", $prof_name, $prof_username, $prof_email, $user_id);
+        }
     }
     
     $stmt->execute();
@@ -194,6 +235,7 @@ if (isset($_POST['update_profile'])) {
     header("Location: user_page.php?action=profile_success");
     exit();
 }
+
 
 
 // --- FETCH DATA FOR DASHBOARD ---
@@ -920,8 +962,12 @@ if ($total_artworks > 0) {
 
         <div class="sidebar-footer">
             <div class="user-meta">
-                <div class="user-avatar">
-                    <?= strtoupper(substr($currentUser['name'], 0, 2)); ?>
+                <div class="user-avatar" style="overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center;">
+                    <?php if (!empty($currentUser['profile_pic']) && file_exists($currentUser['profile_pic'])): ?>
+                        <img src="<?= htmlspecialchars($currentUser['profile_pic']) ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                    <?php else: ?>
+                        <?= strtoupper(substr($currentUser['name'], 0, 2)); ?>
+                    <?php endif; ?>
                 </div>
                 <div class="user-details">
                     <span class="user-name"><?= htmlspecialchars($currentUser['name']); ?></span>
@@ -1069,7 +1115,18 @@ if ($total_artworks > 0) {
                 <h3>⚙️ Profile & Studio Settings</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 20px; text-align: left;">Modify your public artist details and credentials.</p>
                 
-                <form method="post">
+                <form method="post" enctype="multipart/form-data">
+                    <div class="form-group" style="text-align: center; margin-bottom: 25px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Profile Picture</label>
+                        <div style="position: relative; display: inline-block;">
+                            <img src="<?= !empty($currentUser['profile_pic']) ? htmlspecialchars($currentUser['profile_pic']) : 'uploads/default_avatar.svg' ?>" alt="Profile Picture" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid var(--accent); box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+                        </div>
+                        <div style="margin-top: 12px;">
+                            <input type="file" name="profile_pic" accept="image/*" class="form-control" style="max-width: 300px; margin: 0 auto; font-size: 13px;">
+                            <small style="color: var(--text-secondary); display: block; margin-top: 5px;">Supports: PNG, JPG, JPEG, GIF, SVG (Max 2MB)</small>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="prof_name">Artist / Display Name</label>
                         <input type="text" id="prof_name" name="name" class="form-control" value="<?= htmlspecialchars($currentUser['name']) ?>" required>

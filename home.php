@@ -679,7 +679,7 @@ if (isset($_POST['upload_art']) && isset($_FILES['image'])) {
             $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
             
             if (!empty($search)) {
-                $query = "SELECT images.*, users.name as artist_name, users.username as artist_username 
+                $query = "SELECT images.*, users.name as artist_name, users.username as artist_username, users.profile_pic as artist_profile_pic 
                           FROM images 
                           LEFT JOIN users ON images.user_id = users.id 
                           WHERE images.image_name LIKE '%$search%' 
@@ -688,7 +688,7 @@ if (isset($_POST['upload_art']) && isset($_FILES['image'])) {
                              OR users.username LIKE '%$search%' 
                           ORDER BY images.id DESC";
             } else {
-                $query = "SELECT images.*, users.name as artist_name, users.username as artist_username 
+                $query = "SELECT images.*, users.name as artist_name, users.username as artist_username, users.profile_pic as artist_profile_pic 
                           FROM images 
                           LEFT JOIN users ON images.user_id = users.id 
                           ORDER BY images.id DESC";
@@ -736,8 +736,17 @@ if (isset($_POST['upload_art']) && isset($_FILES['image'])) {
                             <?= !empty($description) ? htmlspecialchars($description) : 'No description provided.' ?>
                         </div>
                         
-                        <div class="art-meta">
-                            <span class="art-author"><?= htmlspecialchars($artist) ?></span>
+                        <div class="art-meta" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                            <div class="art-author-wrapper" style="display: flex; align-items: center; gap: 8px;">
+                                <div class="art-author-avatar" style="width: 22px; height: 22px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);">
+                                    <?php if (!empty($row['artist_profile_pic']) && file_exists($row['artist_profile_pic'])): ?>
+                                        <img src="<?= htmlspecialchars($row['artist_profile_pic']) ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                                    <?php else: ?>
+                                        <span style="font-size: 10px; font-weight: 700; color: var(--text-secondary);"><?= strtoupper(substr($artist, 0, 1)) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <span class="art-author" style="font-size: 13px; font-weight: 500; color: var(--text-secondary);"><?= htmlspecialchars($artist) ?></span>
+                            </div>
                             <span class="art-date"><?= date("M d, Y", strtotime($row['created_at'])) ?></span>
                         </div>
 
