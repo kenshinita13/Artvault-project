@@ -69,6 +69,22 @@ Developed two interchangeable execution configurations depending on the local wo
 - Transitioned query structures into PDO SQLite wrapper emulators to initialize database layers dynamically inside an `artvault.sqlite` file.
 - *Status*: Code has been fully reverted to Apache based on environment needs, preserving Git-tracking cleanliness.
 
+#### 3. Execution Verification
+A browser validation sweep confirmed that switching configs maintains clean state mapping without errors.
+
+---
+
+### D. Secure Password Updates
+Users can change their accounts' login passwords directly through a dedicated security panel.
+
+#### 1. Security Verification Requirements
+- **Current Password Input**: Matches current hashed records via `password_verify()`.
+- **New Password Input**: Specifies the new security key (min length: 6 characters).
+- **Confirm Password Input**: Must match the new password precisely.
+
+#### 2. Layout Structure
+Renders inside a dedicated **"🔒 Change Password"** panel in the Settings view, containing a separate form and submit button to avoid collision with standard profile details updates.
+
 ---
 
 ## 🗄️ Database Schema Updates
@@ -187,4 +203,68 @@ if (isset($_FILES['profile_pic']) && $_FILES['profile_pic']['error'] == 0) {
     <span class="art-date"><?= date("M d, Y", strtotime($row['created_at'])) ?></span>
 </div>
 ```
+
+### 5. Change Password Form Controller & Markup (`user_page.php`)
+```php
+// PHP Backend POST Handler
+if (isset($_POST['change_password'])) {
+    $current_pass = $_POST['current_password'];
+    $new_pass = $_POST['new_password'];
+    $confirm_pass = $_POST['confirm_password'];
+    
+    $user_res = $conn->query("SELECT password FROM users WHERE id = $user_id");
+    $user_data = $user_res->fetch_assoc();
+    
+    if ($user_data && password_verify($current_pass, $user_data['password'])) {
+        if ($new_pass === $confirm_pass) {
+            if (strlen($new_pass) >= 6) {
+                $hashed_new = password_hash($new_pass, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+                $stmt->bind_param("si", $hashed_new, $user_id);
+                $stmt->execute();
+                header("Location: user_page.php?action=password_success");
+                exit();
+            } else {
+                header("Location: user_page.php?action=error&message=New password must be at least 6 characters.");
+                exit();
+            }
+        } else {
+            header("Location: user_page.php?action=error&message=Passwords do not match.");
+            exit();
+        }
+    } else {
+        header("Location: user_page.php?action=error&message=Incorrect current password.");
+        exit();
+    }
+}
+```
+
+```html
+<!-- HTML Frontend Card Form -->
+<div class="content-card" style="max-width: 600px; margin: 0 auto;">
+    <h3>🔒 Change Password</h3>
+    <form method="post">
+        <div class="form-group">
+            <label for="curr_pass">Current Password</label>
+            <input type="password" id="curr_pass" name="current_password" class="form-control" required>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="new_pass">New Password</label>
+                <input type="password" id="new_pass" name="new_password" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="confirm_pass">Confirm New Password</label>
+                <input type="password" id="confirm_pass" name="confirm_password" class="form-control" required>
+            </div>
+        </div>
+        <div style="text-align: right; margin-top: 10px;">
+            <button type="submit" name="change_password" class="btn btn-primary">
+                🔑 Update Password
+            </button>
+        </div>
+    </form>
+</div>
+```
+
 
