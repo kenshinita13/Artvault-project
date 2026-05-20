@@ -41,19 +41,21 @@ Artists can now upload custom avatars to personalize their gallery page, replaci
 
 ---
 
-### B. Inline Gallery Description Editing
-Allows artists to edit descriptions of their uploaded artworks directly inside the gallery details lightbox without reloading the page.
+### B. Artwork Description and Title Management
+Allows artists to assign and edit descriptions of their uploaded artworks at multiple lifecycle stages:
 
-#### 1. AJAX Backend Handler (`edit_description.php`)
-- Accepts AJAX POST requests containing `image_id` and the new `description`.
-- Checks that the user is logged in.
-- **Authorization Verification**: Ensures that the editing user is either the **original posting artist** of that artwork or an **Administrator**.
-- Returns JSON response outputs (`{status: "success"}` or `{status: "error", message: "..."}`).
+#### 1. Description Entry During Upload (`user_page.php`)
+- Added a Description input field inside the **"Upload New Artwork"** modal.
+- Submitting the form writes the title, file path, and description parameters to the database simultaneously.
 
-#### 2. Inline Widgets (`home.php` & `profile.php`)
-- Double-clicking the description triggers an inline transition from a paragraph element to an editable text-area input field.
-- Renders **Edit / Save / Cancel** action controls.
-- Employs the JavaScript `Fetch API` to submit changes asynchronously.
+#### 2. Unified Details Editing Modal (`user_page.php`)
+- Redesigned the Dashboard's **"Rename"** modal to act as an **"Edit Artwork Details"** dialog.
+- Allows changing the artwork's display title and writing/updating the description.
+- Retains physical renaming checks on the storage volume to keep the filename aligned with the title.
+
+#### 3. Inline Gallery Lightbox Editing (`home.php` & `profile.php`)
+- Retained inline double-click editing of descriptions directly inside the public showcase lightbox.
+- Employs an AJAX backend endpoint (`edit_description.php`) checking session-based owner or administrator privilege.
 
 ---
 
