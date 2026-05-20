@@ -36,6 +36,7 @@ function sanitize($conn, $data) {
 // 1. Upload Artwork
 if (isset($_POST['upload_art']) && isset($_FILES['image'])) {
     $art_title = sanitize($conn, $_POST['title']);
+    $description = isset($_POST['description']) ? sanitize($conn, $_POST['description']) : '';
     
     $fileName = time() . "_" . $_FILES['image']['name'];
     $tmpName = $_FILES['image']['tmp_name'];
@@ -57,8 +58,8 @@ if (isset($_POST['upload_art']) && isset($_FILES['image'])) {
             // Clean title for database
             $clean_title = !empty($art_title) ? preg_replace('/[^a-zA-Z0-9_\- ]/', '', $art_title) : pathinfo($_FILES['image']['name'], PATHINFO_FILENAME);
             
-            $stmt = $conn->prepare("INSERT INTO images (file_path, image_name, image_path, user_id) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("sssi", $filePath, $clean_title, $filePath, $user_id);
+            $stmt = $conn->prepare("INSERT INTO images (file_path, image_name, image_path, user_id, description) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssis", $filePath, $clean_title, $filePath, $user_id, $description);
             $stmt->execute();
             
             header("Location: user_page.php?action=upload_success");
@@ -107,10 +108,11 @@ if (isset($_POST['delete_art'])) {
     }
 }
 
-// 3. Rename Artwork (Only their own)
+// 3. Rename/Edit Artwork (Only their own)
 if (isset($_POST['rename_art'])) {
     $image_id = (int)$_POST['image_id'];
     $new_title = trim($_POST['new_title']);
+    $new_desc = isset($_POST['new_description']) ? sanitize($conn, $_POST['new_description']) : '';
     
     // Fetch and check owner
     $stmt = $conn->prepare("SELECT file_path, user_id FROM images WHERE id = ?");
@@ -130,8 +132,8 @@ if (isset($_POST['rename_art'])) {
             
             if (file_exists($old_path)) {
                 if (rename($old_path, $new_path)) {
-                    $upd_stmt = $conn->prepare("UPDATE images SET file_path = ?, image_path = ?, image_name = ? WHERE id = ?");
-                    $upd_stmt->bind_param("sssi", $new_path, $new_path, $new_title_clean, $image_id);
+                    $upd_stmt = $conn->prepare("UPDATE images SET file_path = ?, image_path = ?, image_name = ?, description = ? WHERE id = ?");
+                    $upd_stmt->bind_param("ssssi", $new_path, $new_path, $new_title_clean, $new_desc, $image_id);
                     $upd_stmt->execute();
                     header("Location: user_page.php?action=rename_success");
                     exit();
@@ -141,8 +143,8 @@ if (isset($_POST['rename_art'])) {
                 }
             } else {
                 // Update db anyway if physical file is missing
-                $upd_stmt = $conn->prepare("UPDATE images SET file_path = ?, image_path = ?, image_name = ? WHERE id = ?");
-                $upd_stmt->bind_param("sssi", $new_path, $new_path, $new_title_clean, $image_id);
+                $upd_stmt = $conn->prepare("UPDATE images SET file_path = ?, image_path = ?, image_name = ?, description = ? WHERE id = ?");
+                $upd_stmt->bind_param("ssssi", $new_path, $new_path, $new_title_clean, $new_desc, $image_id);
                 $upd_stmt->execute();
                 header("Location: user_page.php?action=rename_success");
                 exit();
@@ -1116,7 +1118,7 @@ if ($total_artworks > 0) {
                                     <span style="word-break: break-all;"><strong>File:</strong> <?= htmlspecialchars($filename) ?></span>
                                 </div>
                                 <div class="image-card-actions">
-                                    <button class="btn btn-secondary btn-sm" onclick="openRenameArtModal(<?= $img['id'] ?>, '<?= htmlspecialchars($custom_name, ENT_QUOTES) ?>')">
+                                    <button class="btn btn-secondary btn-sm" onclick="openRenameArtModal(<?= $img['id'] ?>, '<?= htmlspecialchars($custom_name, ENT_QUOTES) ?>', '<?= htmlspecialchars($img['description'] ?? '', ENT_QUOTES) ?>')">
                                         ✏️ Rename
                                     </button>
                                     <form method="post" onsubmit="return confirm('Permanently remove this artwork?')" style="display: inline;">
@@ -1221,8 +1223,13 @@ if ($total_artworks > 0) {
                         <label>Artwork Title</label>
                         <input type="text" name="title" class="form-control" placeholder="e.g. Starry Night Over the Rhone" required>
                     </div>
+
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Description</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Explain the story behind your creation..."></textarea>
+                    </div>
                     
-                    <div class="form-group">
+                    <div class="form-group" style="margin-top: 15px;">
                         <label>Select Image File</label>
                         <div class="file-upload-wrapper">
                             <span class="file-upload-icon">📁</span>
@@ -1241,24 +1248,28 @@ if ($total_artworks > 0) {
         </div>
     </div>
 
-    <!-- ================= RENAME ARTWORK MODAL ================= -->
+    <!-- ================= RENAME/EDIT ARTWORK DETAILS MODAL ================= -->
     <div id="renameArtModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>✏️ Rename Artwork</h3>
+                <h3>✏️ Edit Artwork Details</h3>
                 <button class="close-modal" onclick="closeModal('renameArtModal')">✕</button>
             </div>
             <div class="modal-body">
                 <form method="post">
                     <input type="hidden" name="image_id" id="rename_image_id">
                     <div class="form-group">
-                        <label>New Artwork Title</label>
+                        <label>Artwork Title</label>
                         <input type="text" name="new_title" id="rename_image_title" class="form-control" required placeholder="e.g. starry_night">
-                        <small style="color: var(--text-secondary); margin-top: 5px; display: block;">The physical filename on the server will be updated automatically while preserving the file extension.</small>
+                        <small style="color: var(--text-secondary); margin-top: 5px; display: block;">The physical filename on the server will be updated automatically while preserving the extension.</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Description</label>
+                        <textarea name="new_description" id="rename_image_description" class="form-control" rows="4" placeholder="Enter artwork description..."></textarea>
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
                         <button type="button" class="btn btn-secondary" onclick="closeModal('renameArtModal')">Cancel</button>
-                        <button type="submit" name="rename_art" class="btn btn-primary">Rename</button>
+                        <button type="submit" name="rename_art" class="btn btn-primary">Save Changes</button>
                     </div>
                 </form>
             </div>
@@ -1286,9 +1297,10 @@ if ($total_artworks > 0) {
         });
 
         // Trigger rename artwork modal
-        function openRenameArtModal(id, title) {
+        function openRenameArtModal(id, title, description) {
             document.getElementById('rename_image_id').value = id;
             document.getElementById('rename_image_title').value = title;
+            document.getElementById('rename_image_description').value = description;
             openModal('renameArtModal');
         }
 
