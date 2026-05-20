@@ -99,3 +99,92 @@ ADD COLUMN `profile_pic` VARCHAR(255) DEFAULT 'uploads/default_avatar.svg';
 | **`uploads/default_avatar.svg`** | Built a modern gradient vector graphic to serve as the default user avatar. |
 | **`.gitignore`** | Removed local uploads directory exclusion to track sample database artwork images. |
 | **`README.md`** | Streamlined setup documentation back to traditional Apache/XAMPP instructions. |
+
+---
+
+## 💻 Core Code Implementations
+
+Here are the primary code modifications implemented across the project files:
+
+### 1. Database Schema (`users_db.sql`)
+```sql
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `username` varchar(50) NOT NULL UNIQUE,
+  `email` varchar(100) NOT NULL UNIQUE,
+  `password` varchar(255) NOT NULL,
+  `role` enum('user','admin') DEFAULT 'user',
+  `profile_pic` varchar(255) DEFAULT 'uploads/default_avatar.svg',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+### 2. Avatar File Upload and Processing Controller (`user_page.php`)
+```php
+// Handle profile picture upload if selected
+$profile_pic_path = null;
+if (isset($_FILES['profile_pic']) && $_FILES['profile_pic']['error'] == 0) {
+    $allowed = ['jpg', 'jpeg', 'png', 'gif', 'svg'];
+    $ext = strtolower(pathinfo($_FILES['profile_pic']['name'], PATHINFO_EXTENSION));
+    if (in_array($ext, $allowed)) {
+        // Check size (max 2MB)
+        if ($_FILES['profile_pic']['size'] <= 2 * 1024 * 1024) {
+            $new_avatar_name = "avatar_" . $user_id . "_" . time() . "." . $ext;
+            $upload_dir = "uploads/";
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            $dest_path = $upload_dir . $new_avatar_name;
+            if (move_uploaded_file($_FILES['profile_pic']['tmp_name'], $dest_path)) {
+                $profile_pic_path = $dest_path;
+                // Delete old profile picture if not the default one to save space
+                if (!empty($currentUser['profile_pic']) && $currentUser['profile_pic'] !== 'uploads/default_avatar.svg' && file_exists($currentUser['profile_pic'])) {
+                    @unlink($currentUser['profile_pic']);
+                }
+            }
+        } else {
+            header("Location: user_page.php?action=error&message=Profile picture exceeds maximum size of 2MB.");
+            exit();
+        }
+    } else {
+        header("Location: user_page.php?action=error&message=Invalid file type for profile picture.");
+        exit();
+    }
+}
+```
+
+### 3. Sidebar Avatar Rendering Code (`user_page.php`)
+```html
+<div class="user-meta">
+    <div class="user-avatar" style="overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center;">
+        <?php if (!empty($currentUser['profile_pic']) && file_exists($currentUser['profile_pic'])): ?>
+            <img src="<?= htmlspecialchars($currentUser['profile_pic']) ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+        <?php else: ?>
+            <?= strtoupper(substr($currentUser['name'], 0, 2)); ?>
+        <?php endif; ?>
+    </div>
+    <div class="user-details">
+        <span class="user-name"><?= htmlspecialchars($currentUser['name']); ?></span>
+        <span class="user-role">Artist</span>
+    </div>
+</div>
+```
+
+### 4. Showcase Gallery Author Avatar Badge (`home.php`)
+```html
+<div class="art-meta" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+    <div class="art-author-wrapper" style="display: flex; align-items: center; gap: 8px;">
+        <div class="art-author-avatar" style="width: 22px; height: 22px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1);">
+            <?php if (!empty($row['artist_profile_pic']) && file_exists($row['artist_profile_pic'])): ?>
+                <img src="<?= htmlspecialchars($row['artist_profile_pic']) ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+            <?php else: ?>
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-secondary);"><?= strtoupper(substr($artist, 0, 1)) ?></span>
+            <?php endif; ?>
+        </div>
+        <span class="art-author" style="font-size: 13px; font-weight: 500; color: var(--text-secondary);"><?= htmlspecialchars($artist) ?></span>
+    </div>
+    <span class="art-date"><?= date("M d, Y", strtotime($row['created_at'])) ?></span>
+</div>
+```
+
