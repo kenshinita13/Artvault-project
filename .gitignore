@@ -6,3 +6,6 @@ desktop.ini
 # Ignore uploaded assets to keep repo clean, but keep directory structure
 /uploads/*
 !/uploads/.gitkeep
+
+# Ignore local SQLite database
+artvault.sqlite
