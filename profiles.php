@@ -10,10 +10,11 @@ if (!isset($_SESSION['email'])) {
 
 $email = $_SESSION['email'];
 
-// Get current user ID and role for navigation
-$user_res = $conn->query("SELECT id, role FROM users WHERE email = '$email'");
+// Get current user ID, role, profile picture and name for navigation
+$user_res = $conn->query("SELECT id, role, profile_pic, name FROM users WHERE email = '$email'");
 $currentUser = $user_res->fetch_assoc();
 $current_user_role = $currentUser ? $currentUser['role'] : 'user';
+$current_user_initial = $currentUser ? strtoupper(substr($currentUser['name'], 0, 1)) : 'U';
 $dashboard_url = ($current_user_role === 'admin') ? 'admin_page.php' : 'user_page.php';
 
 // Helper function to sanitize user input
@@ -74,6 +75,152 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
             padding: 0 40px;
             z-index: 9999;
             backdrop-filter: blur(12px);
+        }
+
+        /* Waffle Button styling */
+        .waffle-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .waffle-btn:hover {
+            color: var(--accent-hover);
+            background: rgba(255, 255, 255, 0.05);
+            transform: rotate(90deg);
+        }
+
+        /* Nav Avatar Button styling */
+        .nav-avatar-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid var(--panel-border);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--input-bg);
+            text-decoration: none;
+            margin-left: 10px;
+        }
+        .nav-avatar-btn:hover {
+            border-color: var(--accent);
+            transform: scale(1.05);
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+        }
+        .nav-avatar-btn img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .nav-avatar-initials {
+            font-size: 15px;
+            font-weight: 700;
+            color: white;
+        }
+
+        /* Drawer Navigation styling */
+        .nav-drawer {
+            position: fixed;
+            top: 0;
+            left: -320px;
+            width: 320px;
+            height: 100vh;
+            background: rgba(18, 18, 24, 0.98);
+            border-right: 1px solid var(--panel-border);
+            z-index: 100001;
+            transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(20px);
+        }
+        .nav-drawer.open {
+            left: 0;
+        }
+        .nav-drawer-header {
+            padding: 25px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-drawer-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .close-drawer {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .close-drawer:hover {
+            color: var(--text-primary);
+        }
+        .nav-drawer-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .drawer-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 14px 18px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .drawer-item:hover {
+            color: var(--text-primary);
+            background: rgba(168, 85, 247, 0.1);
+            transform: translateX(5px);
+        }
+        .drawer-item.logout:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+        .drawer-icon {
+            font-size: 18px;
+        }
+        .drawer-divider {
+            border: none;
+            border-top: 1px solid var(--panel-border);
+            margin: 15px 0;
+        }
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 100000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            backdrop-filter: blur(4px);
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .nav-logo {
@@ -316,11 +463,58 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
 </head>
 <body>
 
+    <!-- Slide-out Drawer Navigation -->
+    <div id="nav-drawer" class="nav-drawer">
+        <div class="nav-drawer-header">
+            <h3>🧭 Quick Navigation</h3>
+            <button class="close-drawer" onclick="toggleNavMenu()">✕</button>
+        </div>
+        <div class="nav-drawer-body">
+            <a href="home.php" class="drawer-item">
+                <span class="drawer-icon">🖼️</span> Global Showcase
+            </a>
+            <a href="profiles.php" class="drawer-item">
+                <span class="drawer-icon">👥</span> Artists Directory
+            </a>
+            <a href="<?= $dashboard_url ?>" class="drawer-item">
+                <span class="drawer-icon">🛡️</span> Studio Dashboard
+            </a>
+            <a href="<?= $dashboard_url ?>" class="drawer-item">
+                <span class="drawer-icon">⚙️</span> Profile Settings
+            </a>
+            <a href="<?= $dashboard_url ?>" class="drawer-item">
+                <span class="drawer-icon">📤</span> Post New Artwork
+            </a>
+            <hr class="drawer-divider">
+            <a href="logout.php" class="drawer-item logout">
+                <span class="drawer-icon">🚪</span> Logout Session
+            </a>
+        </div>
+    </div>
+    <!-- Drawer overlay -->
+    <div id="drawer-overlay" class="drawer-overlay" onclick="toggleNavMenu()"></div>
+
     <!-- Navbar -->
     <header class="navbar">
-        <a href="home.php" class="nav-logo">
-            🎨 <span>ArtVault</span> Gallery
-        </a>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <!-- Waffle Icon Button -->
+            <button class="waffle-btn" onclick="toggleNavMenu()" title="Navigate Menu">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <rect x="3" y="3" width="4" height="4" rx="1" />
+                    <rect x="10" y="3" width="4" height="4" rx="1" />
+                    <rect x="17" y="3" width="4" height="4" rx="1" />
+                    <rect x="3" y="10" width="4" height="4" rx="1" />
+                    <rect x="10" y="10" width="4" height="4" rx="1" />
+                    <rect x="17" y="10" width="4" height="4" rx="1" />
+                    <rect x="3" y="17" width="4" height="4" rx="1" />
+                    <rect x="10" y="17" width="4" height="4" rx="1" />
+                    <rect x="17" y="17" width="4" height="4" rx="1" />
+                </svg>
+            </button>
+            <a href="home.php" class="nav-logo">
+                🎨 <span>ArtVault</span> Gallery
+            </a>
+        </div>
 
         <!-- Search Form -->
         <form action="profiles.php" method="GET" class="search-form">
@@ -332,11 +526,12 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
             <a href="home.php" class="btn btn-secondary">
                 🖼️ Gallery
             </a>
-            <a href="<?= $dashboard_url ?>" class="btn btn-secondary">
-                🛡️ Dashboard
-            </a>
-            <a href="logout.php" class="btn btn-danger">
-                Logout
+            <a href="<?= $dashboard_url ?>" class="nav-avatar-btn" title="Go to My Studio Dashboard">
+                <?php if (!empty($currentUser['profile_pic']) && file_exists($currentUser['profile_pic'])): ?>
+                    <img src="<?= htmlspecialchars($currentUser['profile_pic']) ?>" alt="Avatar">
+                <?php else: ?>
+                    <span class="nav-avatar-initials"><?= $current_user_initial ?></span>
+                <?php endif; ?>
             </a>
         </div>
     </header>
@@ -423,5 +618,11 @@ $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
         </div>
     </main>
 
+    <script>
+        function toggleNavMenu() {
+            document.getElementById('nav-drawer').classList.toggle('open');
+            document.getElementById('drawer-overlay').classList.toggle('open');
+        }
+    </script>
 </body>
 </html>
