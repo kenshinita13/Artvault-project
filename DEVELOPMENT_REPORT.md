@@ -104,10 +104,18 @@ Optimized the navigation architecture across all public gallery showcase pages (
 - **Slide-Out Side Drawer**: Clicking the waffle icon slides in a sleek left navigation drawer (`left: 0` from `-320px`) with a backdrop blur overlay (`backdrop-filter: blur(4px)`).
 - **Navigation Shortcuts**: Provides direct items to the Global Showcase, Artists Directory, private Studio Dashboard, Profile Settings, Post New Artwork, and Logout.
 
-#### 2. Top-Right Profile Avatar Shortcut
-- **Interactive Avatar Button**: Replaced static buttons on the top right of the navbar with a circular avatar image.
-- **Initials Fallback**: Displays the first letter of the user's name styled on a dark background when no profile avatar is uploaded.
-- **Direct Redirection**: Clicking the avatar redirects the user immediately to their private Dashboard page (`user_page.php` or `admin_page.php`) where they can customize their profile picture, manage uploads, or update passwords.
+#### 2. Interactive Avatar Dropdown Menu
+- **Dropdown Toggle**: Clicking the circular avatar on the top right triggers a sleek, responsive dropdown menu positioned absolute to the navbar context.
+- **Account Context Info**: Renders the logged-in user's display name and email address clearly at the top of the menu.
+- **Quick Links**:
+  - 👤 **View Public Profile**: Direct link to their profile showcase page (`profile.php?id=...`).
+  - 🛡️ **Studio Dashboard**: Loads the main dashboard directory.
+  - ⚙️ **Edit Profile / Settings**: Takes the user directly to the Settings tab in the dashboard via a URL query parameter (`?tab=settings`), avoiding manual tab switching.
+  - 🚪 **Logout Session**: Safe logout hook shortcut.
+
+#### 3. Dashboard Quick "View Gallery" Shortcut
+- **Header Button**: Appended a **"🌐 View Gallery"** button to the top headers of both `user_page.php` and `admin_page.php`.
+- **Seamless Navigation**: Allows developers, admins, and artists to return to the public gallery instantly from private views without using the sidebars.
 
 ---
 
