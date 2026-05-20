@@ -2,7 +2,3 @@
 Thumbs.db
 desktop.ini
 .DS_Store
-
-# Ignore uploaded assets to keep repo clean, but keep directory structure
-/uploads/*
-!/uploads/.gitkeep
