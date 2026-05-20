@@ -57,9 +57,18 @@ Allows artists to assign and edit descriptions of their uploaded artworks at mul
 - Retained inline double-click editing of descriptions directly inside the public showcase lightbox.
 - Employs an AJAX backend endpoint (`edit_description.php`) checking session-based owner or administrator privilege.
 
+### C. Click-to-Zoom & Drag-to-Pan Lightbox Interactions
+Enhanced public showcase viewer lightboxes (`home.php` and `profile.php`) to allow detailed inspection of artwork details.
+
+#### 1. Interactive Lifecycle Steps
+- **Cursor State Hints**: Default state indicates zoom capability with `zoom-in` cursor style.
+- **Double Action click handler**: Clicking once triggers Zoomed/Fullscreen mode. Clicking again on the zoomed image (without dragging) exits zoom mode.
+- **Zoom Scale Factor**: Scales up the image by `2.5x` dynamically inside its wrapper, which clips the boundaries (`overflow: hidden`) to allow focused region inspection.
+- **Hold-and-Drag Pan**: Pressing down the left mouse button locks the grab cursor to `grabbing`. Moving the mouse recalculates drag translation relative to the `scale` factor to deliver a `1:1` panning ratio relative to cursor speed.
+
 ---
 
-### C. Database Configuration & Deployment
+### D. Database Configuration & Deployment
 Developed two interchangeable execution configurations depending on the local workspace environment:
 
 #### 1. Traditional Apache Setup (Active Deployment)
@@ -76,7 +85,7 @@ A browser validation sweep confirmed that switching configs maintains clean stat
 
 ---
 
-### D. Secure Password Updates
+### E. Secure Password Updates
 Users can change their accounts' login passwords directly through a dedicated security panel.
 
 #### 1. Security Verification Requirements
