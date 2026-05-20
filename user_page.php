@@ -162,7 +162,6 @@ if (isset($_POST['update_profile'])) {
     $prof_name = sanitize($conn, $_POST['name']);
     $prof_username = sanitize($conn, $_POST['username']);
     $prof_email = sanitize($conn, $_POST['email']);
-    $prof_pass = $_POST['password'];
     
     // Check constraints
     $check_email = $conn->query("SELECT id FROM users WHERE email = '$prof_email' AND id != $user_id");
@@ -208,23 +207,12 @@ if (isset($_POST['update_profile'])) {
         }
     }
     
-    if (!empty($prof_pass)) {
-        $hashed_pass = password_hash($prof_pass, PASSWORD_DEFAULT);
-        if ($profile_pic_path) {
-            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, password = ?, profile_pic = ? WHERE id = ?");
-            $stmt->bind_param("sssssi", $prof_name, $prof_username, $prof_email, $hashed_pass, $profile_pic_path, $user_id);
-        } else {
-            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, password = ? WHERE id = ?");
-            $stmt->bind_param("ssssi", $prof_name, $prof_username, $prof_email, $hashed_pass, $user_id);
-        }
+    if ($profile_pic_path) {
+        $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, profile_pic = ? WHERE id = ?");
+        $stmt->bind_param("ssssi", $prof_name, $prof_username, $prof_email, $profile_pic_path, $user_id);
     } else {
-        if ($profile_pic_path) {
-            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ?, profile_pic = ? WHERE id = ?");
-            $stmt->bind_param("ssssi", $prof_name, $prof_username, $prof_email, $profile_pic_path, $user_id);
-        } else {
-            $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ? WHERE id = ?");
-            $stmt->bind_param("sssi", $prof_name, $prof_username, $prof_email, $user_id);
-        }
+        $stmt = $conn->prepare("UPDATE users SET name = ?, username = ?, email = ? WHERE id = ?");
+        $stmt->bind_param("sssi", $prof_name, $prof_username, $prof_email, $user_id);
     }
     
     $stmt->execute();
@@ -234,6 +222,40 @@ if (isset($_POST['update_profile'])) {
     
     header("Location: user_page.php?action=profile_success");
     exit();
+}
+
+// 5. Change Password Settings
+if (isset($_POST['change_password'])) {
+    $current_pass = $_POST['current_password'];
+    $new_pass = $_POST['new_password'];
+    $confirm_pass = $_POST['confirm_password'];
+    
+    // Fetch user's current hashed password from database
+    $user_res = $conn->query("SELECT password FROM users WHERE id = $user_id");
+    $user_data = $user_res->fetch_assoc();
+    
+    if ($user_data && password_verify($current_pass, $user_data['password'])) {
+        if ($new_pass === $confirm_pass) {
+            if (strlen($new_pass) >= 6) {
+                $hashed_new = password_hash($new_pass, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+                $stmt->bind_param("si", $hashed_new, $user_id);
+                $stmt->execute();
+                
+                header("Location: user_page.php?action=password_success");
+                exit();
+            } else {
+                header("Location: user_page.php?action=error&message=New password must be at least 6 characters long.");
+                exit();
+            }
+        } else {
+            header("Location: user_page.php?action=error&message=New passwords do not match.");
+            exit();
+        }
+    } else {
+        header("Location: user_page.php?action=error&message=Incorrect current password.");
+        exit();
+    }
 }
 
 
@@ -1018,6 +1040,9 @@ if ($total_artworks > 0) {
                         case 'profile_success':
                             echo "✅ Your profile and studio settings were updated.";
                             break;
+                        case 'password_success':
+                            echo "✅ Your password has been changed successfully.";
+                            break;
                     }
                     ?>
                 </div>
@@ -1111,7 +1136,7 @@ if ($total_artworks > 0) {
 
         <!-- ================= SETTINGS TAB ================= -->
         <div id="settings" class="tab-content">
-            <div class="content-card" style="max-width: 600px; margin: 0 auto;">
+            <div class="content-card" style="max-width: 600px; margin: 0 auto 30px auto;">
                 <h3>⚙️ Profile & Studio Settings</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 20px; text-align: left;">Modify your public artist details and credentials.</p>
                 
@@ -1143,14 +1168,38 @@ if ($total_artworks > 0) {
                         </div>
                     </div>
 
+                    <div style="text-align: right; margin-top: 10px;">
+                        <button type="submit" name="update_profile" class="btn btn-primary">
+                            💾 Save Profile Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="content-card" style="max-width: 600px; margin: 0 auto;">
+                <h3>🔒 Change Password</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; text-align: left;">Update your account password safely. You must provide your current password for security verification.</p>
+                
+                <form method="post">
                     <div class="form-group">
-                        <label for="prof_pass">Update Password <small style="color: var(--text-secondary); font-weight: normal;">(leave blank to keep current)</small></label>
-                        <input type="password" id="prof_pass" name="password" class="form-control" placeholder="Enter new password">
+                        <label for="curr_pass">Current Password</label>
+                        <input type="password" id="curr_pass" name="current_password" class="form-control" placeholder="Enter current password" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="new_pass">New Password</label>
+                            <input type="password" id="new_pass" name="new_password" class="form-control" placeholder="Enter new password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirm_pass">Confirm New Password</label>
+                            <input type="password" id="confirm_pass" name="confirm_password" class="form-control" placeholder="Re-type new password" required>
+                        </div>
                     </div>
 
                     <div style="text-align: right; margin-top: 10px;">
-                        <button type="submit" name="update_profile" class="btn btn-primary">
-                            💾 Save Settings
+                        <button type="submit" name="change_password" class="btn btn-primary">
+                            🔑 Update Password
                         </button>
                     </div>
                 </form>
