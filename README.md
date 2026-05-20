@@ -13,35 +13,36 @@ ArtVault is a modern, dark-themed, glassmorphic portfolio showcase web applicati
 
 ## 🛠️ Setup Instructions
 
-### 1. Prerequisites
-- **XAMPP** (or any server stack with Apache, PHP 7.4+, and MySQL).
+### Option A: Using NPM (Easiest & Portable)
+This option allows you to run the project from **any folder** on your computer without putting the code inside XAMPP's `htdocs` directory.
 
-### 2. Project Clone
-Clone this repository directly into your local XAMPP web server hosting folder (typically `C:\xampp\htdocs\` on Windows):
-```bash
-git clone https://github.com/kenshinita13/Projects.git Artvaultv3
-```
+1. **Prerequisites**: Ensure you have Node.js/NPM and the PHP interpreter installed and registered on your system path.
+2. **Clone the repository** to any folder:
+   ```bash
+   git clone https://github.com/kenshinita13/Projects.git Artvaultv3
+   ```
+3. **Start local database**: Start MySQL in your XAMPP Control Panel.
+4. **Import Database Schema**: Create a database named `users_db` in `http://localhost/phpmyadmin/` and import `users_db.sql`.
+5. **Start server**: Inside the project directory, run:
+   ```bash
+   npm start
+   ```
+6. **Open browser**: Visit `http://localhost:8000/`.
 
-### 3. Database Installation
-1. Start **Apache** and **MySQL** in your XAMPP Control Panel.
-2. Go to `http://localhost/phpmyadmin/`.
-3. Create a new database named **`users_db`**.
-4. Click on the database name, go to the **Import** tab, choose the **`users_db.sql`** file from the cloned project directory, and click **Import**.
+---
 
-### 4. Configuration Check
-Open `config.php` and verify the MySQL credentials correspond to your environment settings:
-```php
-$host = "localhost";
-$user = "root";
-$password = ""; // Default empty password for XAMPP root
-$database = "users_db";
-```
+### Option B: Using XAMPP / Apache (Traditional)
+This option serves the project directly through XAMPP's built-in Apache server.
 
-### 5. Access App
-Visit the application in your browser:
-```
-http://localhost/Artvaultv3/
-```
+1. **Clone the repository** inside your XAMPP `htdocs` folder:
+   - *Windows*: `C:\xampp\htdocs\Artvaultv3`
+   - *macOS*: `/Applications/XAMPP/xamppfiles/htdocs/Artvaultv3`
+   ```bash
+   git clone https://github.com/kenshinita13/Projects.git Artvaultv3
+   ```
+2. **Start Servers**: Start Apache and MySQL in your XAMPP Control Panel.
+3. **Import Database Schema**: Create a database named `users_db` in `http://localhost/phpmyadmin/` and import `users_db.sql`.
+4. **Open browser**: Visit `http://localhost/Artvaultv3/`.
 
 ---
 

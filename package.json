@@ -1,0 +1,17 @@
+{
+  "name": "artvault-v3",
+  "version": "1.0.0",
+  "description": "ArtVault - Digital Art Showcase and Creator Studio Web Application",
+  "main": "index.php",
+  "scripts": {
+    "start": "php -S localhost:8000"
+  },
+  "keywords": [
+    "php",
+    "art-gallery",
+    "showcase",
+    "portfolio"
+  ],
+  "author": "kenshinita13",
+  "license": "MIT"
+}
