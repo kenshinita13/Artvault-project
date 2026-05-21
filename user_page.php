@@ -1082,10 +1082,10 @@ if ($total_artworks > 0) {
                             echo "✅ Your password has been changed successfully.";
                             break;
                         case 'otp_enabled_success':
-                            echo "🔒 Google Authenticator OTP has been activated successfully.";
+                            echo "🔒 Authenticator App OTP has been activated successfully.";
                             break;
                         case 'otp_disabled_success':
-                            echo "🔓 Google Authenticator OTP has been deactivated.";
+                            echo "🔓 Authenticator App OTP has been deactivated.";
                             break;
                     }
                     ?>

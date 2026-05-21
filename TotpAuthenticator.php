@@ -83,7 +83,7 @@ class TotpAuthenticator {
     }
 
     /**
-     * Generate a quickchart QR Code URL for Google Authenticator.
+     * Generate a quickchart QR Code URL for an Authenticator App.
      */
     public static function getQrCodeUrl($name, $issuer, $secret) {
         $url = 'otpauth://totp/' . rawurlencode($issuer) . ':' . rawurlencode($name) . '?secret=' . $secret . '&issuer=' . rawurlencode($issuer);
