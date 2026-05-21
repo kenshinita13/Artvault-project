@@ -13,18 +13,22 @@ ArtVault is a modern, dark-themed, glassmorphic portfolio showcase web applicati
 
 ## 🛠️ Setup Instructions
 
-### Using XAMPP / Apache (Traditional)
-This option serves the project directly through XAMPP's built-in Apache server.
+> ⚠️ **Important Note:** This is a native PHP project, not a Node.js project. You do **NOT** need to run `npm install` or `npm start`.
+
+### Running with XAMPP / Apache
+
+To run this application, you must use a local web server stack like XAMPP:
 
 1. **Clone the repository** inside your XAMPP `htdocs` folder:
-   - *Windows*: `C:\xampp\htdocs\Artvaultv3` (or your local custom XAMPP installation directory)
+   - *Windows*: `C:\xampp\htdocs\Artvaultv3` (or your local custom XAMPP installation directory, e.g., `C:\Users\root\Desktop\APACHEXAMPP\htdocs\Artvaultv3`)
    - *macOS*: `/Applications/XAMPP/xamppfiles/htdocs/Artvaultv3`
    ```bash
    git clone https://github.com/kenshinita13/Projects.git Artvaultv3
    ```
-2. **Start Servers**: Start Apache and MySQL in your XAMPP Control Panel.
-3. **Import Database Schema**: Create a database named `users_db` in `http://localhost/phpmyadmin/` and import `users_db.sql`.
-4. **Open browser**: Visit `http://localhost/Artvaultv3/`.
+2. **Start Servers**: Open your **XAMPP Control Panel** and start both **Apache** and **MySQL**.
+3. **Database Configuration**: Open `http://localhost/phpmyadmin/`, create a new database named `users_db`, and import the provided `users_db.sql` file. (Note: A patch script `patch_totp.php` is available to add 2FA table columns if needed).
+4. **Access the Application**: Open your web browser and navigate directly to the project URL:
+   👉 **`http://localhost/Artvaultv3/`**
 
 ---
 

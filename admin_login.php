@@ -26,6 +26,12 @@ if (isset($_POST['admin_login'])) {
         $user = $result->fetch_assoc();
 
         if (password_verify($password, $user['password'])) {
+            if (isset($user['totp_enabled']) && $user['totp_enabled'] == 1) {
+                $_SESSION['otp_pending_user_id'] = $user['id'];
+                header("Location: otp-verify.php");
+                exit();
+            }
+
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['name'] = $user['name'];
             $_SESSION['email'] = $user['email'];

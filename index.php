@@ -278,6 +278,49 @@ function isActiveForm($formName, $activeForm) {
         .admin-link:hover {
             color: var(--text-primary);
         }
+
+        /* OAuth Social Styles */
+        .oauth-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 20px 0;
+            color: var(--text-secondary);
+            font-size: 13.5px;
+        }
+        .oauth-divider::before, .oauth-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .oauth-divider:not(:empty)::before {
+            margin-right: 15px;
+        }
+        .oauth-divider:not(:empty)::after {
+            margin-left: 15px;
+        }
+        .btn-google {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .btn-google:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.15);
+        }
     </style>
 </head>
 <body>
@@ -314,6 +357,8 @@ function isActiveForm($formName, $activeForm) {
                 </div>
 
                 <button type="submit" name="login">Enter Studio</button>
+
+
 
                 <div class="form-footer">
                     New to ArtVault? 
@@ -364,6 +409,8 @@ function isActiveForm($formName, $activeForm) {
                 </div>
 
                 <button type="submit" name="register">Onboard Account</button>
+
+
 
                 <div class="form-footer">
                     Already registered? 

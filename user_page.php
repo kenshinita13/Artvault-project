@@ -260,6 +260,39 @@ if (isset($_POST['change_password'])) {
     }
 }
 
+// 6. Enable TOTP MFA
+if (isset($_POST['enable_totp'])) {
+    $otp_code = trim($_POST['otp_code']);
+    $secret = trim($_POST['otp_secret']);
+    require_once 'TotpAuthenticator.php';
+    if (TotpAuthenticator::verifyCode($secret, $otp_code)) {
+        $stmt = $conn->prepare("UPDATE users SET totp_secret = ?, totp_enabled = 1 WHERE id = ?");
+        $stmt->bind_param("si", $secret, $user_id);
+        $stmt->execute();
+        header("Location: user_page.php?action=otp_enabled_success");
+        exit();
+    } else {
+        header("Location: user_page.php?action=error&message=Invalid OTP code. Authenticator activation failed.");
+        exit();
+    }
+}
+
+// 7. Disable TOTP MFA
+if (isset($_POST['disable_totp'])) {
+    $otp_code = trim($_POST['otp_code']);
+    require_once 'TotpAuthenticator.php';
+    if (TotpAuthenticator::verifyCode($currentUser['totp_secret'], $otp_code)) {
+        $stmt = $conn->prepare("UPDATE users SET totp_enabled = 0 WHERE id = ?");
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        header("Location: user_page.php?action=otp_disabled_success");
+        exit();
+    } else {
+        header("Location: user_page.php?action=error&message=Invalid OTP code. Authenticator deactivation failed.");
+        exit();
+    }
+}
+
 
 
 // --- FETCH DATA FOR DASHBOARD ---
@@ -1048,6 +1081,12 @@ if ($total_artworks > 0) {
                         case 'password_success':
                             echo "✅ Your password has been changed successfully.";
                             break;
+                        case 'otp_enabled_success':
+                            echo "🔒 Google Authenticator OTP has been activated successfully.";
+                            break;
+                        case 'otp_disabled_success':
+                            echo "🔓 Google Authenticator OTP has been deactivated.";
+                            break;
                     }
                     ?>
                 </div>
@@ -1209,6 +1248,67 @@ if ($total_artworks > 0) {
                     </div>
                 </form>
             </div>
+
+                <!-- TOTP settings -->
+                <?php
+                require_once 'TotpAuthenticator.php';
+                $otp_secret = $currentUser['totp_secret'] ?? '';
+                if (empty($otp_secret)) {
+                    $otp_secret = TotpAuthenticator::generateSecret();
+                    $conn->query("UPDATE users SET totp_secret = '$otp_secret' WHERE id = $user_id");
+                }
+                $qr_code_url = TotpAuthenticator::getQrCodeUrl($currentUser['email'], 'ArtVault', $otp_secret);
+                ?>
+                <div class="content-card" style="max-width: 600px; margin: 25px auto 0 auto;">
+                    <h3>🔒 Two-Factor Authenticator (TOTP)</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px; text-align: left;">
+                        Protect your account sign-in with One-Time Password (OTP) multi-factor authentication.
+                    </p>
+                    
+                    <?php if (isset($currentUser['totp_enabled']) && $currentUser['totp_enabled'] != 1): ?>
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px; border: 1px dashed var(--panel-border);">
+                            <img src="<?= $qr_code_url ?>" alt="Scan QR Code" style="background: white; padding: 10px; border-radius: 8px; width: 180px; height: 180px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 14px; font-weight: 600; margin-bottom: 5px;">Scan this QR code in any Authenticator App</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); font-family: monospace;">Secret: <?= htmlspecialchars($otp_secret) ?></div>
+                            </div>
+                            
+                            <form method="post" style="width: 100%; margin-top: 10px;">
+                                <input type="hidden" name="otp_secret" value="<?= htmlspecialchars($otp_secret) ?>">
+                                <div class="form-group">
+                                    <label for="otp_code">Enter 6-Digit Verification Code</label>
+                                    <input type="text" id="otp_code" name="otp_code" class="form-control" placeholder="000000" pattern="[0-9]{6}" maxlength="6" inputmode="numeric" required style="font-size: 20px; text-align: center; letter-spacing: 4px;">
+                                </div>
+                                <button type="submit" name="enable_totp" class="btn btn-primary" style="width: 100%;">
+                                    ✔️ Verify & Activate OTP
+                                </button>
+                            </form>
+                        </div>
+                    <?php else: ?>
+                        <div style="display: flex; flex-direction: column; gap: 15px; background: rgba(16, 185, 129, 0.05); padding: 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.15);">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 24px;">🛡️</span>
+                                <div style="text-align: left;">
+                                    <h4 style="color: var(--success); font-weight: 600;">Two-Factor OTP is Active</h4>
+                                    <p style="font-size: 13px; color: var(--text-secondary); margin: 2px 0 0 0;">Your sign-in is fully secured using an Authenticator app.</p>
+                                </div>
+                            </div>
+                            
+                            <hr style="border: none; border-top: 1px solid var(--panel-border); margin: 5px 0;">
+                            
+                            <h5 style="text-align: left; font-weight: 600; margin-bottom: 5px;">Deactivate Two-Factor Authenticator</h5>
+                            <form method="post">
+                                <div class="form-group">
+                                    <label for="otp_code_disable">Enter Code to Confirm Deactivation</label>
+                                    <input type="text" id="otp_code_disable" name="otp_code" class="form-control" placeholder="000000" pattern="[0-9]{6}" maxlength="6" inputmode="numeric" required style="font-size: 18px; text-align: center; letter-spacing: 3px;">
+                                </div>
+                                <button type="submit" name="disable_totp" class="btn btn-danger" style="width: 100%;">
+                                    ⚠️ Turn Off 2FA
+                                </button>
+                            </form>
+                        </div>
+                    <?php endif; ?>
+                </div>
         </div>
 
     </main>
