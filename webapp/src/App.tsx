@@ -110,32 +110,15 @@ function App() {
         .eq('id', data.user.id)
         .single();
         
-      if (isAdminLogin) {
-        if (profile?.role !== 'admin') {
-          setError('Unauthorized: This account does not have Administrator privileges.');
-          toast.error('Unauthorized: Missing Administrator privileges.');
-          await supabase.auth.signOut();
-          setIsValidatingLogin(false);
-        } else {
-          setSuccess('Admin verified. Entering secure gateway...');
-          toast.success('Admin verified.');
-          setIsValidatingLogin(false);
-          setShowMfaChallenge(false);
-          navigate('/admin_panel');
-        }
+      setSuccess('Login successful! Redirecting...');
+      toast.success('Login successful!');
+      setIsValidatingLogin(false);
+      setShowMfaChallenge(false);
+      
+      if (profile?.role === 'admin') {
+        navigate('/admin_panel');
       } else {
-        if (profile?.role === 'admin') {
-          setError('Security Policy: Administrators must log in via the Administrator Gateway.');
-          toast.error('Policy: Use the Administrator Gateway.');
-          await supabase.auth.signOut();
-          setIsValidatingLogin(false);
-        } else {
-          setSuccess('Login successful! Redirecting...');
-          toast.success('Login successful!');
-          setIsValidatingLogin(false);
-          setShowMfaChallenge(false);
-          navigate('/home');
-        }
+        navigate('/home');
       }
     } else {
       setIsValidatingLogin(false);
@@ -197,6 +180,7 @@ function App() {
       email,
       password,
       options: {
+        emailRedirectTo: window.location.origin + '/home',
         data: {
           name,
           username,
