@@ -21,7 +21,6 @@ This project has been fully modernized and is built natively on **React**, **Vit
 ### Prerequisites
 - Node.js (v16+)
 - npm or yarn
-- A Supabase Project (Database & Storage)
 
 ### Running Locally
 
@@ -36,18 +35,13 @@ This project has been fully modernized and is built natively on **React**, **Vit
    npm install
    ```
 
-3. **Environment Configuration**:
-   Create a `.env` file in the root of the `webapp` directory and add your Supabase credentials:
-   ```env
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
-
-4. **Start Development Server**:
+3. **Start Development Server**:
    ```bash
    npm run dev
    ```
-5. **Access the Application**: Open your web browser and navigate directly to the Vite local server:
+   *Note: The project is pre-configured with public access keys to the live ArtVault Cloud Database, so you do not need to set up your own database to run it locally!*
+
+4. **Access the Application**: Open your web browser and navigate directly to the Vite local server:
    👉 **`http://localhost:5173/`**
 
 ---
