@@ -1,34 +1,54 @@
 # ArtVault Premium - Digital Art Showcase Web App
 
-ArtVault is a modern, dark-themed, glassmorphic portfolio showcase web application built for digital artists to publish, search, and view artworks.
+ArtVault is a modern, dark-themed, glassmorphic portfolio showcase web application built for digital artists to publish, search, and view artworks. 
+
+This project has been fully modernized and is built natively on **React**, **Vite**, **TypeScript**, and **Supabase**!
 
 ## 🚀 Key Features
 - **Global Art Showcase**: High-resolution gallery display with search bar filters.
-- **Maximized Lightbox details Modal**: Beautiful double-column split details modal with support for click-to-zoom manual image enlargement.
+- **Maximized Lightbox Modal**: Beautiful double-column split details modal with support for click-to-zoom manual image enlargement.
 - **Searchable Artists Directory**: Browse other registered creators, check their creation counts, and inspect their portfolios.
 - **Public Creator Portfolios**: Specific artist-focused showcases showcasing only their respective uploads.
-- **Artist & Admin Dashboards**: Role-based access control allowing creators to manage their own uploads, and admins to manage all users, uploads, database states, and descriptions.
+- **Role-based Authentication**: Secure User & Admin dashboards authenticated with **Two-Factor Authentication (TOTP)** and Supabase Row Level Security.
+- **Cloud Storage**: Fast and secure image uploads powered by Supabase Cloud Buckets.
 
 ---
 
 ## 🛠️ Setup Instructions
 
-> ⚠️ **Important Note:** This is a native PHP project, not a Node.js project. You do **NOT** need to run `npm install` or `npm start`.
+> ⚠️ **Important Note:** This project has been migrated away from PHP/XAMPP. It is now a modern Node.js application.
 
-### Running with XAMPP / Apache
+### Prerequisites
+- Node.js (v16+)
+- npm or yarn
+- A Supabase Project (Database & Storage)
 
-To run this application, you must use a local web server stack like XAMPP:
+### Running Locally
 
-1. **Clone the repository** inside your XAMPP `htdocs` folder:
-   - *Windows*: `C:\xampp\htdocs\Artvaultv3` (or your local custom XAMPP installation directory, e.g., `C:\Users\root\Desktop\APACHEXAMPP\htdocs\Artvaultv3`)
-   - *macOS*: `/Applications/XAMPP/xamppfiles/htdocs/Artvaultv3`
+1. **Clone the repository**:
    ```bash
-   git clone https://github.com/kenshinita13/Projects.git Artvaultv3
+   git clone https://github.com/kenshinita13/Artvault-project.git Artvaultv3
+   cd Artvaultv3/webapp
    ```
-2. **Start Servers**: Open your **XAMPP Control Panel** and start both **Apache** and **MySQL**.
-3. **Database Configuration**: Open `http://localhost/phpmyadmin/`, create a new database named `users_db`, and import the provided `users_db.sql` file. (Note: A patch script `patch_totp.php` is available to add 2FA table columns if needed).
-4. **Access the Application**: Open your web browser and navigate directly to the project URL:
-   👉 **`http://localhost/Artvaultv3/`**
+
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Environment Configuration**:
+   Create a `.env` file in the root of the `webapp` directory and add your Supabase credentials:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+4. **Start Development Server**:
+   ```bash
+   npm run dev
+   ```
+5. **Access the Application**: Open your web browser and navigate directly to the Vite local server:
+   👉 **`http://localhost:5173/`**
 
 ---
 
