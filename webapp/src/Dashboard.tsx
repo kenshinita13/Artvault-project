@@ -34,8 +34,6 @@ export default function Dashboard({ user }: { user: any }) {
   const [file, setFile] = useState<File | null>(null);
   
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
-  
-  const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
 
   useEffect(() => {
     fetchArtworks();
