@@ -20,6 +20,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const [suspendDays, setSuspendDays] = useState('7');
   
   const [banModalUser, setBanModalUser] = useState<any>(null);
+  const [unbanModalUser, setUnbanModalUser] = useState<any>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<any>(null);
   
   const [deleteArtworkModal, setDeleteArtworkModal] = useState<any>(null);
@@ -102,12 +103,14 @@ export default function AdminPanel({ user }: { user: any }) {
     }
   };
   
-  const handleUnbanUser = async (u: any) => {
+  const confirmUnbanUser = async () => {
+    if (!unbanModalUser) return;
     try {
-      const { error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', u.id);
+      const { error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', unbanModalUser.id);
       if (error) throw error;
-      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, status: 'active', suspension_end: null } : user));
-      toast.success(`@${u.username} is now active.`);
+      setAllUsers(allUsers.map(user => user.id === unbanModalUser.id ? { ...user, status: 'active', suspension_end: null } : user));
+      toast.success(`@${unbanModalUser.username} is now active.`);
+      setUnbanModalUser(null);
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -328,7 +331,7 @@ export default function AdminPanel({ user }: { user: any }) {
                         ) : null}
                         
                         {u.status === 'banned' || u.status === 'suspended' ? (
-                          <button className="btn btn-secondary btn-sm" onClick={() => handleUnbanUser(u)} disabled={u.id === user.id}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => setUnbanModalUser(u)} disabled={u.id === user.id}>
                             Unban / Unsuspend
                           </button>
                         ) : (
@@ -586,6 +589,34 @@ export default function AdminPanel({ user }: { user: any }) {
                 </button>
                 <button type="button" className="btn btn-danger" onClick={confirmBanUser} style={{ flex: 1 }}>
                   Yes, Ban User
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unban User Modal */}
+      {unbanModalUser && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--success)' }}>Lift Restriction</h3>
+              <button onClick={() => setUnbanModalUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                Are you sure you want to restore access for <strong>@{unbanModalUser.username}</strong>? 
+                This will lift their {unbanModalUser.status === 'banned' ? 'ban' : 'suspension'} and immediately allow them to log in again.
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setUnbanModalUser(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={confirmUnbanUser} style={{ flex: 1 }}>
+                  Yes, Lift Restriction
                 </button>
               </div>
             </div>
