@@ -60,6 +60,24 @@ export default function AdminPanel({ user }: { user: any }) {
     }
   };
 
+  const handleEditUser = async (u: any) => {
+    const newName = prompt("Enter new name:", u.name);
+    if (!newName) return;
+    const newUsername = prompt("Enter new username:", u.username);
+    if (!newUsername) return;
+
+    if (newName === u.name && newUsername === u.username) return;
+
+    try {
+      const { error } = await supabase.from('profiles').update({ name: newName, username: newUsername }).eq('id', u.id);
+      if (error) throw error;
+      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, name: newName, username: newUsername } : user));
+      toast.success("User details updated.");
+    } catch (err: any) {
+      toast.error("Error updating user: " + err.message);
+    }
+  };
+
   const handleDeleteArtworkAdmin = async (artworkId: string, imagePath: string) => {
     if (!confirm('Are you sure you want to delete this artwork globally?')) return;
     try {
@@ -184,7 +202,10 @@ export default function AdminPanel({ user }: { user: any }) {
                           <option value="admin">Admin</option>
                         </select>
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => handleEditUser(u)}>
+                          <Edit2 size={14} /> Edit
+                        </button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)} disabled={u.id === user.id}>
                           <Trash2 size={14} /> Delete
                         </button>
