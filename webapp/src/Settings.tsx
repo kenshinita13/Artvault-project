@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 import { Shield, User, Image as ImageIcon } from 'lucide-react';
+import Avatar from './Avatar';
 import './Dashboard.css';
 
 export default function Settings({ user }: { user: any }) {
@@ -22,6 +23,34 @@ export default function Settings({ user }: { user: any }) {
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaLoading, setMfaLoading] = useState(false);
 
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarToken, setAvatarToken] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Avatar must be less than 2MB');
+      return;
+    }
+
+    setAvatarLoading(true);
+    const filePath = `${user.id}/avatar`;
+    const { error } = await supabase.storage.from('artworks').upload(filePath, file, {
+      upsert: true,
+      cacheControl: '0'
+    });
+
+    if (error) {
+      toast.error('Error uploading avatar: ' + error.message);
+    } else {
+      toast.success('Profile picture updated!');
+      setAvatarToken(Date.now().toString());
+    }
+    setAvatarLoading(false);
+  };
 
   async function fetchProfile() {
     setLoading(true);
@@ -38,7 +67,7 @@ export default function Settings({ user }: { user: any }) {
         setMfaEnabled(true);
       }
     }
-    
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -183,6 +212,18 @@ export default function Settings({ user }: { user: any }) {
         {activeTab === 'profile' && (
           <div className="content-card">
             <h3>Personal Information</h3>
+            <div style={{ marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ width: 80, height: 80, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                <Avatar userId={user.id} name={profile?.name || 'User'} size={80} updateToken={avatarToken} />
+              </div>
+              <div>
+                <input type="file" accept="image/png, image/jpeg, image/gif, image/svg+xml" style={{ display: 'none' }} ref={fileInputRef} onChange={handleAvatarUpload} />
+                <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={avatarLoading}>
+                  {avatarLoading ? 'Uploading...' : 'Change Profile Picture'}
+                </button>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>JPG, PNG or GIF. Max size 2MB.</p>
+              </div>
+            </div>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Full Name</label>
               <input type="text" className="search-input" defaultValue={profile?.name} readOnly style={{ opacity: 0.7 }} />

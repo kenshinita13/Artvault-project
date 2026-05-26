@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { Trash2, X, Upload } from 'lucide-react';
+import Avatar from './Avatar';
 import './Dashboard.css';
 
 interface Profile {
@@ -166,8 +167,8 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
         
         {/* Header Card */}
         <div className="studio-header-card">
-          <div className="studio-avatar">
-            {profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}
+          <div className="studio-avatar" style={{ padding: 0, overflow: 'hidden' }}>
+            <Avatar userId={profile.id} name={profile.name} size={100} />
           </div>
           <div className="studio-meta">
             <h1>{profile.name}</h1>

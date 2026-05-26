@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Link } from 'react-router-dom';
+import Avatar from './Avatar';
 import './Dashboard.css';
 
 interface ArtistProfile {
@@ -56,6 +57,7 @@ export default function Artists() {
     fullProfiles.sort((a, b) => b.total_uploads - a.total_uploads);
 
     setArtists(fullProfiles);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -80,8 +82,8 @@ export default function Artists() {
         <div className="profiles-grid">
           {artists.map(artist => (
             <div key={artist.id} className="profile-card">
-              <div className="avatar-placeholder">
-                {artist.name ? artist.name.charAt(0).toUpperCase() : 'U'}
+              <div className="avatar-placeholder" style={{ padding: 0, overflow: 'hidden' }}>
+                <Avatar userId={artist.id} name={artist.name} size={60} />
               </div>
               <div className="artist-name">{artist.name}</div>
               <div className="artist-handle">@{artist.username}</div>

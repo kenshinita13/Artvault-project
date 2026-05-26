@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { Search, X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
+import Avatar from './Avatar';
 import './Dashboard.css';
 
 export default function Layout({ user }: { user: any }) {
@@ -93,8 +94,8 @@ export default function Layout({ user }: { user: any }) {
 
         <div className="nav-actions">
           <div style={{ position: 'relative' }}>
-            <button className="nav-avatar-btn" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}>
-              {user.user_metadata?.name ? user.user_metadata.name.charAt(0).toUpperCase() : 'U'}
+            <button className="nav-avatar-btn" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
+              <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
             </button>
             
             {/* Avatar Dropdown */}

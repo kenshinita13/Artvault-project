@@ -23,6 +23,7 @@ export default function AdminPanel({ user }: { user: any }) {
         fetchAllArtworks();
       }
     }
+    setLoading(false);
   };
 
   useEffect(() => {

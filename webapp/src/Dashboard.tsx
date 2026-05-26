@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { Upload, Trash2, X } from 'lucide-react';
+import Avatar from './Avatar';
 import './Dashboard.css';
 
 interface Artwork {
@@ -152,6 +153,7 @@ export default function Dashboard({ user }: { user: any }) {
                   
                   <div className="art-meta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Avatar userId={artwork.user_id} name={artwork.profiles?.name || 'Unknown Artist'} size={24} />
                       <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
                         {artwork.profiles?.name || 'Unknown Artist'}
                       </span>
