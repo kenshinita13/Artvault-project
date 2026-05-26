@@ -127,8 +127,8 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
 
       {/* Report Modal */}
       {reportModalOpen && (
-        <div className="modal" style={{ zIndex: 1000000 }}>
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+        <div className="modal" style={{ zIndex: 1000000 }} onClick={(e) => { e.stopPropagation(); setReportModalOpen(false); }}>
+          <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Report Artwork</h3>
               <button onClick={() => setReportModalOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
