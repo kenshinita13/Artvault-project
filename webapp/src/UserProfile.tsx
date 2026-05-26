@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient';
 import { Trash2, X, Upload } from 'lucide-react';
 import Avatar from './Avatar';
 import Lightbox from './Lightbox';
+import { checkImageIsSafe } from './nsfwHelper';
 import './Dashboard.css';
 
 interface Profile {
@@ -85,6 +86,14 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
     try {
       setUploading(true);
       
+      // NSFW AI Moderation
+      const isSafe = await checkImageIsSafe(file);
+      if (!isSafe) {
+        toast.error('Upload blocked: Image contains explicit or inappropriate content.');
+        setUploading(false);
+        return;
+      }
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const filePath = `${currentUser.id}/${fileName}`;

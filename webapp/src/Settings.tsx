@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 import { Shield, User, Image as ImageIcon } from 'lucide-react';
 import Avatar from './Avatar';
+import { checkImageIsSafe } from './nsfwHelper';
 import './Dashboard.css';
 
 export default function Settings({ user }: { user: any }) {
@@ -37,6 +38,15 @@ export default function Settings({ user }: { user: any }) {
     }
 
     setAvatarLoading(true);
+
+    // NSFW AI Moderation
+    const isSafe = await checkImageIsSafe(file);
+    if (!isSafe) {
+      toast.error('Upload blocked: Avatar contains explicit or inappropriate content.');
+      setAvatarLoading(false);
+      return;
+    }
+
     const filePath = `${user.id}/avatar`;
     const { error } = await supabase.storage.from('artworks').upload(filePath, file, {
       upsert: true,
