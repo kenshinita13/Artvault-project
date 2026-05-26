@@ -16,6 +16,11 @@ export default function AdminPanel({ user }: { user: any }) {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', username: '' });
 
+  const [suspendModalUser, setSuspendModalUser] = useState<any>(null);
+  const [suspendDays, setSuspendDays] = useState('7');
+  
+  const [banModalUser, setBanModalUser] = useState<any>(null);
+
 
   async function fetchProfile() {
     setLoading(true);
@@ -57,29 +62,34 @@ export default function AdminPanel({ user }: { user: any }) {
     }
   };
 
-  const handleSuspendUser = async (u: any) => {
-    const days = prompt(`How many days to suspend @${u.username}?`);
-    if (!days || isNaN(parseInt(days))) return;
+  const confirmSuspendUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!suspendModalUser) return;
+    const days = parseInt(suspendDays);
+    if (isNaN(days) || days <= 0) return;
+    
     const end = new Date();
-    end.setDate(end.getDate() + parseInt(days));
+    end.setDate(end.getDate() + days);
     
     try {
-      const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', u.id);
+      const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModalUser.id);
       if (error) throw error;
-      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, status: 'suspended', suspension_end: end.toISOString() } : user));
-      toast.success(`@${u.username} suspended for ${days} days.`);
+      setAllUsers(allUsers.map(user => user.id === suspendModalUser.id ? { ...user, status: 'suspended', suspension_end: end.toISOString() } : user));
+      toast.success(`@${suspendModalUser.username} suspended for ${days} days.`);
+      setSuspendModalUser(null);
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
-  const handleBanUser = async (u: any) => {
-    if (!confirm(`Are you sure you want to PERMANENTLY BAN @${u.username}?`)) return;
+  const confirmBanUser = async () => {
+    if (!banModalUser) return;
     try {
-      const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', u.id);
+      const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModalUser.id);
       if (error) throw error;
-      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, status: 'banned', suspension_end: null } : user));
-      toast.success(`@${u.username} has been banned.`);
+      setAllUsers(allUsers.map(user => user.id === banModalUser.id ? { ...user, status: 'banned', suspension_end: null } : user));
+      toast.success(`@${banModalUser.username} has been permanently banned.`);
+      setBanModalUser(null);
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -312,10 +322,10 @@ export default function AdminPanel({ user }: { user: any }) {
                           </button>
                         ) : (
                           <>
-                            <button className="btn btn-secondary btn-sm" onClick={() => handleSuspendUser(u)} disabled={u.id === user.id}>
+                            <button className="btn btn-secondary btn-sm" onClick={() => { setSuspendModalUser(u); setSuspendDays('7'); }} disabled={u.id === user.id}>
                               Suspend
                             </button>
-                            <button className="btn btn-danger btn-sm" onClick={() => handleBanUser(u)} disabled={u.id === user.id}>
+                            <button className="btn btn-danger btn-sm" onClick={() => setBanModalUser(u)} disabled={u.id === user.id}>
                               Ban
                             </button>
                           </>
@@ -494,6 +504,79 @@ export default function AdminPanel({ user }: { user: any }) {
                   Save Changes
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend User Modal */}
+      {suspendModalUser && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Suspend Account</h3>
+              <button onClick={() => setSuspendModalUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={confirmSuspendUser}>
+                <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                  You are about to suspend <strong>@{suspendModalUser.username}</strong>. They will be immediately disconnected and unable to log in until the suspension expires.
+                </div>
+                <div className="form-group" style={{ marginBottom: '25px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Suspension Duration (Days)</label>
+                  <select 
+                    className="search-input" 
+                    value={suspendDays}
+                    onChange={e => setSuspendDays(e.target.value)}
+                    required 
+                  >
+                    <option value="1">1 Day</option>
+                    <option value="3">3 Days</option>
+                    <option value="7">1 Week</option>
+                    <option value="14">2 Weeks</option>
+                    <option value="30">1 Month</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setSuspendModalUser(null)} style={{ flex: 1 }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                    Enforce Suspension
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ban User Modal */}
+      {banModalUser && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Permanent Ban</h3>
+              <button onClick={() => setBanModalUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                You are about to <strong>permanently ban @{banModalUser.username}</strong>. 
+                <br /><br />
+                This action will permanently restrict their access to ArtVault. Their live sessions will be terminated immediately. Are you absolutely sure?
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setBanModalUser(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-danger" onClick={confirmBanUser} style={{ flex: 1 }}>
+                  Yes, Ban User
+                </button>
+              </div>
             </div>
           </div>
         </div>
