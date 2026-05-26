@@ -25,13 +25,17 @@ export default function Avatar({ userId, name, size = 40, updateToken = '' }: { 
   if (error) {
     return (
       <div style={{ 
-        width: '100%', 
-        height: '100%', 
+        width: size, 
+        height: size, 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center', 
-        fontWeight: 'bold', 
-        fontSize: size * 0.4 
+        background: 'linear-gradient(135deg, #c084fc 0%, #6366f1 100%)', 
+        color: 'white', 
+        fontSize: `${size * 0.4}px`, 
+        fontWeight: 'bold',
+        borderRadius: '50%',
+        flexShrink: 0
       }}>
         {name ? name.charAt(0).toUpperCase() : 'U'}
       </div>
@@ -42,7 +46,7 @@ export default function Avatar({ userId, name, size = 40, updateToken = '' }: { 
     <img 
       src={avatarUrl} 
       alt={name} 
-      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
+      style={{ width: size, height: size, objectFit: 'cover', borderRadius: '50%', display: 'block', flexShrink: 0 }}
       onError={() => setError(true)}
     />
   );
