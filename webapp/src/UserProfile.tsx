@@ -42,6 +42,8 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
+  const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
+
   useEffect(() => {
     if (id) {
       fetchUserProfile();
@@ -143,21 +145,27 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, artwork: Artwork) => {
+  const handleDeleteClick = (e: React.MouseEvent, artwork: Artwork) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this image?')) return;
+    setDeleteModalArtwork(artwork);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModalArtwork) return;
 
     try {
-      const pathParts = artwork.image_url.split('/artworks/');
+      const pathParts = deleteModalArtwork.image_url.split('/artworks/');
       if (pathParts.length > 1) {
         await supabase.storage.from('artworks').remove([pathParts[1]]);
       }
 
-      await supabase.from('artworks').delete().eq('id', artwork.id);
-      setArtworks(artworks.filter(a => a.id !== artwork.id));
-      if (activeArtwork?.id === artwork.id) {
+      await supabase.from('artworks').delete().eq('id', deleteModalArtwork.id);
+      setArtworks(artworks.filter(a => a.id !== deleteModalArtwork.id));
+      if (activeArtwork?.id === deleteModalArtwork.id) {
         setActiveArtwork(null);
       }
+      toast.success('Artwork deleted successfully.');
+      setDeleteModalArtwork(null);
     } catch (error: any) {
       toast.error('Error deleting: ' + error.message);
     }
@@ -225,7 +233,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
 
                   <div className="art-actions">
                     {(currentUser.id === artwork.user_id || currentUser.user_metadata?.role === 'admin') && (
-                      <button onClick={(e) => handleDelete(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
+                      <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
                         <Trash2 size={14} /> Delete
                       </button>
                     )}
@@ -305,6 +313,36 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           </div>
         </div>
       )}
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalArtwork && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete Artwork</h3>
+              <button onClick={() => setDeleteModalArtwork(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete <strong>{deleteModalArtwork.title}</strong>? 
+                This action cannot be undone.
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setDeleteModalArtwork(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-danger" onClick={confirmDelete} style={{ flex: 1 }}>
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

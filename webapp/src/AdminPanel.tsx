@@ -20,6 +20,13 @@ export default function AdminPanel({ user }: { user: any }) {
   const [suspendDays, setSuspendDays] = useState('7');
   
   const [banModalUser, setBanModalUser] = useState<any>(null);
+  const [deleteUserModal, setDeleteUserModal] = useState<any>(null);
+  
+  const [deleteArtworkModal, setDeleteArtworkModal] = useState<any>(null);
+  const [editArtworkDescModal, setEditArtworkDescModal] = useState<any>(null);
+  const [editDescForm, setEditDescForm] = useState('');
+  
+  const [takeDownReportModal, setTakeDownReportModal] = useState<any>(null);
 
 
   async function fetchProfile() {
@@ -117,39 +124,37 @@ export default function AdminPanel({ user }: { user: any }) {
     }
   };
 
-  const handleTakeDownArtwork = async (report: any) => {
-    if (!confirm('Are you sure you want to take down this artwork?')) return;
+  const confirmTakeDownArtwork = async () => {
+    if (!takeDownReportModal) return;
     try {
-      if (report.artworks?.image_url) {
-        const imgUrl = report.artworks.image_url;
+      if (takeDownReportModal.artworks?.image_url) {
+        const imgUrl = takeDownReportModal.artworks.image_url;
         const pathParts = imgUrl.split('/artworks/');
         if (pathParts.length > 1) {
             await supabase.storage.from('artworks').remove([pathParts[1]]);
         }
       }
-      await supabase.from('artworks').delete().eq('id', report.artwork_id);
-      await supabase.from('reports').update({ status: 'resolved' }).eq('id', report.id);
-      setReports(reports.map(r => r.id === report.id ? { ...r, status: 'resolved' } : r));
-      setAllArtworks(allArtworks.filter(a => a.id !== report.artwork_id));
+      await supabase.from('artworks').delete().eq('id', takeDownReportModal.artwork_id);
+      await supabase.from('reports').update({ status: 'resolved' }).eq('id', takeDownReportModal.id);
+      setReports(reports.map(r => r.id === takeDownReportModal.id ? { ...r, status: 'resolved' } : r));
+      setAllArtworks(allArtworks.filter(a => a.id !== takeDownReportModal.artwork_id));
       toast.success("Artwork taken down and report resolved.");
+      setTakeDownReportModal(null);
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
 
-  const handleDeleteUser = async (userId: string) => {
-    if (userId === user.id) {
-      toast.error("You cannot delete your own admin account!");
-      return;
-    }
-    if (!confirm('Are you sure you want to delete this user? This will also delete their artworks.')) return;
+  const confirmDeleteUser = async () => {
+    if (!deleteUserModal) return;
 
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+      const { error } = await supabase.from('profiles').delete().eq('id', deleteUserModal.id);
       if (error) throw error;
-      setAllUsers(allUsers.filter(u => u.id !== userId));
+      setAllUsers(allUsers.filter(u => u.id !== deleteUserModal.id));
       toast.success("User deleted successfully.");
+      setDeleteUserModal(null);
     } catch (err: any) {
       toast.error("Error deleting user: " + err.message);
     }
@@ -180,27 +185,33 @@ export default function AdminPanel({ user }: { user: any }) {
     }
   };
 
-  const handleDeleteArtworkAdmin = async (artworkId: string, imagePath: string) => {
-    if (!confirm('Are you sure you want to delete this artwork globally?')) return;
+  const confirmDeleteArtworkAdmin = async () => {
+    if (!deleteArtworkModal) return;
     try {
-      await supabase.storage.from('artworks').remove([imagePath]);
-      const { error } = await supabase.from('artworks').delete().eq('id', artworkId);
+      await supabase.storage.from('artworks').remove([deleteArtworkModal.image_path]);
+      const { error } = await supabase.from('artworks').delete().eq('id', deleteArtworkModal.id);
       if (error) throw error;
-      setAllArtworks(allArtworks.filter(a => a.id !== artworkId));
+      setAllArtworks(allArtworks.filter(a => a.id !== deleteArtworkModal.id));
       toast.success("Artwork removed successfully.");
+      setDeleteArtworkModal(null);
     } catch (err: any) {
       toast.error("Error removing artwork: " + err.message);
     }
   };
 
-  const handleUpdateArtworkDescr = async (artworkId: string, currentDescr: string) => {
-    const newDescr = prompt("Enter new description:", currentDescr);
-    if (newDescr === null || newDescr === currentDescr) return;
+  const confirmUpdateArtworkDescr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editArtworkDescModal || editDescForm === editArtworkDescModal.description) {
+        setEditArtworkDescModal(null);
+        return;
+    }
 
     try {
-      const { error } = await supabase.from('artworks').update({ description: newDescr }).eq('id', artworkId);
+      const { error } = await supabase.from('artworks').update({ description: editDescForm }).eq('id', editArtworkDescModal.id);
       if (error) throw error;
-      setAllArtworks(allArtworks.map(a => a.id === artworkId ? { ...a, description: newDescr } : a));
+      setAllArtworks(allArtworks.map(a => a.id === editArtworkDescModal.id ? { ...a, description: editDescForm } : a));
+      toast.success("Description updated successfully.");
+      setEditArtworkDescModal(null);
     } catch (err: any) {
       toast.error("Error updating description: " + err.message);
     }
@@ -333,7 +344,7 @@ export default function AdminPanel({ user }: { user: any }) {
                         <button className="btn btn-primary btn-sm" onClick={() => handleEditUser(u)}>
                           <Edit2 size={14} /> Edit
                         </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)} disabled={u.id === user.id}>
+                        <button className="btn btn-danger btn-sm" onClick={() => setDeleteUserModal(u)} disabled={u.id === user.id}>
                           <Trash2 size={14} /> Delete
                         </button>
                       </td>
@@ -374,10 +385,10 @@ export default function AdminPanel({ user }: { user: any }) {
                         <div style={{ fontSize: '13px' }}>@{a.profiles?.username}</div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleUpdateArtworkDescr(a.id, a.description)} style={{ marginRight: '8px' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { setEditArtworkDescModal(a); setEditDescForm(a.description || ''); }} style={{ marginRight: '8px' }}>
                           <Edit2 size={14} /> Edit Descr.
                         </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteArtworkAdmin(a.id, a.image_path)}>
+                        <button className="btn btn-danger btn-sm" onClick={() => setDeleteArtworkModal(a)}>
                           <Trash2 size={14} /> Remove
                         </button>
                       </td>
@@ -437,7 +448,7 @@ export default function AdminPanel({ user }: { user: any }) {
                         <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           {r.status === 'pending' && (
                             <>
-                              <button className="btn btn-danger btn-sm" onClick={() => handleTakeDownArtwork(r)}>
+                              <button className="btn btn-danger btn-sm" onClick={() => setTakeDownReportModal(r)}>
                                 Take Down
                               </button>
                               <button className="btn btn-secondary btn-sm" onClick={() => handleDismissReport(r.id)}>
@@ -575,6 +586,124 @@ export default function AdminPanel({ user }: { user: any }) {
                 </button>
                 <button type="button" className="btn btn-danger" onClick={confirmBanUser} style={{ flex: 1 }}>
                   Yes, Ban User
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Modal */}
+      {deleteUserModal && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete User Account</h3>
+              <button onClick={() => setDeleteUserModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                Are you sure you want to permanently delete <strong>@{deleteUserModal.username}</strong>? 
+                This action will irrevocably destroy their profile and <strong>all</strong> of their uploaded artworks.
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setDeleteUserModal(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-danger" onClick={confirmDeleteUser} style={{ flex: 1 }}>
+                  Yes, Delete User
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Artwork Modal */}
+      {deleteArtworkModal && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Global Artwork Deletion</h3>
+              <button onClick={() => setDeleteArtworkModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete <strong>{deleteArtworkModal.title}</strong> globally? 
+                This action cannot be undone.
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setDeleteArtworkModal(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-danger" onClick={confirmDeleteArtworkAdmin} style={{ flex: 1 }}>
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Artwork Description Modal */}
+      {editArtworkDescModal && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Edit Artwork Description</h3>
+              <button onClick={() => setEditArtworkDescModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={confirmUpdateArtworkDescr}>
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Description</label>
+                  <textarea 
+                    className="search-input" 
+                    style={{ height: '100px', resize: 'vertical' }}
+                    value={editDescForm}
+                    onChange={e => setEditDescForm(e.target.value)}
+                  ></textarea>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditArtworkDescModal(null)} style={{ flex: 1 }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Take Down Report Artwork Modal */}
+      {takeDownReportModal && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Take Down Reported Artwork</h3>
+              <button onClick={() => setTakeDownReportModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                You are about to enforce a takedown on a reported artwork. This will permanently delete the image from the global showcase and resolve the report. Proceed?
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setTakeDownReportModal(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-danger" onClick={confirmTakeDownArtwork} style={{ flex: 1 }}>
+                  Yes, Enforce Takedown
                 </button>
               </div>
             </div>

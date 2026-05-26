@@ -11,6 +11,8 @@ interface LightboxProps {
 
 export default function Lightbox({ artwork, artistName, onClose }: LightboxProps) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
   
   // Panning state
   const [isDragging, setIsDragging] = useState(false);
@@ -45,9 +47,9 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
     setIsDragging(false);
   };
 
-  const handleReport = async () => {
-    const reason = prompt("Why are you reporting this artwork? (e.g., Inappropriate content, Copyright violation)");
-    if (!reason) return;
+  const confirmReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportReason) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -59,11 +61,13 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
       const { error } = await supabase.from('reports').insert({
         artwork_id: artwork.id,
         reporter_id: user.id,
-        reason: reason
+        reason: reportReason
       });
 
       if (error) throw error;
       toast.success("Report submitted to administrators for review.");
+      setReportModalOpen(false);
+      setReportReason('');
     } catch (err: any) {
       toast.error("Error submitting report: " + err.message);
       console.error(err);
@@ -111,7 +115,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
             <div className="lightbox-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Published on: {new Date(artwork.created_at).toLocaleDateString()}</span>
               <button 
-                onClick={handleReport} 
+                onClick={() => setReportModalOpen(true)} 
                 style={{ background: 'none', border: 'none', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '13px' }}
               >
                 <Flag size={14} /> Report
@@ -120,6 +124,44 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
           </div>
         )}
       </div>
+
+      {/* Report Modal */}
+      {reportModalOpen && (
+        <div className="modal" style={{ zIndex: 1000000 }}>
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Report Artwork</h3>
+              <button onClick={() => setReportModalOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={confirmReport}>
+                <div className="form-group" style={{ marginBottom: '25px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Reason for Reporting</label>
+                  <textarea 
+                    className="search-input" 
+                    value={reportReason}
+                    onChange={e => setReportReason(e.target.value)}
+                    style={{ height: '100px', resize: 'vertical' }}
+                    placeholder="e.g., Inappropriate content, Copyright violation, Spam"
+                    required 
+                  ></textarea>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setReportModalOpen(false)} style={{ flex: 1 }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-danger" style={{ flex: 1 }}>
+                    Submit Report
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
