@@ -47,7 +47,9 @@ export default function Settings({ user }: { user: any }) {
       toast.error('Error uploading avatar: ' + error.message);
     } else {
       toast.success('Profile picture updated!');
-      setAvatarToken(Date.now().toString());
+      const token = Date.now().toString();
+      setAvatarToken(token);
+      window.dispatchEvent(new CustomEvent('avatarUpdated', { detail: { userId: user.id, token } }));
     }
     setAvatarLoading(false);
   };

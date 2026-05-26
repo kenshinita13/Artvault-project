@@ -2,12 +2,25 @@ import { useState, useEffect } from 'react';
 
 export default function Avatar({ userId, name, size = 40, updateToken = '' }: { userId: string, name: string, size?: number, updateToken?: string }) {
   const [error, setError] = useState(false);
+  const [localToken, setLocalToken] = useState(updateToken);
   
   useEffect(() => {
     setError(false);
+    setLocalToken(updateToken);
   }, [userId, updateToken]);
 
-  const avatarUrl = `https://exaaahqhnesijbdixjzc.supabase.co/storage/v1/object/public/artworks/${userId}/avatar${updateToken ? `?t=${updateToken}` : ''}`;
+  useEffect(() => {
+    const handleAvatarUpdate = (e: any) => {
+      if (e.detail && e.detail.userId === userId) {
+        setLocalToken(e.detail.token);
+        setError(false);
+      }
+    };
+    window.addEventListener('avatarUpdated', handleAvatarUpdate as EventListener);
+    return () => window.removeEventListener('avatarUpdated', handleAvatarUpdate as EventListener);
+  }, [userId]);
+
+  const avatarUrl = `https://exaaahqhnesijbdixjzc.supabase.co/storage/v1/object/public/artworks/${userId}/avatar${localToken ? `?t=${localToken}` : ''}`;
 
   if (error) {
     return (
@@ -29,7 +42,7 @@ export default function Avatar({ userId, name, size = 40, updateToken = '' }: { 
     <img 
       src={avatarUrl} 
       alt={name} 
-      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
       onError={() => setError(true)}
     />
   );
