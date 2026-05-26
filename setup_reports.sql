@@ -2,11 +2,16 @@
 CREATE TABLE IF NOT EXISTS public.reports (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     artwork_id UUID REFERENCES public.artworks(id) ON DELETE CASCADE,
-    reporter_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    reporter_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     reason TEXT NOT NULL,
     status TEXT DEFAULT 'pending', -- pending, resolved, dismissed
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+);
+
+-- FIX: If you already ran this script before, run these two lines to fix the reporter_id relation so usernames show up in the Admin Panel:
+ALTER TABLE public.reports DROP CONSTRAINT IF EXISTS reports_reporter_id_fkey;
+ALTER TABLE public.reports ADD CONSTRAINT reports_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
 
 -- Update Profiles Table to support bans and suspensions
 ALTER TABLE public.profiles 

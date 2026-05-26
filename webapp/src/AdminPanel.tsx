@@ -28,6 +28,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const [editDescForm, setEditDescForm] = useState('');
   
   const [takeDownReportModal, setTakeDownReportModal] = useState<any>(null);
+  const [viewReportModal, setViewReportModal] = useState<any>(null);
 
 
   async function fetchProfile() {
@@ -63,7 +64,7 @@ export default function AdminPanel({ user }: { user: any }) {
 
   async function fetchAllReports() {
     try {
-      const { data } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
+      const { data } = await supabase.from('reports').select('*, reporter:profiles!reporter_id(*), artworks(*, profiles(name, username))').order('created_at', { ascending: false });
       if (data) setReports(data);
     } catch (e) {
       console.log('Reports table might not exist yet.');
@@ -444,9 +445,16 @@ export default function AdminPanel({ user }: { user: any }) {
                             <span style={{ color: 'var(--text-secondary)' }}>Artwork Deleted</span>
                           )}
                         </td>
-                        <td>{r.reason}</td>
+                        <td style={{ maxWidth: '200px' }}>
+                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {r.reason}
+                          </div>
+                          <button className="btn btn-secondary btn-sm" style={{ padding: '2px 6px', fontSize: '11px', marginTop: '4px' }} onClick={() => setViewReportModal(r)}>
+                            View Full Reason
+                          </button>
+                        </td>
                         <td style={{ fontSize: '13px' }}>
-                          {r.profiles ? `@${r.profiles.username}` : 'Unknown'}
+                          {r.reporter ? `@${r.reporter.username}` : 'Unknown'}
                         </td>
                         <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           {r.status === 'pending' && (
@@ -735,6 +743,36 @@ export default function AdminPanel({ user }: { user: any }) {
                 </button>
                 <button type="button" className="btn btn-danger" onClick={confirmTakeDownArtwork} style={{ flex: 1 }}>
                   Yes, Enforce Takedown
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Full Report Modal */}
+      {viewReportModal && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Moderation Ticket Details</h3>
+              <button onClick={() => setViewReportModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Reported By:</strong> {viewReportModal.reporter ? `@${viewReportModal.reporter.username}` : 'Unknown User'}
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <strong>Full Reason:</strong>
+                <div style={{ marginTop: '10px', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--panel-border)', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                  {viewReportModal.reason}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setViewReportModal(null)} style={{ flex: 1 }}>
+                  Close
                 </button>
               </div>
             </div>
