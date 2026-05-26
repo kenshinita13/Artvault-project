@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
-import { Trash2, Users, BarChart3, Edit2, Shield, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Users, BarChart3, Edit2, Shield } from 'lucide-react';
 import './Dashboard.css';
 
 export default function AdminPanel({ user }: { user: any }) {
@@ -12,11 +12,8 @@ export default function AdminPanel({ user }: { user: any }) {
   const [allArtworks, setAllArtworks] = useState<any[]>([]);
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks'>('stats');
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
 
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     setLoading(true);
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (data) {
@@ -26,15 +23,18 @@ export default function AdminPanel({ user }: { user: any }) {
         fetchAllArtworks();
       }
     }
-    setLoading(false);
   };
 
-  const fetchAllUsers = async () => {
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  async function fetchAllUsers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setAllUsers(data);
   };
 
-  const fetchAllArtworks = async () => {
+  async function fetchAllArtworks() {
     const { data } = await supabase.from('artworks').select(`
       *,
       profiles (name, username)

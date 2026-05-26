@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { Search, X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
 import './Dashboard.css';

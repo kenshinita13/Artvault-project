@@ -22,11 +22,8 @@ export default function Settings({ user }: { user: any }) {
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaLoading, setMfaLoading] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
 
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     setLoading(true);
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (data) {
@@ -42,8 +39,11 @@ export default function Settings({ user }: { user: any }) {
       }
     }
     
-    setLoading(false);
   };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();

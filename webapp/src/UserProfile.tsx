@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
-import { Download, Trash2, X, Upload } from 'lucide-react';
+import { Trash2, X, Upload } from 'lucide-react';
 import './Dashboard.css';
 
 interface Profile {
@@ -45,7 +45,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
     }
   }, [id]);
 
-  const fetchUserProfile = async () => {
+  async function fetchUserProfile() {
     setLoading(true);
     
     // Fetch profile

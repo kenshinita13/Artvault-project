@@ -15,11 +15,8 @@ export default function Artists() {
   const [artists, setArtists] = useState<ArtistProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchArtists();
-  }, []);
 
-  const fetchArtists = async () => {
+  async function fetchArtists() {
     setLoading(true);
     // Fetch profiles
     const { data: profiles, error: profileError } = await supabase
@@ -59,8 +56,11 @@ export default function Artists() {
     fullProfiles.sort((a, b) => b.total_uploads - a.total_uploads);
 
     setArtists(fullProfiles);
-    setLoading(false);
   };
+
+  useEffect(() => {
+    fetchArtists();
+  }, []);
 
   return (
     <main className="directory-container">

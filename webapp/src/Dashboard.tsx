@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
-import { Search, Upload, Trash2, X, Download } from 'lucide-react';
+import { Upload, Trash2, X } from 'lucide-react';
 import './Dashboard.css';
 
 interface Artwork {
@@ -34,7 +34,7 @@ export default function Dashboard({ user }: { user: any }) {
     fetchArtworks();
   }, []);
 
-  const fetchArtworks = async () => {
+  async function fetchArtworks() {
     setLoading(true);
     // Fetch artworks along with the profile of the artist
     const { data, error } = await supabase

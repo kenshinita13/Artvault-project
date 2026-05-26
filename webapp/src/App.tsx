@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import Layout from './Layout';
@@ -81,6 +80,33 @@ function App() {
       return;
     }
 
+    // Role check before proceeding to MFA or completing login
+    if (data?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (isAdminLogin && profile?.role !== 'admin') {
+        await supabase.auth.signOut();
+        setError('Access denied. Only administrators can log in here.');
+        toast.error('Access denied. Only administrators can log in here.');
+        setLoading(false);
+        setIsValidatingLogin(false);
+        return;
+      }
+
+      if (!isAdminLogin && profile?.role === 'admin') {
+        await supabase.auth.signOut();
+        setError('Admins must log in through the /admin portal.');
+        toast.error('Admins must log in through the /admin portal.');
+        setLoading(false);
+        setIsValidatingLogin(false);
+        return;
+      }
+    }
+
     // Check for MFA
     const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
@@ -99,10 +125,10 @@ function App() {
     }
 
     // If no MFA required, proceed as normal
-    completeLogin(data, isAdminLogin);
+    completeLogin(data);
   };
 
-  const completeLogin = async (data: any, isAdminLogin: boolean) => {
+  const completeLogin = async (data: any) => {
     if (data?.user) {
       const { data: profile } = await supabase
         .from('profiles')
@@ -126,7 +152,7 @@ function App() {
     setLoading(false);
   };
 
-  const handleMfaSubmit = async (e: React.FormEvent, isAdminLogin = false) => {
+  const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -167,7 +193,7 @@ function App() {
     // MFA verified successfully
     setShowMfaChallenge(false);
     const { data } = await supabase.auth.getUser();
-    completeLogin({ user: data.user }, isAdminLogin);
+    completeLogin({ user: data.user });
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -244,7 +270,7 @@ function App() {
             </p>
             {error && <div className="alert error">❌ {error}</div>}
             
-            <form onSubmit={e => handleMfaSubmit(e, isAdminRoute)}>
+            <form onSubmit={e => handleMfaSubmit(e)}>
               <div className="form-group">
                 <input 
                   type="text" 
