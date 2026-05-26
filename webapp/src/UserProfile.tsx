@@ -43,12 +43,23 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
   const [file, setFile] = useState<File | null>(null);
 
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('user');
 
   useEffect(() => {
     if (id) {
       fetchUserProfile();
     }
-  }, [id]);
+    if (currentUser?.id) {
+      fetchCurrentUserRole();
+    }
+  }, [id, currentUser]);
+
+  async function fetchCurrentUserRole() {
+    const { data } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
+    if (data) {
+      setCurrentUserRole(data.role);
+    }
+  }
 
   async function fetchUserProfile() {
     setLoading(true);
@@ -200,7 +211,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
               </span>
             </div>
           </div>
-          {(currentUser.id?.toLowerCase() === profile.id?.toLowerCase() || currentUser.user_metadata?.role === 'admin') && (
+          {(currentUser.id?.toLowerCase() === profile.id?.toLowerCase() || currentUserRole === 'admin') && (
             <div style={{ marginLeft: 'auto' }}>
               <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
                 <Upload size={16} /> Post Artwork
@@ -232,7 +243,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
                   </div>
 
                   <div className="art-actions">
-                    {(currentUser.id === artwork.user_id || currentUser.user_metadata?.role === 'admin') && (
+                    {(currentUser.id === artwork.user_id || currentUserRole === 'admin') && (
                       <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
                         <Trash2 size={14} /> Delete
                       </button>

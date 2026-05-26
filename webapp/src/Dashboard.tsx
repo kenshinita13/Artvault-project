@@ -34,10 +34,19 @@ export default function Dashboard({ user }: { user: any }) {
   const [file, setFile] = useState<File | null>(null);
   
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
+  const [userRole, setUserRole] = useState<string>('user');
 
   useEffect(() => {
     fetchArtworks();
+    fetchUserRole();
   }, []);
+
+  async function fetchUserRole() {
+    const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (data) {
+      setUserRole(data.role);
+    }
+  }
 
   async function fetchArtworks() {
     setLoading(true);
@@ -180,7 +189,7 @@ export default function Dashboard({ user }: { user: any }) {
                   </div>
 
                   <div className="art-actions">
-                    {(user.id === artwork.user_id || user.user_metadata?.role === 'admin') && (
+                    {(user.id === artwork.user_id || userRole === 'admin') && (
                       <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
                         <Trash2 size={14} /> Delete
                       </button>
