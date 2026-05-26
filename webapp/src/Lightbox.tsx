@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Flag } from 'lucide-react';
+import { supabase } from './supabaseClient';
+import toast from 'react-hot-toast';
 
 interface LightboxProps {
   artwork: any;
@@ -43,6 +45,31 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
     setIsDragging(false);
   };
 
+  const handleReport = async () => {
+    const reason = prompt("Why are you reporting this artwork? (e.g., Inappropriate content, Copyright violation)");
+    if (!reason) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be logged in to report.");
+        return;
+      }
+
+      const { error } = await supabase.from('reports').insert({
+        artwork_id: artwork.id,
+        reporter_id: user.id,
+        reason: reason
+      });
+
+      if (error) throw error;
+      toast.success("Report submitted to administrators for review.");
+    } catch (err: any) {
+      toast.error("Error submitting report: " + err.message);
+      console.error(err);
+    }
+  };
+
   return (
     <div className="modal" style={{ display: 'flex' }} onClick={onClose}>
       <div className="lightbox-content" onClick={e => e.stopPropagation()}>
@@ -81,8 +108,14 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
             <div className="lightbox-desc-title">Description</div>
             <div className="lightbox-desc">{artwork.description || 'No description provided for this artwork.'}</div>
             
-            <div className="lightbox-meta">
+            <div className="lightbox-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Published on: {new Date(artwork.created_at).toLocaleDateString()}</span>
+              <button 
+                onClick={handleReport} 
+                style={{ background: 'none', border: 'none', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '13px' }}
+              >
+                <Flag size={14} /> Report
+              </button>
             </div>
           </div>
         )}

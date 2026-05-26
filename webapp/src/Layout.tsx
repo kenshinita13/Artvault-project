@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { Search, X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import './Dashboard.css';
 
@@ -11,8 +12,25 @@ export default function Layout({ user }: { user: any }) {
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
-    supabase.from('profiles').select('role').eq('id', user.id).single().then(({ data }) => {
-      if (data) setProfile(data);
+    supabase.from('profiles').select('role, status, suspension_end').eq('id', user.id).single().then(async ({ data }) => {
+      if (data) {
+        if (data.status === 'banned') {
+          await supabase.auth.signOut();
+          toast.error("Your account has been permanently banned.");
+          return;
+        }
+        if (data.status === 'suspended' && data.suspension_end) {
+          if (new Date() < new Date(data.suspension_end)) {
+            await supabase.auth.signOut();
+            toast.error(`Your account is suspended until ${new Date(data.suspension_end).toLocaleDateString()}.`);
+            return;
+          } else {
+            await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', user.id);
+            data.status = 'active';
+          }
+        }
+        setProfile(data);
+      }
     });
   }, [user.id]);
 

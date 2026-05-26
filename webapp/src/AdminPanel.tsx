@@ -10,7 +10,8 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [allArtworks, setAllArtworks] = useState<any[]>([]);
-  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks'>('stats');
+  const [reports, setReports] = useState<any[]>([]);
+  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks' | 'reports'>('stats');
 
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', username: '' });
@@ -24,6 +25,7 @@ export default function AdminPanel({ user }: { user: any }) {
       if (data.role === 'admin') {
         fetchAllUsers();
         fetchAllArtworks();
+        fetchAllReports();
       }
     }
     setLoading(false);
@@ -45,6 +47,86 @@ export default function AdminPanel({ user }: { user: any }) {
     `).order('created_at', { ascending: false });
     if (data) setAllArtworks(data);
   };
+
+  async function fetchAllReports() {
+    try {
+      const { data } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
+      if (data) setReports(data);
+    } catch (e) {
+      console.log('Reports table might not exist yet.');
+    }
+  };
+
+  const handleSuspendUser = async (u: any) => {
+    const days = prompt(`How many days to suspend @${u.username}?`);
+    if (!days || isNaN(parseInt(days))) return;
+    const end = new Date();
+    end.setDate(end.getDate() + parseInt(days));
+    
+    try {
+      const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', u.id);
+      if (error) throw error;
+      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, status: 'suspended', suspension_end: end.toISOString() } : user));
+      toast.success(`@${u.username} suspended for ${days} days.`);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleBanUser = async (u: any) => {
+    if (!confirm(`Are you sure you want to PERMANENTLY BAN @${u.username}?`)) return;
+    try {
+      const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', u.id);
+      if (error) throw error;
+      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, status: 'banned', suspension_end: null } : user));
+      toast.success(`@${u.username} has been banned.`);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+  
+  const handleUnbanUser = async (u: any) => {
+    try {
+      const { error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', u.id);
+      if (error) throw error;
+      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, status: 'active', suspension_end: null } : user));
+      toast.success(`@${u.username} is now active.`);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDismissReport = async (reportId: string) => {
+    try {
+      const { error } = await supabase.from('reports').update({ status: 'dismissed' }).eq('id', reportId);
+      if (error) throw error;
+      setReports(reports.map(r => r.id === reportId ? { ...r, status: 'dismissed' } : r));
+      toast.success("Report dismissed.");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleTakeDownArtwork = async (report: any) => {
+    if (!confirm('Are you sure you want to take down this artwork?')) return;
+    try {
+      if (report.artworks?.image_url) {
+        const imgUrl = report.artworks.image_url;
+        const pathParts = imgUrl.split('/artworks/');
+        if (pathParts.length > 1) {
+            await supabase.storage.from('artworks').remove([pathParts[1]]);
+        }
+      }
+      await supabase.from('artworks').delete().eq('id', report.artwork_id);
+      await supabase.from('reports').update({ status: 'resolved' }).eq('id', report.id);
+      setReports(reports.map(r => r.id === report.id ? { ...r, status: 'resolved' } : r));
+      setAllArtworks(allArtworks.filter(a => a.id !== report.artwork_id));
+      toast.success("Artwork taken down and report resolved.");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
 
   const handleDeleteUser = async (userId: string) => {
     if (userId === user.id) {
@@ -154,6 +236,11 @@ export default function AdminPanel({ user }: { user: any }) {
               <Shield size={18} /> Global Artworks
             </button>
           </li>
+          <li>
+            <button className={`tab-btn ${adminSubTab === 'reports' ? 'active' : ''}`} onClick={() => setAdminSubTab('reports')}>
+              <Shield size={18} /> Tickets & Reports
+            </button>
+          </li>
         </ul>
       </div>
 
@@ -212,7 +299,27 @@ export default function AdminPanel({ user }: { user: any }) {
                           <option value="admin">Admin</option>
                         </select>
                       </td>
-                      <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {u.status === 'banned' ? (
+                          <span style={{ color: 'var(--danger)', fontSize: '12px', fontWeight: 'bold' }}>BANNED</span>
+                        ) : u.status === 'suspended' ? (
+                          <span style={{ color: 'var(--warning)', fontSize: '12px', fontWeight: 'bold' }}>SUSPENDED</span>
+                        ) : null}
+                        
+                        {u.status === 'banned' || u.status === 'suspended' ? (
+                          <button className="btn btn-secondary btn-sm" onClick={() => handleUnbanUser(u)} disabled={u.id === user.id}>
+                            Unban / Unsuspend
+                          </button>
+                        ) : (
+                          <>
+                            <button className="btn btn-secondary btn-sm" onClick={() => handleSuspendUser(u)} disabled={u.id === user.id}>
+                              Suspend
+                            </button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleBanUser(u)} disabled={u.id === user.id}>
+                              Ban
+                            </button>
+                          </>
+                        )}
                         <button className="btn btn-primary btn-sm" onClick={() => handleEditUser(u)}>
                           <Edit2 size={14} /> Edit
                         </button>
@@ -269,6 +376,72 @@ export default function AdminPanel({ user }: { user: any }) {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+        {adminSubTab === 'reports' && (
+          <div className="content-card">
+            <h3>Active Moderation Tickets</h3>
+            {reports.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)' }}>No active reports.</p>
+            ) : (
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Artwork</th>
+                      <th>Report Reason</th>
+                      <th>Reporter</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reports.map(r => (
+                      <tr key={r.id}>
+                        <td>
+                          <span style={{ 
+                            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
+                            backgroundColor: r.status === 'pending' ? 'var(--warning)' : r.status === 'resolved' ? 'var(--success)' : 'var(--panel-border)',
+                            color: r.status === 'pending' ? '#000' : '#fff'
+                          }}>
+                            {r.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
+                          {r.artworks ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <img src={r.artworks.image_url} alt="reported" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                              <div>
+                                <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{r.artworks.title}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>by @{r.artworks.profiles?.username}</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-secondary)' }}>Artwork Deleted</span>
+                          )}
+                        </td>
+                        <td>{r.reason}</td>
+                        <td style={{ fontSize: '13px' }}>
+                          {r.profiles ? `@${r.profiles.username}` : 'Unknown'}
+                        </td>
+                        <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          {r.status === 'pending' && (
+                            <>
+                              <button className="btn btn-danger btn-sm" onClick={() => handleTakeDownArtwork(r)}>
+                                Take Down
+                              </button>
+                              <button className="btn btn-secondary btn-sm" onClick={() => handleDismissReport(r.id)}>
+                                Dismiss
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
