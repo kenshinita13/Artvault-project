@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
-import { Trash2, Users, BarChart3, Edit2, Shield } from 'lucide-react';
+import { Trash2, Users, BarChart3, Edit2, Shield, X } from 'lucide-react';
 import './Dashboard.css';
 
 export default function AdminPanel({ user }: { user: any }) {
@@ -11,6 +11,9 @@ export default function AdminPanel({ user }: { user: any }) {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [allArtworks, setAllArtworks] = useState<any[]>([]);
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks'>('stats');
+
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: '', username: '' });
 
 
   async function fetchProfile() {
@@ -60,19 +63,26 @@ export default function AdminPanel({ user }: { user: any }) {
     }
   };
 
-  const handleEditUser = async (u: any) => {
-    const newName = prompt("Enter new name:", u.name);
-    if (!newName) return;
-    const newUsername = prompt("Enter new username:", u.username);
-    if (!newUsername) return;
+  const handleEditUser = (u: any) => {
+    setEditingUser(u);
+    setEditForm({ name: u.name, username: u.username });
+  };
 
-    if (newName === u.name && newUsername === u.username) return;
+  const saveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    if (editForm.name === editingUser.name && editForm.username === editingUser.username) {
+        setEditingUser(null);
+        return;
+    }
 
     try {
-      const { error } = await supabase.from('profiles').update({ name: newName, username: newUsername }).eq('id', u.id);
+      const { error } = await supabase.from('profiles').update({ name: editForm.name, username: editForm.username }).eq('id', editingUser.id);
       if (error) throw error;
-      setAllUsers(allUsers.map(user => user.id === u.id ? { ...user, name: newName, username: newUsername } : user));
+      setAllUsers(allUsers.map(user => user.id === editingUser.id ? { ...user, name: editForm.name, username: editForm.username } : user));
       toast.success("User details updated.");
+      setEditingUser(null);
     } catch (err: any) {
       toast.error("Error updating user: " + err.message);
     }
@@ -262,6 +272,60 @@ export default function AdminPanel({ user }: { user: any }) {
           </div>
         )}
       </div>
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Edit User Identity</h3>
+              <button onClick={() => setEditingUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={saveEditUser}>
+                <div className="form-group" style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Account Email</label>
+                  <input 
+                    type="text" 
+                    className="search-input" 
+                    value="Restricted by Auth Policies" 
+                    disabled 
+                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                  />
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Email addresses are tied to core authentication credentials and cannot be changed by administrators due to strict security policies.
+                  </div>
+                </div>
+                <div className="form-group" style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Full Name</label>
+                  <input 
+                    type="text" 
+                    className="search-input" 
+                    value={editForm.name}
+                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                    required 
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '25px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Username</label>
+                  <input 
+                    type="text" 
+                    className="search-input" 
+                    value={editForm.username}
+                    onChange={e => setEditForm({ ...editForm, username: e.target.value })}
+                    required 
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                  Save Changes
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
