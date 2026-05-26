@@ -35,3 +35,6 @@ CREATE POLICY "Admins can update reports" ON public.reports
             WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
         )
     );
+
+-- Enable Realtime for the profiles table to allow live-booting banned users
+ALTER PUBLICATION supabase_realtime ADD TABLE profiles;

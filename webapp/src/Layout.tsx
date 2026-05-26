@@ -32,6 +32,35 @@ export default function Layout({ user }: { user: any }) {
         setProfile(data);
       }
     });
+
+    // Real-time listener for Live Bans/Suspensions
+    const channel = supabase
+      .channel('profile-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`
+        },
+        async (payload) => {
+          const newData = payload.new;
+          if (newData.status === 'banned') {
+            await supabase.auth.signOut();
+            toast.error("Your account has just been permanently banned by an administrator.");
+          } else if (newData.status === 'suspended') {
+            await supabase.auth.signOut();
+            const suspendedUntil = newData.suspension_end ? new Date(newData.suspension_end).toLocaleDateString() : 'a later date';
+            toast.error(`Your account has just been suspended until ${suspendedUntil}.`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user.id]);
 
   const handleLogout = async () => {
