@@ -313,7 +313,6 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           </div>
         </div>
       )}
-      )}
 
       {/* Delete Confirmation Modal */}
       {deleteModalArtwork && (
