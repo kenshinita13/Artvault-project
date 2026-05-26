@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { Trash2, X, Upload } from 'lucide-react';
 import Avatar from './Avatar';
+import Lightbox from './Lightbox';
 import './Dashboard.css';
 
 interface Profile {
@@ -229,37 +230,11 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
 
       {/* Lightbox Modal */}
       {activeArtwork && (
-        <div className="modal" style={{ display: 'flex' }} onClick={() => setActiveArtwork(null)}>
-          <div className="lightbox-content" onClick={e => e.stopPropagation()}>
-            <div className={`lightbox-img-wrapper ${fullscreen ? 'fullscreen' : ''}`} onClick={() => !fullscreen && setFullscreen(true)}>
-              {fullscreen && (
-                <button className="fullscreen-close" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>
-                  <X size={20} />
-                </button>
-              )}
-              <img src={activeArtwork.image_url} alt={activeArtwork.title} />
-              {!fullscreen && <div className="zoom-indicator">🔍 Click Image to Zoom</div>}
-            </div>
-            {!fullscreen && (
-              <div className="lightbox-info">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-                  <h2 className="lightbox-title">{activeArtwork.title}</h2>
-                  <button onClick={() => setActiveArtwork(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '24px', cursor: 'pointer', padding: 0 }}>
-                    <X size={24} />
-                  </button>
-                </div>
-                <div className="lightbox-artist">By {profile.name}</div>
-                
-                <div className="lightbox-desc-title">Description</div>
-                <div className="lightbox-desc">{activeArtwork.description || 'No description provided for this artwork.'}</div>
-                
-                <div className="lightbox-meta">
-                  <span>Published on: {new Date(activeArtwork.created_at).toLocaleDateString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <Lightbox 
+          artwork={activeArtwork} 
+          artistName={profile.name} 
+          onClose={() => setActiveArtwork(null)} 
+        />
       )}
 
       {/* Upload Modal */}
