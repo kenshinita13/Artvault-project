@@ -29,6 +29,7 @@ export default function AdminPanel({ user }: { user: any }) {
   
   const [takeDownReportModal, setTakeDownReportModal] = useState<any>(null);
   const [viewReportModal, setViewReportModal] = useState<any>(null);
+  const [reportSearchQuery, setReportSearchQuery] = useState('');
 
 
   async function fetchProfile() {
@@ -64,12 +65,46 @@ export default function AdminPanel({ user }: { user: any }) {
 
   async function fetchAllReports() {
     try {
-      const { data } = await supabase.from('reports').select('*, reporter:profiles!reporter_id(*), artworks(*, profiles(name, username))').order('created_at', { ascending: false });
-      if (data) setReports(data);
-    } catch (e) {
+      const { data, error } = await supabase.from('reports').select('*, reporter:profiles!reporter_id(*), artworks(*, profiles(name, username))').order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Fetch reports error:', error);
+        // Fallback for when the foreign key to profiles is missing or named differently
+        const { data: fallbackData, error: fallbackError } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
+        
+        if (fallbackError) {
+           console.error('Fallback fetch error:', fallbackError);
+           // Absolute fallback without any joins
+           const { data: rawData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
+           if (rawData) await populateReporters(rawData);
+        } else if (fallbackData) {
+           await populateReporters(fallbackData);
+        }
+      } else if (data) {
+        setReports(data);
+      }
+    } catch {
       console.log('Reports table might not exist yet.');
     }
   };
+
+  async function populateReporters(reportList: any[]) {
+    // Extract unique reporter IDs
+    const reporterIds = [...new Set(reportList.map(r => r.reporter_id).filter(Boolean))];
+    if (reporterIds.length > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('*').in('id', reporterIds);
+      if (profiles) {
+         const profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
+         const populated = reportList.map(r => ({
+           ...r,
+           reporter: profileMap[r.reporter_id] || null
+         }));
+         setReports(populated);
+         return;
+      }
+    }
+    setReports(reportList);
+  }
 
   const confirmSuspendUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -405,7 +440,17 @@ export default function AdminPanel({ user }: { user: any }) {
         )}
         {adminSubTab === 'reports' && (
           <div className="content-card">
-            <h3>Active Moderation Tickets</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>Active Moderation Tickets</h3>
+              <input 
+                type="text" 
+                placeholder="Search reports..." 
+                className="search-input" 
+                style={{ width: '250px' }}
+                value={reportSearchQuery}
+                onChange={e => setReportSearchQuery(e.target.value)}
+              />
+            </div>
             {reports.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)' }}>No active reports.</p>
             ) : (
@@ -414,6 +459,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   <thead>
                     <tr>
                       <th>Status</th>
+                      <th>Reported On</th>
                       <th>Artwork</th>
                       <th>Report Reason</th>
                       <th>Reporter</th>
@@ -421,16 +467,26 @@ export default function AdminPanel({ user }: { user: any }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.map(r => (
+                    {reports.filter(r => {
+                      const q = reportSearchQuery.toLowerCase();
+                      const title = r.artworks?.title?.toLowerCase() || '';
+                      const reason = r.reason?.toLowerCase() || '';
+                      const reporter = r.reporter?.username?.toLowerCase() || '';
+                      return title.includes(q) || reason.includes(q) || reporter.includes(q);
+                    }).map(r => (
                       <tr key={r.id}>
                         <td>
                           <span style={{ 
                             padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
-                            backgroundColor: r.status === 'pending' ? 'var(--warning)' : r.status === 'resolved' ? 'var(--success)' : 'var(--panel-border)',
-                            color: r.status === 'pending' ? '#000' : '#fff'
+                            backgroundColor: r.status === 'pending' ? 'rgba(234, 179, 8, 0.15)' : r.status === 'resolved' ? 'rgba(34, 197, 94, 0.15)' : 'var(--panel-border)',
+                            color: r.status === 'pending' ? '#eab308' : r.status === 'resolved' ? '#22c55e' : '#fff',
+                            border: r.status === 'pending' ? '1px solid rgba(234, 179, 8, 0.3)' : r.status === 'resolved' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid transparent'
                           }}>
                             {r.status.toUpperCase()}
                           </span>
+                        </td>
+                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {new Date(r.created_at).toLocaleDateString()}
                         </td>
                         <td>
                           {r.artworks ? (
@@ -449,14 +505,14 @@ export default function AdminPanel({ user }: { user: any }) {
                           <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {r.reason}
                           </div>
-                          <button className="btn btn-secondary btn-sm" style={{ padding: '2px 6px', fontSize: '11px', marginTop: '4px' }} onClick={() => setViewReportModal(r)}>
-                            View Full Reason
-                          </button>
                         </td>
                         <td style={{ fontSize: '13px' }}>
                           {r.reporter ? `@${r.reporter.username}` : 'Unknown'}
                         </td>
                         <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button className="btn btn-primary btn-sm" onClick={() => setViewReportModal(r)}>
+                            Review Ticket
+                          </button>
                           {r.status === 'pending' && (
                             <>
                               <button className="btn btn-danger btn-sm" onClick={() => setTakeDownReportModal(r)}>
@@ -753,7 +809,7 @@ export default function AdminPanel({ user }: { user: any }) {
       {/* View Full Report Modal */}
       {viewReportModal && (
         <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
+          <div className="modal-content" style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '18px' }}>Moderation Ticket Details</h3>
               <button onClick={() => setViewReportModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
@@ -761,18 +817,45 @@ export default function AdminPanel({ user }: { user: any }) {
               </button>
             </div>
             <div className="modal-body">
-              <div style={{ marginBottom: '15px' }}>
-                <strong>Reported By:</strong> {viewReportModal.reporter ? `@${viewReportModal.reporter.username}` : 'Unknown User'}
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                {viewReportModal.artworks ? (
+                  <>
+                    <img src={viewReportModal.artworks.image_url} alt="Reported Artwork" style={{ width: '150px', height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--panel-border)' }} />
+                    <div>
+                      <h4 style={{ margin: '0 0 5px 0' }}>{viewReportModal.artworks.title}</h4>
+                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
+                        Posted by: <strong>@{viewReportModal.artworks.profiles?.username || 'Unknown'}</strong>
+                      </p>
+                      <div style={{ fontSize: '13px', lineHeight: '1.4', color: 'var(--text-secondary)' }}>
+                        {viewReportModal.artworks.description || 'No description provided.'}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ width: '100%', padding: '20px', textAlign: 'center', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--panel-border)' }}>
+                    Artwork has been deleted.
+                  </div>
+                )}
               </div>
-              <div style={{ marginBottom: '20px' }}>
-                <strong>Full Reason:</strong>
-                <div style={{ marginTop: '10px', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--panel-border)', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+              
+              <div style={{ padding: '15px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.2)', marginBottom: '20px' }}>
+                <div style={{ marginBottom: '10px', fontSize: '13px' }}>
+                  <strong>Reported By:</strong> {viewReportModal.reporter ? `@${viewReportModal.reporter.username}` : 'Unknown'}
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Reason for Report:</div>
+                <div style={{ fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
                   {viewReportModal.reason}
                 </div>
               </div>
+              
               <div style={{ display: 'flex', gap: '10px' }}>
+                {viewReportModal.status === 'pending' && (
+                  <button type="button" className="btn btn-danger" onClick={() => { setViewReportModal(null); setTakeDownReportModal(viewReportModal); }} style={{ flex: 1 }}>
+                    Take Down Artwork
+                  </button>
+                )}
                 <button type="button" className="btn btn-secondary" onClick={() => setViewReportModal(null)} style={{ flex: 1 }}>
-                  Close
+                  Close Ticket
                 </button>
               </div>
             </div>

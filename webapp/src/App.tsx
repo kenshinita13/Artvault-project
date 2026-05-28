@@ -12,6 +12,7 @@ import AdminPanel from './AdminPanel';
 
 function App() {
   const [session, setSession] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [activeForm, setActiveForm] = useState<'login' | 'register'>('login');
   const [isValidatingLogin, setIsValidatingLogin] = useState(false);
 
@@ -30,7 +31,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
-  const [role, setRole] = useState('user');
+  const role = 'user';
   
   // States for feedback
   const [error, setError] = useState('');
@@ -40,6 +41,7 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setIsInitializing(false);
     });
 
     const {
@@ -59,6 +61,10 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  if (isInitializing) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
+  }
   
   const handleLogin = async (e: React.FormEvent, isAdminLogin = false) => {
     e.preventDefault();
@@ -459,19 +465,7 @@ function App() {
                 />
               </div>
 
-              <div className="form-group">
-                <label htmlFor="reg_role">Account Privilege</label>
-                <select 
-                  id="reg_role" 
-                  className="form-control" 
-                  required
-                  value={role}
-                  onChange={e => setRole(e.target.value)}
-                >
-                  <option value="user">Artist / Regular User</option>
-                  <option value="admin">Administrator</option>
-                </select>
-              </div>
+
 
               <button type="submit" disabled={loading}>
                 {loading ? 'Registering...' : 'Onboard Account'}
