@@ -40,8 +40,33 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const checkStatus = async (userSession: any) => {
+      if (!userSession?.user) return null;
+      const { data: profile } = await supabase.from('profiles').select('status, suspension_end').eq('id', userSession.user.id).single();
+      
+      if (profile) {
+        if (profile.status === 'banned') {
+          await supabase.auth.signOut();
+          toast.error('Access Denied: Your account has been permanently banned.');
+          return null;
+        }
+        if (profile.status === 'suspended' && profile.suspension_end) {
+          const endDate = new Date(profile.suspension_end);
+          if (endDate > new Date()) {
+            await supabase.auth.signOut();
+            toast.error(`Access Denied: Account suspended until ${endDate.toLocaleString()}.`);
+            return null;
+          } else {
+            await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', userSession.user.id);
+          }
+        }
+      }
+      return userSession;
+    };
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const valid = await checkStatus(session);
+      setSession(valid);
       setIsInitializing(false);
     });
 
@@ -49,8 +74,13 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session && (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED')) {
+         const valid = await checkStatus(session);
+         setSession(valid);
+      } else {
+         setSession(session);
+      }
       
       if (_event === 'SIGNED_IN' && session?.user) {
          currentUserId = session.user.id;
