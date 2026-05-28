@@ -100,13 +100,41 @@ function App() {
       return;
     }
 
-    // Role check before proceeding to MFA or completing login
+    // Role and Status check before proceeding to MFA or completing login
     if (data?.user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, status, suspension_end')
         .eq('id', data.user.id)
         .single();
+
+      if (profile) {
+        if (profile.status === 'banned') {
+          await supabase.auth.signOut();
+          const msg = 'Access Denied: Your account has been permanently banned.';
+          setError(msg);
+          toast.error(msg);
+          setLoading(false);
+          setIsValidatingLogin(false);
+          return;
+        }
+
+        if (profile.status === 'suspended' && profile.suspension_end) {
+          const endDate = new Date(profile.suspension_end);
+          if (endDate > new Date()) {
+            await supabase.auth.signOut();
+            const msg = `Access Denied: Account suspended until ${endDate.toLocaleString()}.`;
+            setError(msg);
+            toast.error(msg);
+            setLoading(false);
+            setIsValidatingLogin(false);
+            return;
+          } else {
+            // Suspension has expired, auto-restore them
+            await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', data.user.id);
+          }
+        }
+      }
 
       if (isAdminLogin && profile?.role !== 'admin') {
         await supabase.auth.signOut();
