@@ -63,13 +63,16 @@ export default function AdminPanel({ user }: { user: any }) {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (profile?.role === 'admin' && adminSubTab === 'reports') {
       interval = setInterval(() => {
         fetchAllReports();
       }, 5000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, adminSubTab]);
 
   async function fetchAllUsers() {
@@ -87,23 +90,14 @@ export default function AdminPanel({ user }: { user: any }) {
 
   async function fetchAllReports() {
     try {
-      const { data, error } = await supabase.from('reports').select('*, reporter:profiles!reporter_id(*), artworks(*, profiles(name, username))').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
       
       if (error) {
         console.error('Fetch reports error:', error);
-        // Fallback for when the foreign key to profiles is missing or named differently
-        const { data: fallbackData, error: fallbackError } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
-        
-        if (fallbackError) {
-           console.error('Fallback fetch error:', fallbackError);
-           // Absolute fallback without any joins
-           const { data: rawData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
-           if (rawData) await populateReporters(rawData);
-        } else if (fallbackData) {
-           await populateReporters(fallbackData);
-        }
+        const { data: rawData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
+        if (rawData) await populateReporters(rawData);
       } else if (data) {
-        setReports(data);
+        await populateReporters(data);
       }
     } catch {
       console.log('Reports table might not exist yet.');
@@ -111,15 +105,18 @@ export default function AdminPanel({ user }: { user: any }) {
   };
 
   async function populateReporters(reportList: any[]) {
-    // Extract unique reporter IDs
     const reporterIds = [...new Set(reportList.map(r => r.reporter_id).filter(Boolean))];
-    if (reporterIds.length > 0) {
-      const { data: profiles } = await supabase.from('profiles').select('*').in('id', reporterIds);
+    const reviewerIds = [...new Set(reportList.map(r => r.reviewed_by).filter(Boolean))];
+    const allIds = [...new Set([...reporterIds, ...reviewerIds])];
+
+    if (allIds.length > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('*').in('id', allIds);
       if (profiles) {
          const profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
          const populated = reportList.map(r => ({
            ...r,
-           reporter: profileMap[r.reporter_id] || null
+           reporter: profileMap[r.reporter_id] || r.reporter || null,
+           reviewer: profileMap[r.reviewed_by] || r.reviewer || null
          }));
          setReports(populated);
          return;
@@ -178,9 +175,18 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const handleDismissReport = async (reportId: string) => {
     try {
-      const { error } = await supabase.from('reports').update({ status: 'dismissed' }).eq('id', reportId);
-      if (error) throw error;
-      setReports(reports.map(r => r.id === reportId ? { ...r, status: 'dismissed' } : r));
+      let err = null;
+      const { error } = await supabase.from('reports').update({ status: 'dismissed', reviewed_by: profile.id }).eq('id', reportId);
+      if (error && error.message.includes('reviewed_by')) {
+          const { error: fallbackErr } = await supabase.from('reports').update({ status: 'dismissed' }).eq('id', reportId);
+          err = fallbackErr;
+      } else {
+          err = error;
+      }
+      if (err) throw err;
+      
+      logAudit('Report Dismissed', `Dismissed report ticket ID: ${reportId}.`);
+      setReports(reports.map(r => r.id === reportId ? { ...r, status: 'dismissed', reviewed_by: profile.id, reviewer: profile } : r));
       toast.success("Report dismissed.");
     } catch (err: any) {
       toast.error(err.message);
@@ -198,8 +204,18 @@ export default function AdminPanel({ user }: { user: any }) {
         }
       }
       await supabase.from('artworks').delete().eq('id', takeDownReportModal.artwork_id);
-      await supabase.from('reports').update({ status: 'resolved' }).eq('id', takeDownReportModal.id);
-      setReports(reports.map(r => r.id === takeDownReportModal.id ? { ...r, status: 'resolved' } : r));
+      
+      let err = null;
+      const { error } = await supabase.from('reports').update({ status: 'resolved', reviewed_by: profile.id }).eq('id', takeDownReportModal.id);
+      if (error && error.message.includes('reviewed_by')) {
+          const { error: fallbackErr } = await supabase.from('reports').update({ status: 'resolved' }).eq('id', takeDownReportModal.id);
+          err = fallbackErr;
+      } else {
+          err = error;
+      }
+      if (err) throw err;
+
+      setReports(reports.map(r => r.id === takeDownReportModal.id ? { ...r, status: 'resolved', reviewed_by: profile.id, reviewer: profile } : r));
       setAllArtworks(allArtworks.filter(a => a.id !== takeDownReportModal.artwork_id));
       logAudit('Artwork Takedown', `Enforced takedown for reported artwork ID: ${takeDownReportModal.artwork_id}.`);
       toast.success("Artwork taken down and report resolved.");
@@ -495,6 +511,7 @@ export default function AdminPanel({ user }: { user: any }) {
                       <th>Artwork</th>
                       <th>Report Reason</th>
                       <th>Reporter</th>
+                      <th>Reviewer</th>
                       <th style={{ textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
@@ -540,6 +557,9 @@ export default function AdminPanel({ user }: { user: any }) {
                         </td>
                         <td style={{ fontSize: '13px' }}>
                           {r.reporter ? `@${r.reporter.username}` : 'Unknown'}
+                        </td>
+                        <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          {r.status !== 'pending' ? (r.reviewer ? `@${r.reviewer.username}` : 'Unknown Admin') : '-'}
                         </td>
                         <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button className="btn btn-primary btn-sm" onClick={() => setViewReportModal(r)}>
@@ -916,8 +936,13 @@ export default function AdminPanel({ user }: { user: any }) {
               </div>
               
               <div style={{ padding: '15px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.2)', marginBottom: '20px' }}>
-                <div style={{ marginBottom: '10px', fontSize: '13px' }}>
-                  <strong>Reported By:</strong> {viewReportModal.reporter ? `@${viewReportModal.reporter.username}` : 'Unknown'}
+                <div style={{ marginBottom: '10px', fontSize: '13px', display: 'flex', justifyContent: 'space-between' }}>
+                  <div><strong>Reported By:</strong> {viewReportModal.reporter ? `@${viewReportModal.reporter.username}` : 'Unknown'}</div>
+                  {viewReportModal.status !== 'pending' && (
+                    <div style={{ color: viewReportModal.status === 'resolved' ? '#22c55e' : 'var(--text-secondary)' }}>
+                      <strong>Reviewed By:</strong> {viewReportModal.reviewer ? `@${viewReportModal.reviewer.username}` : 'Unknown Admin'}
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Reason for Report:</div>
                 <div style={{ fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
