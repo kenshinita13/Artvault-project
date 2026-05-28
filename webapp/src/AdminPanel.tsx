@@ -385,18 +385,66 @@ export default function AdminPanel({ user }: { user: any }) {
         </div>
 
         {adminSubTab === 'stats' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-            <div className="content-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{allUsers.length}</div>
-              <div style={{ color: 'var(--text-secondary)' }}>Total Registered Users</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <Users size={32} style={{ color: '#3b82f6', marginBottom: '10px' }} />
+                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{allUsers.length}</div>
+                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Registered Users</div>
+              </div>
+
+              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, transparent 100%)', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+                <Shield size={32} style={{ color: '#a855f7', marginBottom: '10px' }} />
+                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{allArtworks.length}</div>
+                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Global Artworks</div>
+              </div>
+
+              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, transparent 100%)', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                <Activity size={32} style={{ color: '#22c55e', marginBottom: '10px' }} />
+                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{allUsers.filter(u => u.role === 'admin').length}</div>
+                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Admins</div>
+              </div>
+
+              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, transparent 100%)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
+                <BarChart3 size={32} style={{ color: '#eab308', marginBottom: '10px' }} />
+                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{reports.filter(r => r.status === 'pending').length}</div>
+                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Pending Tickets</div>
+              </div>
             </div>
-            <div className="content-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{allArtworks.length}</div>
-              <div style={{ color: 'var(--text-secondary)' }}>Total Artworks Uploaded</div>
-            </div>
-            <div className="content-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{allUsers.filter(u => u.role === 'admin').length}</div>
-              <div style={{ color: 'var(--text-secondary)' }}>Active Administrators</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+              <div className="content-card">
+                <h3 style={{ marginTop: 0, marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Activity size={18} style={{ color: 'var(--primary)' }} /> Live Audit Feed
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {auditLogs.slice(0, 5).map(log => (
+                    <div key={log.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{log.action}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{log.details}</div>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'right' }}>
+                        <div>{log.profiles ? `@${log.profiles.username}` : 'System'}</div>
+                        <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {auditLogs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontStyle: 'italic' }}>No recent activity to display.</div>}
+                </div>
+              </div>
+
+              <div className="content-card" style={{ background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, transparent 100%)', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#ef4444' }}>Security Overview</h3>
+                <div style={{ padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', marginBottom: '15px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#ef4444', lineHeight: '1' }}>{allUsers.filter(u => u.status === 'banned' || u.status === 'suspended').length}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '5px' }}>Restricted Accounts</div>
+                </div>
+                <div style={{ padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{auditLogs.length}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '5px' }}>Total Events Logged</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
