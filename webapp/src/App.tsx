@@ -9,6 +9,7 @@ import UserProfile from './UserProfile';
 import Settings from './Settings';
 
 import AdminPanel from './AdminPanel';
+import { logAudit } from './auditHelper';
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -44,10 +45,23 @@ function App() {
       setIsInitializing(false);
     });
 
+    let currentUserId: string | null = null;
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      
+      if (_event === 'SIGNED_IN' && session?.user) {
+         currentUserId = session.user.id;
+         logAudit('User Login', 'User authenticated successfully.', currentUserId);
+      } else if (_event === 'SIGNED_OUT') {
+         if (currentUserId) {
+            logAudit('User Logout', 'User logged out securely.', currentUserId);
+            currentUserId = null;
+         }
+      }
+
       if (!session) {
         setEmail('');
         setPassword('');
@@ -208,7 +222,7 @@ function App() {
     setSuccess('');
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -225,6 +239,9 @@ function App() {
       setError(error.message);
       toast.error(error.message);
     } else {
+      if (data?.user?.id) {
+        logAudit('User Registration', `New account created: @${username}`, data.user.id);
+      }
       setSuccess('Registration successful! Please check your email to verify.');
       toast.success('Registration successful! Check email to verify.');
     }

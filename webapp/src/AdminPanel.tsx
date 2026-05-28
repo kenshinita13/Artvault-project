@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
-import { Trash2, Users, BarChart3, Edit2, Shield, X } from 'lucide-react';
+import { Trash2, Users, BarChart3, Edit2, Shield, X, Activity } from 'lucide-react';
 import './Dashboard.css';
+import { logAudit } from './auditHelper';
 
 export default function AdminPanel({ user }: { user: any }) {
   const [profile, setProfile] = useState<any>(null);
@@ -11,7 +12,8 @@ export default function AdminPanel({ user }: { user: any }) {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [allArtworks, setAllArtworks] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
-  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks' | 'reports'>('stats');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks' | 'reports' | 'logs'>('stats');
 
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', username: '' });
@@ -41,14 +43,34 @@ export default function AdminPanel({ user }: { user: any }) {
         fetchAllUsers();
         fetchAllArtworks();
         fetchAllReports();
+        fetchAuditLogs();
       }
     }
     setLoading(false);
   };
 
+  async function fetchAuditLogs() {
+    try {
+      const { data } = await supabase.from('audit_logs').select('*, profiles(username)').order('created_at', { ascending: false }).limit(100);
+      if (data) setAuditLogs(data);
+    } catch {
+       console.log('Audit logs table might not exist yet.');
+    }
+  }
+
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (profile?.role === 'admin' && adminSubTab === 'reports') {
+      interval = setInterval(() => {
+        fetchAllReports();
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [profile, adminSubTab]);
 
   async function fetchAllUsers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -119,6 +141,7 @@ export default function AdminPanel({ user }: { user: any }) {
       const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModalUser.id);
       if (error) throw error;
       setAllUsers(allUsers.map(user => user.id === suspendModalUser.id ? { ...user, status: 'suspended', suspension_end: end.toISOString() } : user));
+      logAudit('User Suspended', `Suspended @${suspendModalUser.username} for ${days} days.`);
       toast.success(`@${suspendModalUser.username} suspended for ${days} days.`);
       setSuspendModalUser(null);
     } catch (err: any) {
@@ -132,6 +155,7 @@ export default function AdminPanel({ user }: { user: any }) {
       const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModalUser.id);
       if (error) throw error;
       setAllUsers(allUsers.map(user => user.id === banModalUser.id ? { ...user, status: 'banned', suspension_end: null } : user));
+      logAudit('User Banned', `Permanently banned @${banModalUser.username}.`);
       toast.success(`@${banModalUser.username} has been permanently banned.`);
       setBanModalUser(null);
     } catch (err: any) {
@@ -177,6 +201,7 @@ export default function AdminPanel({ user }: { user: any }) {
       await supabase.from('reports').update({ status: 'resolved' }).eq('id', takeDownReportModal.id);
       setReports(reports.map(r => r.id === takeDownReportModal.id ? { ...r, status: 'resolved' } : r));
       setAllArtworks(allArtworks.filter(a => a.id !== takeDownReportModal.artwork_id));
+      logAudit('Artwork Takedown', `Enforced takedown for reported artwork ID: ${takeDownReportModal.artwork_id}.`);
       toast.success("Artwork taken down and report resolved.");
       setTakeDownReportModal(null);
     } catch (err: any) {
@@ -192,6 +217,7 @@ export default function AdminPanel({ user }: { user: any }) {
       const { error } = await supabase.from('profiles').delete().eq('id', deleteUserModal.id);
       if (error) throw error;
       setAllUsers(allUsers.filter(u => u.id !== deleteUserModal.id));
+      logAudit('User Deleted', `Permanently deleted user @${deleteUserModal.username}.`);
       toast.success("User deleted successfully.");
       setDeleteUserModal(null);
     } catch (err: any) {
@@ -231,6 +257,7 @@ export default function AdminPanel({ user }: { user: any }) {
       const { error } = await supabase.from('artworks').delete().eq('id', deleteArtworkModal.id);
       if (error) throw error;
       setAllArtworks(allArtworks.filter(a => a.id !== deleteArtworkModal.id));
+      logAudit('Admin Artwork Deletion', `Deleted artwork: ${deleteArtworkModal.title}.`);
       toast.success("Artwork removed successfully.");
       setDeleteArtworkModal(null);
     } catch (err: any) {
@@ -299,6 +326,11 @@ export default function AdminPanel({ user }: { user: any }) {
           <li>
             <button className={`tab-btn ${adminSubTab === 'reports' ? 'active' : ''}`} onClick={() => setAdminSubTab('reports')}>
               <Shield size={18} /> Tickets & Reports
+            </button>
+          </li>
+          <li>
+            <button className={`tab-btn ${adminSubTab === 'logs' ? 'active' : ''}`} onClick={() => { setAdminSubTab('logs'); fetchAuditLogs(); }}>
+              <Activity size={18} /> Audit Logs
             </button>
           </li>
         </ul>
@@ -523,6 +555,51 @@ export default function AdminPanel({ user }: { user: any }) {
                               </button>
                             </>
                           )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {adminSubTab === 'logs' && (
+          <div className="content-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>System Audit Logs</h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => fetchAuditLogs()}>
+                 Refresh Logs
+              </button>
+            </div>
+            {auditLogs.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)' }}>No audit logs available. Run setup_audit_logs.sql in Supabase to enable this feature.</p>
+            ) : (
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>User/Actor</th>
+                      <th>Action</th>
+                      <th>Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map(log => (
+                      <tr key={log.id}>
+                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td>
+                          {log.profiles ? `@${log.profiles.username}` : 'System/Unknown'}
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 'bold' }}>{log.action}</span>
+                        </td>
+                        <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          {log.details}
                         </td>
                       </tr>
                     ))}

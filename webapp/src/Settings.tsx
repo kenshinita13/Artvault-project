@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Shield, User, Image as ImageIcon } from 'lucide-react';
 import Avatar from './Avatar';
 import { checkImageIsSafe } from './nsfwHelper';
+import { logAudit } from './auditHelper';
 import './Dashboard.css';
 
 export default function Settings({ user }: { user: any }) {
@@ -115,6 +116,7 @@ export default function Settings({ user }: { user: any }) {
     if (updateError) {
       toast.error("Error updating password: " + updateError.message);
     } else {
+      logAudit('Password Changed', 'User securely updated their password.');
       toast.success("Password updated successfully.");
       setCurrentPassword('');
       setNewPassword('');
@@ -158,6 +160,7 @@ export default function Settings({ user }: { user: any }) {
     if (verify.error) {
       toast.error("Verification error: " + verify.error.message);
     } else {
+      logAudit('MFA Enabled', 'User enabled Two-Factor Authentication (TOTP).');
       toast.success("MFA Successfully Enabled!");
       setMfaEnabled(true);
       setQrCode(null);
@@ -179,6 +182,7 @@ export default function Settings({ user }: { user: any }) {
       }
       if (successCount > 0) {
         setMfaEnabled(false);
+        logAudit('MFA Disabled', 'User disabled Two-Factor Authentication.');
         toast.success("MFA completely disabled.");
       } else {
         toast.error("Failed to disable MFA.");
