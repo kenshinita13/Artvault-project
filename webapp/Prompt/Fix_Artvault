@@ -1,0 +1,162 @@
+You are a senior full-stack architect and Supabase expert.
+
+Your task is to document and explain how the ArtVault platform was designed and built from scratch using Supabase as the primary backend infrastructure.
+
+ArtVault is a secure art storage and portfolio platform — not a marketplace.
+There are NO buyer or seller accounts.
+
+The platform focuses on:
+
+* Secure artwork storage
+* Artwork management
+* Portfolio display
+* User authentication
+* Role-based access control
+* Private and public artwork visibility
+* Secure file uploads
+* Realtime updates
+* Scalable database architecture
+
+Tech stack:
+
+* Supabase
+* PostgreSQL
+* Supabase Auth
+* Supabase Storage
+* Row Level Security (RLS)
+* Edge Functions
+* Realtime subscriptions
+* SQL migrations
+
+Explain the full architecture and implementation details including:
+
+1. Platform Overview
+
+* What ArtVault is
+* Main purpose of the application
+* Core user experience
+* Difference between private storage and public portfolio display
+
+2. Authentication System
+   Explain:
+
+* User registration flow
+* Login flow
+* Session handling
+* Supabase Auth integration
+* Protected routes
+* Email verification/password reset
+* Auth security best practices
+
+3. Database Architecture
+   Explain:
+
+* PostgreSQL schema design
+* Core tables
+* Relationships
+* Artwork ownership structure
+* Metadata storage
+* File references
+* Audit/logging tables if applicable
+
+4. Role-Based Access Control (RBAC)
+   Explain:
+
+* Admin roles
+* Moderator roles
+* Authenticated user roles
+* Public/anonymous access
+* Permission hierarchy
+* Ownership validation using auth.uid()
+
+5. Row Level Security (RLS)
+   Explain:
+
+* How RLS policies were designed
+* Ownership-based access rules
+* Public vs private artwork access
+* Secure INSERT/UPDATE/DELETE protections
+* Preventing unauthorized access
+* Recursive policy prevention
+* Least-privilege architecture
+
+6. Supabase Storage
+   Explain:
+
+* Artwork upload system
+* Storage bucket structure
+* Private vs public file access
+* File ownership validation
+* Secure upload permissions
+* Signed URLs if applicable
+
+7. Artwork Management System
+   Explain:
+
+* Artwork creation flow
+* Editing metadata
+* Artwork categorization
+* Draft/private/public visibility
+* Portfolio organization
+* Gallery display system
+
+8. Messaging & Collaboration (if applicable)
+   Explain:
+
+* Conversation architecture
+* Shared artwork access
+* Collaboration permissions
+* Realtime updates
+
+9. Security Architecture
+   Explain:
+
+* SQL security practices
+* RLS hardening
+* RBAC enforcement
+* Storage security
+* Edge Function protections
+* Prevention of privilege escalation
+* Safe handling of user-generated content
+
+10. Frontend & Realtime Experience
+    Explain:
+
+* How realtime subscriptions work
+* Live updates
+* Optimistic UI handling
+* Authenticated client access patterns
+
+11. Deployment & Scalability
+    Explain:
+
+* Supabase hosting architecture
+* Migration management
+* Environment setup
+* Scalability considerations
+* Performance optimizations
+
+12. Best Practices Used
+    Include:
+
+* Least-privilege access
+* Explicit ownership checks
+* Secure SQL migrations
+* Modular schema design
+* Reusable RLS policies
+* Secure storage patterns
+
+Output format:
+
+* System Architecture Overview
+* Authentication Flow
+* Database Design
+* RBAC Design
+* RLS Security Design
+* Storage Architecture
+* Artwork Management Flow
+* Security Hardening
+* Realtime Features
+* Deployment Strategy
+* Scalability Considerations
+* Recommended Future Improvements

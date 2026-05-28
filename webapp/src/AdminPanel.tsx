@@ -15,6 +15,24 @@ export default function AdminPanel({ user }: { user: any }) {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks' | 'reports' | 'logs'>('stats');
 
+  const ITEMS_PER_PAGE = 10;
+  const [userPage, setUserPage] = useState(1);
+  const [artworkPage, setArtworkPage] = useState(1);
+  const [reportPage, setReportPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+
+  const renderPagination = (currentPage: number, setPage: (p: number) => void, totalItems: number) => {
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    if (totalPages <= 1) return null;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', padding: '15px', borderTop: '1px solid var(--panel-border)', marginTop: '10px' }}>
+        <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button>
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Page {currentPage} of {totalPages}</span>
+        <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button>
+      </div>
+    );
+  };
+
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', username: '' });
 
@@ -320,6 +338,14 @@ export default function AdminPanel({ user }: { user: any }) {
     return <div style={{ padding: '100px', textAlign: 'center', color: 'red' }}>Unauthorized Access</div>;
   }
 
+  const filteredReports = reports.filter(r => {
+    const q = reportSearchQuery.toLowerCase();
+    const title = r.artworks?.title?.toLowerCase() || '';
+    const reason = r.reason?.toLowerCase() || '';
+    const reporter = r.reporter?.username?.toLowerCase() || '';
+    return title.includes(q) || reason.includes(q) || reporter.includes(q);
+  });
+
   return (
     <div className="settings-container">
       <div className="settings-sidebar">
@@ -389,7 +415,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {allUsers.map(u => (
+                  {allUsers.slice((userPage - 1) * ITEMS_PER_PAGE, userPage * ITEMS_PER_PAGE).map(u => (
                     <tr key={u.id}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{u.name}</div>
@@ -439,6 +465,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   ))}
                 </tbody>
               </table>
+              {renderPagination(userPage, setUserPage, allUsers.length)}
             </div>
           </div>
         )}
@@ -457,7 +484,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {allArtworks.map(a => (
+                  {allArtworks.slice((artworkPage - 1) * ITEMS_PER_PAGE, artworkPage * ITEMS_PER_PAGE).map(a => (
                     <tr key={a.id}>
                       <td>
                         <img src={a.image_url} alt={a.title} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
@@ -483,6 +510,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   ))}
                 </tbody>
               </table>
+              {renderPagination(artworkPage, setArtworkPage, allArtworks.length)}
             </div>
           </div>
         )}
@@ -516,13 +544,7 @@ export default function AdminPanel({ user }: { user: any }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.filter(r => {
-                      const q = reportSearchQuery.toLowerCase();
-                      const title = r.artworks?.title?.toLowerCase() || '';
-                      const reason = r.reason?.toLowerCase() || '';
-                      const reporter = r.reporter?.username?.toLowerCase() || '';
-                      return title.includes(q) || reason.includes(q) || reporter.includes(q);
-                    }).map(r => (
+                    {filteredReports.slice((reportPage - 1) * ITEMS_PER_PAGE, reportPage * ITEMS_PER_PAGE).map(r => (
                       <tr key={r.id}>
                         <td>
                           <span style={{ 
@@ -582,6 +604,7 @@ export default function AdminPanel({ user }: { user: any }) {
                     ))}
                   </tbody>
                 </table>
+                {renderPagination(reportPage, setReportPage, filteredReports.length)}
               </div>
             )}
           </div>
@@ -609,7 +632,7 @@ export default function AdminPanel({ user }: { user: any }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {auditLogs.map(log => (
+                    {auditLogs.slice((logPage - 1) * ITEMS_PER_PAGE, logPage * ITEMS_PER_PAGE).map(log => (
                       <tr key={log.id}>
                         <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                           {new Date(log.created_at).toLocaleString()}
@@ -627,6 +650,7 @@ export default function AdminPanel({ user }: { user: any }) {
                     ))}
                   </tbody>
                 </table>
+                {renderPagination(logPage, setLogPage, auditLogs.length)}
               </div>
             )}
           </div>

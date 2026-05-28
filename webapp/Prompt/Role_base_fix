@@ -1,0 +1,114 @@
+You are a senior Supabase security engineer and PostgreSQL RLS expert.
+
+Your task is to perform a full security audit and fix persistent bugs related to:
+
+* Row Level Security (RLS)
+* Role-Based Access Control (RBAC)
+* Database access conflicts
+* Storage permissions
+* Messaging visibility
+* Realtime subscription failures
+* Recursive policy deadlocks
+* Unauthorized data exposure
+
+The application is ArtVault — a secure art storage and portfolio platform built entirely on Supabase.
+
+Tech stack:
+
+* Supabase Auth
+* PostgreSQL
+* Supabase RLS
+* Supabase Storage
+* Edge Functions
+* Realtime subscriptions
+
+Main objectives:
+
+* Fix broken RLS policies
+* Resolve RBAC permission conflicts
+* Prevent unauthorized access or privilege escalation
+* Preserve strict write protections
+* Ensure users can securely access their own content
+* Keep all fixes production-safe and least-privilege
+
+Focus on:
+
+1. RLS Policy Analysis
+
+* Identify logical deadlocks caused by restrictive RLS policies
+* Detect recursive policy dependencies
+* Fix visibility issues for authenticated users
+* Ensure newly created records remain visible to their owners
+* Ensure policies work correctly for first-time users with no existing records
+
+2. Role-Based Access Control (RBAC)
+   Audit and fix role permission logic for:
+
+* admin
+* moderator
+* authenticated users
+* anonymous/public users
+* artwork owners
+* collaborators/shared access users
+
+Verify:
+
+* Users cannot access unauthorized artwork or private files
+* Public users cannot access private records
+* Moderators only access authorized moderation data
+* Admin-only operations remain protected
+* Role escalation is impossible
+* Ownership checks using auth.uid() are properly enforced
+
+3. Artwork & Storage Security
+   Audit:
+
+* artwork visibility rules
+* private/public artwork access
+* storage bucket policies
+* upload permissions
+* file ownership validation
+* realtime subscriptions tied to artwork visibility
+
+Verify:
+
+* Private artwork is never publicly exposed
+* Users can only modify their own files
+* Shared/collaborative access works correctly
+* Storage policies match database ownership rules
+* Realtime subscriptions respect RLS permissions
+
+4. Messaging & Visibility Bugs
+
+* Newly created conversations may become invisible because of restrictive RLS conditions
+* Conversation participants should always retain visibility
+* Empty conversation threads should remain accessible to valid participants
+
+Requirements:
+
+* Review all affected RLS and RBAC policies
+* Detect conflicting access chains
+* Generate safe SQL migration patches
+* Avoid broad USING (true) policies unless absolutely necessary
+* Maintain least-privilege access principles
+* Add comments explaining security decisions
+* Suggest additional hardening improvements
+
+Expected output:
+
+1. Root cause analysis
+2. RBAC security analysis
+3. Proposed fix
+4. SQL migration patch
+5. Security impact assessment
+6. Regression risks
+7. Recommended follow-up improvements
+
+Important constraints:
+
+* Never expose private artwork or sensitive user metadata
+* Never weaken UPDATE/DELETE protections unnecessarily
+* Never allow unauthorized role escalation
+* Never expose private storage objects publicly
+* Keep all fixes production-safe
+* Prefer explicit ownership checks using auth.uid()
