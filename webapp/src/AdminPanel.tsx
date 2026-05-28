@@ -561,20 +561,22 @@ export default function AdminPanel({ user }: { user: any }) {
                         <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                           {r.status !== 'pending' ? (r.reviewer ? `@${r.reviewer.username}` : 'Unknown Admin') : '-'}
                         </td>
-                        <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button className="btn btn-primary btn-sm" onClick={() => setViewReportModal(r)}>
-                            Review Ticket
-                          </button>
-                          {r.status === 'pending' && (
-                            <>
-                              <button className="btn btn-danger btn-sm" onClick={() => setTakeDownReportModal(r)}>
-                                Take Down
-                              </button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => handleDismissReport(r.id)}>
-                                Dismiss
-                              </button>
-                            </>
-                          )}
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => setViewReportModal(r)} style={{ whiteSpace: 'nowrap' }}>
+                              Review Ticket
+                            </button>
+                            {r.status === 'pending' && (
+                              <>
+                                <button className="btn btn-danger btn-sm" onClick={() => setTakeDownReportModal(r)} style={{ whiteSpace: 'nowrap' }}>
+                                  Take Down
+                                </button>
+                                <button className="btn btn-secondary btn-sm" onClick={() => handleDismissReport(r.id)} style={{ whiteSpace: 'nowrap' }}>
+                                  Dismiss
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
