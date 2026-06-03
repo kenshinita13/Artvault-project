@@ -245,15 +245,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
             <p style={{ marginTop: '5px' }}>{searchQuery ? "No artworks match your search." : "This studio is currently empty."}</p>
           </div>
         ) : (
-          <div 
-            className="gallery-grid" 
-            style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
-              gap: '24px',
-              alignItems: 'start'
-            }}
-          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start w-full">
             {filteredArtworks.map(artwork => (
               <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)}>
                 <div className="art-preview">
