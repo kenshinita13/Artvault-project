@@ -164,7 +164,7 @@ export default function Dashboard({ user }: { user: any }) {
                   id: a.id,
                   type: (a.image_url && (a.image_url.toLowerCase().endsWith('.mp4') || a.image_url.toLowerCase().endsWith('.webm'))) ? 'video' : 'image',
                   title: a.title,
-                  desc: a.description || `By ${a.profiles?.name || 'Unknown Artist'}`,
+                  desc: `Posted by @${a.profiles?.username || a.profiles?.name || 'Unknown'}`,
                   url: a.image_url,
                   span: patterns[i % patterns.length]
                 };

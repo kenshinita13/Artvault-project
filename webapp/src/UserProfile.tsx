@@ -43,6 +43,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
 
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>('user');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -189,6 +190,11 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
     return <div style={{ padding: '100px', textAlign: 'center', color: 'var(--danger)' }}>Studio not found.</div>;
   }
 
+  const filteredArtworks = artworks.filter(a => 
+    a.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (a.description && a.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   return (
     <>
       <main className="studio-container">
@@ -219,16 +225,36 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           )}
         </div>
 
+        {/* Search Bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px' }}>
+          <input 
+            type="text" 
+            placeholder="Search artworks by title or description..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+            style={{ width: '100%', maxWidth: '500px' }}
+          />
+        </div>
+
         {/* Gallery Grid Layout */}
-        {artworks.length === 0 ? (
+        {filteredArtworks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
             <span style={{ fontSize: '48px' }}>🖼️</span>
-            <h4 style={{ marginTop: '15px' }}>No Artworks Yet</h4>
-            <p style={{ marginTop: '5px' }}>This studio is currently empty.</p>
+            <h4 style={{ marginTop: '15px' }}>No Artworks Found</h4>
+            <p style={{ marginTop: '5px' }}>{searchQuery ? "No artworks match your search." : "This studio is currently empty."}</p>
           </div>
         ) : (
-          <div className="gallery-grid">
-            {artworks.map(artwork => (
+          <div 
+            className="gallery-grid" 
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+              gap: '24px',
+              alignItems: 'start'
+            }}
+          >
+            {filteredArtworks.map(artwork => (
               <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)}>
                 <div className="art-preview">
                   <img src={artwork.image_url} alt={artwork.title} />
