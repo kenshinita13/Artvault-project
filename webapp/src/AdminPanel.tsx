@@ -153,41 +153,47 @@ export default function AdminPanel({ user }: { user: any }) {
     end.setDate(end.getDate() + days);
     
     try {
-      const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModalUser.id);
+      const { data, error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModalUser.id).select().single();
       if (error) throw error;
+      if (!data) throw new Error("Update failed. You may not have administrative permissions to modify this user.");
+      
       setAllUsers(allUsers.map(user => user.id === suspendModalUser.id ? { ...user, status: 'suspended', suspension_end: end.toISOString() } : user));
       logAudit('User Suspended', `Suspended @${suspendModalUser.username} for ${days} days.`);
       toast.success(`@${suspendModalUser.username} suspended for ${days} days.`);
       setSuspendModalUser(null);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Error enforcing suspension. Please check your admin RLS policies.');
     }
   };
 
   const confirmBanUser = async () => {
     if (!banModalUser) return;
     try {
-      const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModalUser.id);
+      const { data, error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModalUser.id).select().single();
       if (error) throw error;
+      if (!data) throw new Error("Update failed. You may not have administrative permissions to modify this user.");
+      
       setAllUsers(allUsers.map(user => user.id === banModalUser.id ? { ...user, status: 'banned', suspension_end: null } : user));
       logAudit('User Banned', `Permanently banned @${banModalUser.username}.`);
       toast.success(`@${banModalUser.username} has been permanently banned.`);
       setBanModalUser(null);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Error enforcing ban. Please check your admin RLS policies.');
     }
   };
   
   const confirmUnbanUser = async () => {
     if (!unbanModalUser) return;
     try {
-      const { error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', unbanModalUser.id);
+      const { data, error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', unbanModalUser.id).select().single();
       if (error) throw error;
+      if (!data) throw new Error("Update failed. You may not have administrative permissions to modify this user.");
+      
       setAllUsers(allUsers.map(user => user.id === unbanModalUser.id ? { ...user, status: 'active', suspension_end: null } : user));
       toast.success(`@${unbanModalUser.username} is now active.`);
       setUnbanModalUser(null);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Error enforcing action. Please check your admin RLS policies.');
     }
   };
 
@@ -490,7 +496,7 @@ export default function AdminPanel({ user }: { user: any }) {
                         
                         {u.status === 'banned' || u.status === 'suspended' ? (
                           <button className="btn btn-secondary btn-sm" onClick={() => setUnbanModalUser(u)} disabled={u.id === user.id}>
-                            Unban / Unsuspend
+                            Lift Suspension
                           </button>
                         ) : (
                           <>

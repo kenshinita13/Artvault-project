@@ -33,7 +33,6 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
   
   // Lightbox State
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
-  const [fullscreen, setFullscreen] = useState(false);
   
   // Upload Modal State
   const [showUpload, setShowUpload] = useState(false);

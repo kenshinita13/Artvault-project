@@ -30,7 +30,6 @@ export default function Dashboard({ user }: { user: any }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
-  const [fullscreen, setFullscreen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);

@@ -16,6 +16,7 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [activeForm, setActiveForm] = useState<'login' | 'register'>('login');
   const [isValidatingLogin, setIsValidatingLogin] = useState(false);
+  const [banMessage, setBanMessage] = useState<string | null>(null);
 
   const location = useLocation();
   const isAdminRoute = location.pathname === '/admin';
@@ -47,14 +48,14 @@ function App() {
       if (profile) {
         if (profile.status === 'banned') {
           await supabase.auth.signOut();
-          toast.error('Access Denied: Your account has been permanently banned.');
+          setBanMessage('Access Denied: Your account has been permanently banned.');
           return null;
         }
         if (profile.status === 'suspended' && profile.suspension_end) {
           const endDate = new Date(profile.suspension_end);
           if (endDate > new Date()) {
             await supabase.auth.signOut();
-            toast.error(`Access Denied: Account suspended until ${endDate.toLocaleString()}.`);
+            setBanMessage(`Access Denied: Account suspended until ${endDate.toLocaleString()}.`);
             return null;
           } else {
             await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', userSession.user.id);
@@ -64,11 +65,36 @@ function App() {
       return userSession;
     };
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const valid = await checkStatus(session);
-      setSession(valid);
-      setIsInitializing(false);
-    });
+    const initSession = async () => {
+      // Failsafe timeout to prevent infinite loading screen
+      const failsafeTimeout = setTimeout(() => {
+        console.warn("Auth initialization timed out after 5 seconds");
+        setIsInitializing(false);
+      }, 5000);
+
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Supabase getSession error:", error);
+        }
+        
+        try {
+          const valid = await checkStatus(data?.session);
+          setSession(valid);
+        } catch (statusError) {
+          console.error("checkStatus error:", statusError);
+          setSession(null);
+        }
+      } catch (err) {
+        console.error("Unexpected error during auth init:", err);
+        setSession(null);
+      } finally {
+        clearTimeout(failsafeTimeout);
+        setIsInitializing(false);
+      }
+    };
+
+    initSession();
 
     let currentUserId: string | null = null;
 
@@ -105,6 +131,35 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const profileSubscription = supabase
+      .channel('public:profiles')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
+        async (payload) => {
+          const { status, suspension_end } = payload.new;
+          if (status === 'banned') {
+            await supabase.auth.signOut();
+            setBanMessage('Access Denied: Your account has been permanently banned.');
+          } else if (status === 'suspended' && suspension_end) {
+            const endDate = new Date(suspension_end);
+            if (endDate > new Date()) {
+              await supabase.auth.signOut();
+              setBanMessage(`Access Denied: Account suspended until ${endDate.toLocaleString()}.`);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileSubscription);
+    };
+  }, [session?.user?.id]);
 
   if (isInitializing) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
@@ -143,7 +198,7 @@ function App() {
           await supabase.auth.signOut();
           const msg = 'Access Denied: Your account has been permanently banned.';
           setError(msg);
-          toast.error(msg);
+          setBanMessage(msg);
           setLoading(false);
           setIsValidatingLogin(false);
           return;
@@ -155,7 +210,7 @@ function App() {
             await supabase.auth.signOut();
             const msg = `Access Denied: Account suspended until ${endDate.toLocaleString()}.`;
             setError(msg);
-            toast.error(msg);
+            setBanMessage(msg);
             setLoading(false);
             setIsValidatingLogin(false);
             return;
@@ -309,6 +364,7 @@ function App() {
   // If user is logged in and not validating checks, show the App via React Router
   if (session && !isValidatingLogin && !showMfaChallenge) {
     return (
+      <>
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/login" element={<Navigate to="/home" replace />} />
@@ -322,6 +378,17 @@ function App() {
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>
+      {banMessage && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+           <div style={{ background: '#1e1e2d', padding: '40px', borderRadius: '16px', textAlign: 'center', maxWidth: '450px', width: '90%', border: '1px solid #ff4d4d', boxShadow: '0 10px 30px rgba(255, 77, 77, 0.2)' }}>
+              <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚨</div>
+              <h2 style={{ color: '#ff4d4d', marginBottom: '15px', fontSize: '24px' }}>Account Restricted</h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '30px', fontSize: '16px', lineHeight: '1.5' }}>{banMessage}</p>
+              <button onClick={() => setBanMessage(null)} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', width: '100%', transition: 'background 0.2s' }}>Acknowledge</button>
+           </div>
+        </div>
+      )}
+      </>
     );
   }
 
@@ -333,6 +400,17 @@ function App() {
   // Otherwise, show Login/Register form
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', padding: '20px', position: 'relative' }}>
+      {banMessage && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+           <div style={{ background: '#1e1e2d', padding: '40px', borderRadius: '16px', textAlign: 'center', maxWidth: '450px', width: '90%', border: '1px solid #ff4d4d', boxShadow: '0 10px 30px rgba(255, 77, 77, 0.2)' }}>
+              <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚨</div>
+              <h2 style={{ color: '#ff4d4d', marginBottom: '15px', fontSize: '24px' }}>Account Restricted</h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '30px', fontSize: '16px', lineHeight: '1.5' }}>{banMessage}</p>
+              <button onClick={() => setBanMessage(null)} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', width: '100%', transition: 'background 0.2s' }}>Acknowledge</button>
+           </div>
+        </div>
+      )}
+      
       <div className="glow-blob glow-1"></div>
       <div className="glow-blob glow-2"></div>
 
