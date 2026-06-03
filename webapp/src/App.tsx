@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import Layout from './Layout';
@@ -10,6 +11,7 @@ import Settings from './Settings';
 
 import AdminPanel from './AdminPanel';
 import { logAudit } from './auditHelper';
+import LandingPage from './LandingPage';
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -39,6 +41,16 @@ function App() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const mode = params.get('mode');
+    if (mode === 'register') {
+      setActiveForm('register');
+    } else if (mode === 'login') {
+      setActiveForm('login');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     const checkStatus = async (userSession: any) => {
@@ -373,64 +385,66 @@ function App() {
   };
 
   // If user is logged in and not validating checks, show the App via React Router
-  if (session && !isValidatingLogin && !showMfaChallenge) {
-    return (
-      <>
-      <Routes>
-        <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="/login" element={<Navigate to="/home" replace />} />
-        <Route path="/admin" element={<Navigate to="/admin_panel" replace />} />
-        <Route element={<Layout user={session.user} />}>
-          <Route path="/home" element={<Dashboard user={session.user} />} />
-          <Route path="/artists" element={<Artists />} />
-          <Route path="/profile/:id" element={<UserProfile currentUser={session.user} />} />
-          <Route path="/settings" element={<Settings user={session.user} />} />
-          <Route path="/admin_panel" element={<AdminPanel user={session.user} />} />
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Route>
-      </Routes>
-      {banMessage && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-           <div style={{ background: '#1e1e2d', padding: '40px', borderRadius: '16px', textAlign: 'center', maxWidth: '450px', width: '90%', border: '1px solid #ff4d4d', boxShadow: '0 10px 30px rgba(255, 77, 77, 0.2)' }}>
-              <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚨</div>
-              <h2 style={{ color: '#ff4d4d', marginBottom: '15px', fontSize: '24px' }}>Account Restricted</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '30px', fontSize: '16px', lineHeight: '1.5' }}>{banMessage}</p>
-              <button onClick={() => setBanMessage(null)} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', width: '100%', transition: 'background 0.2s' }}>Acknowledge</button>
-           </div>
-        </div>
-      )}
-      </>
-    );
-  }
+  // Refactored Authentication UI
+  const renderAuthUI = () => (
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+      >
+        {!isAdminRoute && (
+          <button 
+            onClick={() => navigate('/')} 
+            className="absolute top-6 right-8 text-white/70 hover:text-white text-3xl transition-colors z-50"
+          >
+            ✕
+          </button>
+        )}
+        
+        {banMessage && (
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="fixed inset-0 bg-black/80 z-[99999] flex justify-center items-center p-4"
+          >
+            <div className="bg-[#1e1e2d] p-10 rounded-2xl text-center max-w-md w-full border border-red-500/50 shadow-[0_10px_40px_rgba(239,68,68,0.2)]">
+                <div className="text-6xl mb-6">🚨</div>
+                <h2 className="text-red-500 mb-4 text-2xl font-bold">Account Restricted</h2>
+                <p className="text-zinc-400 mb-8 text-base leading-relaxed">{banMessage}</p>
+                <button 
+                  onClick={() => setBanMessage(null)} 
+                  className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition-colors"
+                >
+                  Acknowledge
+                </button>
+            </div>
+          </motion.div>
+        )}
 
-  // Enforce unauthenticated routing to /login or /admin
-  if (!isValidatingLogin && location.pathname !== '/login' && location.pathname !== '/admin') {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Otherwise, show Login/Register form
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', padding: '20px', position: 'relative' }}>
-      {banMessage && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-           <div style={{ background: '#1e1e2d', padding: '40px', borderRadius: '16px', textAlign: 'center', maxWidth: '450px', width: '90%', border: '1px solid #ff4d4d', boxShadow: '0 10px 30px rgba(255, 77, 77, 0.2)' }}>
-              <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚨</div>
-              <h2 style={{ color: '#ff4d4d', marginBottom: '15px', fontSize: '24px' }}>Account Restricted</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '30px', fontSize: '16px', lineHeight: '1.5' }}>{banMessage}</p>
-              <button onClick={() => setBanMessage(null)} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', width: '100%', transition: 'background 0.2s' }}>Acknowledge</button>
-           </div>
-        </div>
-      )}
-      
-      <div className="glow-blob glow-1"></div>
-      <div className="glow-blob glow-2"></div>
-
-      <div className="container">
-        <div className="brand-header">
-          <div className="brand-logo">🎨</div>
-          <h1 className="brand-title">ArtVault Studio</h1>
-          <p className="brand-subtitle">The Canvas of Digital Artists & Creators</p>
-        </div>
+        <motion.div 
+          initial={{ scale: 0.95, y: 20, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="container max-w-md w-full relative"
+        >
+          <div className="flex flex-col items-center mb-8 text-center">
+            {/* Logo Container - Handles large transparent image bounds */}
+            <div className="relative w-full h-16 flex items-center justify-center mb-4">
+              <img 
+                src="/artvault_logo.png" 
+                alt="ArtVault Logo" 
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[160px] w-auto mix-blend-screen pointer-events-none" 
+              />
+            </div>
+            <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight mt-4">
+              {isAdminRoute ? 'Admin Portal' : activeForm === 'register' ? 'Join the Studio' : 'Welcome Back'}
+            </h2>
+            <p className="text-zinc-400 text-base">
+              {isAdminRoute ? 'Secure access to ArtVault administration.' : activeForm === 'register' ? 'Join the community and share your work.' : 'Access your creative portfolio.'}
+            </p>
+          </div>
 
         {showMfaChallenge && (
           <div className="form-box active">
@@ -468,8 +482,6 @@ function App() {
         
         {!isAdminRoute && activeForm === 'login' && !showMfaChallenge && (
           <div className="form-box active">
-            <h2>Artist Sign In</h2>
-            
             {error && <div className="alert error">❌ {error}</div>}
             {success && <div className="alert success">✅ {success}</div>}
 
@@ -521,9 +533,7 @@ function App() {
 
         {isAdminRoute && !showMfaChallenge && (
           <div className="form-box active" style={{ borderTop: '4px solid #7494ec' }}>
-            <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '10px' }}>🛡️</div>
-            <h2>Admin Login</h2>
-            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '25px', fontSize: '14px' }}>Secure access to ArtVault administration</p>
+            <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '15px' }}>🛡️</div>
             
             <div style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(234, 179, 8, 0.2)', fontSize: '14px' }}>
               <strong>⚠️ Restricted Access:</strong> This area is for administrators only.
@@ -570,7 +580,6 @@ function App() {
 
         {!isAdminRoute && activeForm === 'register' && !showMfaChallenge && (
           <div className="form-box active">
-            <h2>Register Artist</h2>
 
             {error && <div className="alert error">❌ {error}</div>}
             {success && <div className="alert success">✅ {success}</div>}
@@ -631,16 +640,16 @@ function App() {
 
 
 
-              <button type="submit" disabled={loading}>
+              <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all mt-4">
                 {loading ? 'Registering...' : 'Onboard Account'}
               </button>
 
-              <div className="form-footer">
+              <div className="text-center mt-6 text-zinc-400 text-sm">
                 Already registered?{' '}
-                <a href="#" onClick={(e) => { 
+                <a href="#" className="text-purple-400 hover:text-purple-300 font-semibold" onClick={(e) => { 
                   e.preventDefault(); 
                   setError(''); setSuccess('');
-                  setActiveForm('login'); 
+                  navigate('/login?mode=login');
                 }}>
                   Sign In to Studio
                 </a>
@@ -648,8 +657,37 @@ function App() {
             </form>
           </div>
         )}
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+
+  if (isValidatingLogin) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
+  }
+
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={session && !showMfaChallenge ? <Navigate to="/home" replace /> : <LandingPage />} />
+        <Route path="/login" element={session && !showMfaChallenge ? <Navigate to="/home" replace /> : <><LandingPage />{renderAuthUI()}</>} />
+        <Route path="/admin" element={session && !showMfaChallenge ? <Navigate to="/admin_panel" replace /> : renderAuthUI()} />
+        
+        {/* Publically Accessible Layout */}
+        <Route element={<Layout user={session?.user || null} />}>
+          {/* Public Route */}
+          <Route path="/home" element={<Dashboard user={session?.user || null} />} />
+          
+          {/* Protected Routes */}
+          <Route path="/artists" element={session ? <Artists /> : <Navigate to="/login" replace />} />
+          <Route path="/profile/:id" element={session ? <UserProfile currentUser={session.user} /> : <Navigate to="/login" replace />} />
+          <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
+          <Route path="/admin_panel" element={session ? <AdminPanel user={session.user} /> : <Navigate to="/login" replace />} />
+          
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Route>
+      </Routes>
+    </>
   );
 }
 

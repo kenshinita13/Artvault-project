@@ -15,6 +15,8 @@ export default function Layout({ user }: { user: any }) {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!user) return;
+
     supabase.from('profiles').select('role, status, suspension_end').eq('id', user.id).single().then(async ({ data }) => {
       if (data) {
         if (data.status === 'banned') {
@@ -64,7 +66,7 @@ export default function Layout({ user }: { user: any }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user.id]);
+  }, [user?.id]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -96,21 +98,31 @@ export default function Layout({ user }: { user: any }) {
           <Link to="/artists" className="drawer-item" onClick={() => setDrawerOpen(false)}>
             <Users className="drawer-icon" /> Artists Directory
           </Link>
-          <Link to={`/profile/${user.id}`} className="drawer-item" onClick={() => setDrawerOpen(false)}>
-            <User className="drawer-icon" /> My Public Profile
-          </Link>
-          <Link to="/settings" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-            <Settings className="drawer-icon" /> Studio Dashboard / Settings
-          </Link>
+          {user && (
+            <>
+              <Link to={`/profile/${user.id}`} className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                <User className="drawer-icon" /> My Public Profile
+              </Link>
+              <Link to="/settings" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                <Settings className="drawer-icon" /> Studio Dashboard / Settings
+              </Link>
+            </>
+          )}
           {profile?.role === 'admin' && (
             <Link to="/admin_panel" className="drawer-item" onClick={() => setDrawerOpen(false)}>
               <Shield className="drawer-icon" /> Administrator Panel
             </Link>
           )}
           <hr className="drawer-divider" />
-          <button className="drawer-item logout" onClick={handleLogout} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer' }}>
-            <LogOut className="drawer-icon" /> Logout Session
-          </button>
+          {user ? (
+            <button className="drawer-item logout" onClick={handleLogout} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer' }}>
+              <LogOut className="drawer-icon" /> Logout Session
+            </button>
+          ) : (
+            <Link to="/login" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+              <LogOut className="drawer-icon" style={{ transform: 'rotate(180deg)' }} /> Sign In / Sign Up
+            </Link>
+          )}
         </div>
       </div>
       
@@ -136,8 +148,8 @@ export default function Layout({ user }: { user: any }) {
                 <rect x="17" y="17" width="4" height="4" rx="1" />
             </svg>
           </button>
-          <Link to="/home" className="nav-logo">
-            🎨 <span>ArtVault</span> Gallery
+          <Link to="/home" className="nav-logo" style={{ display: 'flex', alignItems: 'center', overflow: 'visible' }}>
+            <img src="/artvault_logo.png" alt="ArtVault Studio" style={{ height: '70px', display: 'block', transform: 'scale(2.5)', transformOrigin: 'center left', marginLeft: '15px', mixBlendMode: 'screen' }} />
           </Link>
         </div>
 
@@ -154,31 +166,37 @@ export default function Layout({ user }: { user: any }) {
         </form>
 
         <div className="nav-actions">
-          <div style={{ position: 'relative' }}>
-            <button className="nav-avatar-btn" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
-              <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
-            </button>
-            
-            {/* Avatar Dropdown */}
-            <div className={`avatar-dropdown ${avatarMenuOpen ? 'open' : ''}`} style={{ display: avatarMenuOpen ? 'flex' : 'none' }}>
-              <div className="dropdown-header">
-                <span className="dropdown-name">{user.user_metadata?.name || 'User'}</span>
-                <span className="dropdown-email">{user.email}</span>
-              </div>
-              <Link to="/settings" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
-                 <Settings size={16} /> Profile Settings
-              </Link>
-              {profile?.role === 'admin' && (
-                <Link to="/admin_panel" className="dropdown-item" onClick={() => { setAvatarMenuOpen(false); }}>
-                   <Shield size={16} /> Administrator Panel
-                </Link>
-              )}
-              <hr className="dropdown-divider" />
-              <button className="dropdown-item logout" onClick={handleLogout} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer' }}>
-                 <LogOut size={16} /> Logout Session
+          {user ? (
+            <div style={{ position: 'relative' }}>
+              <button className="nav-avatar-btn" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
+                <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
               </button>
+              
+              {/* Avatar Dropdown */}
+              <div className={`avatar-dropdown ${avatarMenuOpen ? 'open' : ''}`} style={{ display: avatarMenuOpen ? 'flex' : 'none' }}>
+                <div className="dropdown-header">
+                  <span className="dropdown-name">{user.user_metadata?.name || 'User'}</span>
+                  <span className="dropdown-email">{user.email}</span>
+                </div>
+                <Link to="/settings" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
+                   <Settings size={16} /> Profile Settings
+                </Link>
+                {profile?.role === 'admin' && (
+                  <Link to="/admin_panel" className="dropdown-item" onClick={() => { setAvatarMenuOpen(false); }}>
+                     <Shield size={16} /> Administrator Panel
+                  </Link>
+                )}
+                <hr className="dropdown-divider" />
+                <button className="dropdown-item logout" onClick={handleLogout} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer' }}>
+                   <LogOut size={16} /> Logout Session
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <Link to="/login" className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '13px', background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold' }}>
+               Sign In / Sign Up
+            </Link>
+          )}
         </div>
       </header>
 

@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
-import { Upload, Trash2, X } from 'lucide-react';
-import Avatar from './Avatar';
-import Lightbox from './Lightbox';
+import { Upload, X } from 'lucide-react';
 import { checkImageIsSafe } from './nsfwHelper';
+import InteractiveBentoGallery from './components/blocks/interactive-bento-gallery';
+import Lightbox from './Lightbox';
 import './Dashboard.css';
 
 interface Artwork {
@@ -24,32 +24,21 @@ interface Artwork {
 export default function Dashboard({ user }: { user: any }) {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
   
   // Upload Modal State
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  
-  const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
-  const [userRole, setUserRole] = useState<string>('user');
   
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
 
   useEffect(() => {
     fetchArtworks();
-    fetchUserRole();
   }, [searchQuery]);
-
-  async function fetchUserRole() {
-    const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-    if (data) {
-      setUserRole(data.role);
-    }
-  }
 
   async function fetchArtworks() {
     setLoading(true);
@@ -137,41 +126,16 @@ export default function Dashboard({ user }: { user: any }) {
     }
   };
 
-  const handleDeleteClick = (e: React.MouseEvent, artwork: Artwork) => {
-    e.stopPropagation();
-    setDeleteModalArtwork(artwork);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteModalArtwork) return;
-
-    try {
-      const pathParts = deleteModalArtwork.image_url.split('/artworks/');
-      if (pathParts.length > 1) {
-        await supabase.storage.from('artworks').remove([pathParts[1]]);
-      }
-
-      await supabase.from('artworks').delete().eq('id', deleteModalArtwork.id);
-      setArtworks(artworks.filter(a => a.id !== deleteModalArtwork.id));
-      toast.success('Artwork deleted successfully.');
-      setDeleteModalArtwork(null);
-    } catch (error: any) {
-      toast.error('Error deleting: ' + error.message);
-    }
-  };
-
   return (
     <>
       <main className="gallery-container">
-        <div className="gallery-header">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h2>🌟 Global Showcase</h2>
-              <p>Explore creative artworks published by our artists</p>
-            </div>
-            <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
-              <Upload size={16} /> Post Image
-            </button>
+        <div className="gallery-header" style={{ marginBottom: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+            {user && (
+              <button className="btn btn-primary" onClick={() => setShowUpload(true)} style={{ zIndex: 10 }}>
+                <Upload size={16} /> Post Image
+              </button>
+            )}
           </div>
         </div>
 
@@ -184,48 +148,38 @@ export default function Dashboard({ user }: { user: any }) {
             <p style={{ marginTop: '5px' }}>The gallery is currently empty.</p>
           </div>
         ) : (
-          <div className="gallery-grid">
-            {artworks.map(artwork => (
-              <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)}>
-                <div className="art-preview">
-                  <img src={artwork.image_url} alt={artwork.title} />
-                </div>
-                <div className="art-details">
-                  <div className="art-title">{artwork.title}</div>
-                  <div className="art-desc-preview">{artwork.description || 'No description provided.'}</div>
-                  
-                  <div className="art-meta">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Avatar userId={artwork.user_id} name={artwork.profiles?.name || 'Unknown Artist'} size={24} />
-                      <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
-                        {artwork.profiles?.name || 'Unknown Artist'}
-                      </span>
-                    </div>
-                    <span>{new Date(artwork.created_at).toLocaleDateString()}</span>
-                  </div>
-
-                  <div className="art-actions">
-                    {(user.id === artwork.user_id || userRole === 'admin') && (
-                      <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div style={{ marginTop: '-40px' }}>
+            <InteractiveBentoGallery 
+              mediaItems={artworks.map((a, i) => {
+                const patterns = [
+                  "col-span-1 row-span-2",
+                  "col-span-2 row-span-1",
+                  "col-span-1 row-span-2",
+                  "col-span-1 row-span-2",
+                  "col-span-2 row-span-1",
+                  "col-span-2 row-span-1",
+                  "col-span-1 row-span-2",
+                ];
+                return {
+                  id: a.id,
+                  type: (a.image_url && (a.image_url.toLowerCase().endsWith('.mp4') || a.image_url.toLowerCase().endsWith('.webm'))) ? 'video' : 'image',
+                  title: a.title,
+                  desc: a.description || `By ${a.profiles?.name || 'Unknown Artist'}`,
+                  url: a.image_url,
+                  span: patterns[i % patterns.length]
+                };
+              })}
+              title="Gallery Shots Collection"
+              description="Drag and explore our curated collection of shots."
+              onItemClick={(item) => {
+                const selected = artworks.find(a => a.id === item.id);
+                if (selected) setActiveArtwork(selected);
+              }}
+            />
           </div>
         )}
       </main>
 
-      {/* Lightbox Modal */}
-      {activeArtwork && (
-        <Lightbox 
-          artwork={activeArtwork} 
-          artistName={activeArtwork.profiles?.name || 'Unknown Artist'} 
-          onClose={() => setActiveArtwork(null)} 
-        />
-      )}
 
       {/* Upload Modal */}
       {showUpload && (
@@ -286,32 +240,13 @@ export default function Dashboard({ user }: { user: any }) {
           </div>
         </div>
       )}
-      {/* Delete Confirmation Modal */}
-      {deleteModalArtwork && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete Artwork</h3>
-              <button onClick={() => setDeleteModalArtwork(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                Are you sure you want to delete <strong>{deleteModalArtwork.title}</strong>? 
-                This action cannot be undone.
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setDeleteModalArtwork(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-danger" onClick={confirmDelete} style={{ flex: 1 }}>
-                  Yes, Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+
+      {activeArtwork && (
+        <Lightbox 
+          artwork={activeArtwork} 
+          artistName={activeArtwork.profiles?.username || 'Unknown Artist'}
+          onClose={() => setActiveArtwork(null)} 
+        />
       )}
 
     </>
