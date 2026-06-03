@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { Upload, Trash2, X } from 'lucide-react';
@@ -34,11 +35,14 @@ export default function Dashboard({ user }: { user: any }) {
   
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
   const [userRole, setUserRole] = useState<string>('user');
+  
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.get('search') || '';
 
   useEffect(() => {
     fetchArtworks();
     fetchUserRole();
-  }, []);
+  }, [searchQuery]);
 
   async function fetchUserRole() {
     const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
@@ -62,7 +66,20 @@ export default function Dashboard({ user }: { user: any }) {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setArtworks(data as unknown as Artwork[]);
+      let fetchedArtworks = data as unknown as Artwork[];
+      
+      // Client-side filtering if search query exists
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        fetchedArtworks = fetchedArtworks.filter(a => 
+          a.title.toLowerCase().includes(q) || 
+          (a.description && a.description.toLowerCase().includes(q)) ||
+          (a.profiles?.name && a.profiles.name.toLowerCase().includes(q)) ||
+          (a.profiles?.username && a.profiles.username.toLowerCase().includes(q))
+        );
+      }
+      
+      setArtworks(fetchedArtworks);
     }
     setLoading(false);
   };

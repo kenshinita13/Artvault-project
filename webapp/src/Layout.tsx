@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { Search, X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -10,6 +10,9 @@ export default function Layout({ user }: { user: any }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const navigate = useNavigate();
 
   useEffect(() => {
     supabase.from('profiles').select('role, status, suspension_end').eq('id', user.id).single().then(async ({ data }) => {
@@ -65,6 +68,15 @@ export default function Layout({ user }: { user: any }) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/home?search=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      navigate('/home');
+    }
   };
 
   return (
@@ -129,13 +141,15 @@ export default function Layout({ user }: { user: any }) {
           </Link>
         </div>
 
-        <form className="search-form" onSubmit={(e) => { e.preventDefault(); /* search logic */ }} style={{ position: 'relative' }}>
+        <form className="search-form" onSubmit={handleSearch} style={{ position: 'relative' }}>
           <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
           <input 
             type="text" 
             className="search-input" 
             placeholder="Search by title, description, or artist..." 
             style={{ paddingLeft: '40px' }}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </form>
 
