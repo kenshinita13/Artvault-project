@@ -172,109 +172,140 @@ function App() {
     setLoading(true);
     setIsValidatingLogin(true);
 
-    const { error, data } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      toast('Step 1: Starting authentication...');
+      
+      let timeoutId: any;
+      const timeoutPromise = new Promise<{error: any, data: any}>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Authentication timed out after 30 seconds. Please check your network connection and try again.')), 30000);
+      });
 
-    if (error) {
-      setError(error.message);
-      toast.error(error.message);
-      setLoading(false);
-      setIsValidatingLogin(false);
-      return;
-    }
+      const { error, data } = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        timeoutPromise
+      ]);
+      
+      clearTimeout(timeoutId);
 
-    // Role and Status check before proceeding to MFA or completing login
-    if (data?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, status, suspension_end')
-        .eq('id', data.user.id)
-        .single();
+      if (error) {
+        setError(error.message);
+        toast.error('Step 1 Failed: ' + error.message);
+        setLoading(false);
+        setIsValidatingLogin(false);
+        return;
+      }
 
-      if (profile) {
-        if (profile.status === 'banned') {
-          await supabase.auth.signOut();
-          const msg = 'Access Denied: Your account has been permanently banned.';
-          setError(msg);
-          setBanMessage(msg);
-          setLoading(false);
-          setIsValidatingLogin(false);
-          return;
-        }
+      toast.success('Step 1 Complete: User Authenticated');
+      toast('Step 2: Fetching profile and MFA status...');
 
-        if (profile.status === 'suspended' && profile.suspension_end) {
-          const endDate = new Date(profile.suspension_end);
-          if (endDate > new Date()) {
+      if (data?.user) {
+        const [profileResponse, mfaResponse] = await Promise.all([
+          supabase.from('profiles').select('role, status, suspension_end').eq('id', data.user.id).single(),
+          supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        ]);
+
+        toast.success('Step 2 Complete');
+
+        const profile = profileResponse.data;
+        const mfaData = mfaResponse.data;
+
+        if (profile) {
+          if (profile.status === 'banned') {
             await supabase.auth.signOut();
-            const msg = `Access Denied: Account suspended until ${endDate.toLocaleString()}.`;
+            const msg = 'Access Denied: Your account has been permanently banned.';
             setError(msg);
             setBanMessage(msg);
             setLoading(false);
             setIsValidatingLogin(false);
             return;
-          } else {
-            // Suspension has expired, auto-restore them
-            await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', data.user.id);
+          }
+
+          if (profile.status === 'suspended' && profile.suspension_end) {
+            const endDate = new Date(profile.suspension_end);
+            if (endDate > new Date()) {
+              await supabase.auth.signOut();
+              const msg = `Access Denied: Account suspended until ${endDate.toLocaleString()}.`;
+              setError(msg);
+              setBanMessage(msg);
+              setLoading(false);
+              setIsValidatingLogin(false);
+              return;
+            } else {
+              await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', data.user.id);
+            }
           }
         }
-      }
 
-      if (isAdminLogin && profile?.role !== 'admin') {
-        await supabase.auth.signOut();
-        setError('Access denied. Only administrators can log in here.');
-        toast.error('Access denied. Only administrators can log in here.');
-        setLoading(false);
-        setIsValidatingLogin(false);
-        return;
-      }
-
-      if (!isAdminLogin && profile?.role === 'admin') {
-        await supabase.auth.signOut();
-        setError('Admins must log in through the /admin portal.');
-        toast.error('Admins must log in through the /admin portal.');
-        setLoading(false);
-        setIsValidatingLogin(false);
-        return;
-      }
-    }
-
-    // Check for MFA
-    const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
-      const factors = await supabase.auth.mfa.listFactors();
-      if (factors.data && factors.data.totp.length > 0) {
-        const verifiedFactors = factors.data.totp.filter(f => f.status === 'verified');
-        if (verifiedFactors.length > 0) {
-          verifiedFactors.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          setMfaFactorIds(verifiedFactors.map((f: any) => f.id));
-          setShowMfaChallenge(true);
+        if (isAdminLogin && profile?.role !== 'admin') {
+          await supabase.auth.signOut();
+          setError('Access denied. Only administrators can log in here.');
+          toast.error('Access denied. Only administrators can log in here.');
           setLoading(false);
           setIsValidatingLogin(false);
           return;
         }
-      }
-    }
 
-    // If no MFA required, proceed as normal
-    completeLogin(data);
+        if (!isAdminLogin && profile?.role === 'admin') {
+          await supabase.auth.signOut();
+          setError('Admins must log in through the /admin portal.');
+          toast.error('Admins must log in through the /admin portal.');
+          setLoading(false);
+          setIsValidatingLogin(false);
+          return;
+        }
+
+        toast('Step 3: Checking MFA requirements...');
+        if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
+          const factors = await supabase.auth.mfa.listFactors();
+          if (factors.data && factors.data.totp.length > 0) {
+            const verifiedFactors = factors.data.totp.filter((f: any) => f.status === 'verified');
+            if (verifiedFactors.length > 0) {
+              verifiedFactors.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+              setMfaFactorIds(verifiedFactors.map((f: any) => f.id));
+              setShowMfaChallenge(true);
+              setLoading(false);
+              setIsValidatingLogin(false);
+              return;
+            }
+          }
+        }
+
+        toast('Final Step: Completing Login...');
+        completeLogin(data, profile);
+      } else {
+        setLoading(false);
+        setIsValidatingLogin(false);
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      const errMsg = err.message || 'An unexpected error occurred during login. Please try again.';
+      setError(errMsg);
+      toast.error('Caught Error: ' + errMsg);
+      setLoading(false);
+      setIsValidatingLogin(false);
+    }
   };
 
-  const completeLogin = async (data: any) => {
+  const completeLogin = async (data: any, profile?: any) => {
     if (data?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
+      let userRole = profile?.role;
+      
+      // Only fetch if not already provided
+      if (!userRole) {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+        userRole = p?.role;
+      }
         
       setSuccess('Login successful! Redirecting...');
       toast.success('Login successful!');
       setIsValidatingLogin(false);
       setShowMfaChallenge(false);
       
-      if (profile?.role === 'admin') {
+      if (userRole === 'admin') {
         navigate('/admin_panel');
       } else {
         navigate('/home');
