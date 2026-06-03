@@ -173,38 +173,21 @@ function App() {
     setIsValidatingLogin(true);
 
     try {
-      toast('Step 1: Starting authentication...');
-      
-      let timeoutId: any;
-      const timeoutPromise = new Promise<{error: any, data: any}>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Authentication timed out after 30 seconds. Please check your network connection and try again.')), 30000);
-      });
-
-      const { error, data } = await Promise.race([
-        supabase.auth.signInWithPassword({ email, password }),
-        timeoutPromise
-      ]);
-      
-      clearTimeout(timeoutId);
+      const { error, data } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
         setError(error.message);
-        toast.error('Step 1 Failed: ' + error.message);
+        toast.error(error.message);
         setLoading(false);
         setIsValidatingLogin(false);
         return;
       }
-
-      toast.success('Step 1 Complete: User Authenticated');
-      toast('Step 2: Fetching profile and MFA status...');
 
       if (data?.user) {
         const [profileResponse, mfaResponse] = await Promise.all([
           supabase.from('profiles').select('role, status, suspension_end').eq('id', data.user.id).single(),
           supabase.auth.mfa.getAuthenticatorAssuranceLevel()
         ]);
-
-        toast.success('Step 2 Complete');
 
         const profile = profileResponse.data;
         const mfaData = mfaResponse.data;
@@ -254,7 +237,6 @@ function App() {
           return;
         }
 
-        toast('Step 3: Checking MFA requirements...');
         if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
           const factors = await supabase.auth.mfa.listFactors();
           if (factors.data && factors.data.totp.length > 0) {
@@ -270,7 +252,6 @@ function App() {
           }
         }
 
-        toast('Final Step: Completing Login...');
         completeLogin(data, profile);
       } else {
         setLoading(false);
@@ -278,9 +259,8 @@ function App() {
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      const errMsg = err.message || 'An unexpected error occurred during login. Please try again.';
-      setError(errMsg);
-      toast.error('Caught Error: ' + errMsg);
+      setError(err.message || 'An unexpected error occurred. Please try again.');
+      toast.error(err.message || 'Login failed. Please try again.');
       setLoading(false);
       setIsValidatingLogin(false);
     }
