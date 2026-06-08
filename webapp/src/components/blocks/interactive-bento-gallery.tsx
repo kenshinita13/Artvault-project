@@ -148,14 +148,38 @@ interface InteractiveBentoGalleryProps {
 const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ mediaItems, title, description, onItemClick }) => {
     const [items, setItems] = useState(mediaItems);
     const [isDragging, setIsDragging] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    
+    const itemsPerPage = 20;
 
     useEffect(() => {
         setItems(mediaItems);
+        setCurrentPage(1);
     }, [mediaItems]);
+
+    const totalPages = Math.ceil(items.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const currentItems = items.slice(startIndex, startIndex + itemsPerPage);
+
+    const getPaginationGroup = () => {
+        let pages = [];
+        if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+            if (currentPage <= 3) {
+                pages = [1, 2, 3, 4, '...', totalPages];
+            } else if (currentPage >= totalPages - 2) {
+                pages = [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+            } else {
+                pages = [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+            }
+        }
+        return pages;
+    };
 
     return (
         <div className="mx-auto px-4 py-8 w-full max-w-7xl">
-            <div className="mb-8 text-center">
+            <div className="mb-12 text-center">
                 <motion.h1
                     className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight"
                     initial={{ opacity: 0, y: 20 }}
@@ -175,7 +199,7 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ media
             </div>
             <AnimatePresence mode="wait">
                     <motion.div
-                        className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 w-full"
+                        className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-6 sm:gap-8 w-full"
                         initial="hidden"
                         animate="visible"
                         exit="hidden"
@@ -187,11 +211,11 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ media
                             }
                         }}
                     >
-                        {items.map((item, index) => (
+                        {currentItems.map((item, index) => (
                             <motion.div
                                 key={item.id}
                                 layoutId={`media-${item.id}`}
-                                className={`relative overflow-hidden rounded-xl cursor-move break-inside-avoid mb-4`}
+                                className={`relative overflow-hidden rounded-xl cursor-move break-inside-avoid mb-6 sm:mb-8`}
                                 onClick={() => {
                                     if (!isDragging && onItemClick) {
                                         onItemClick(item);
@@ -221,12 +245,13 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ media
                                     const moveDistance = info.offset.x + info.offset.y;
                                     if (Math.abs(moveDistance) > 50) {
                                         const newItems = [...items];
-                                        const draggedItem = newItems[index];
-                                        const targetIndex = moveDistance > 0 ?
-                                            Math.min(index + 1, items.length - 1) :
-                                            Math.max(index - 1, 0);
-                                        newItems.splice(index, 1);
-                                        newItems.splice(targetIndex, 0, draggedItem);
+                                        const realIndex = startIndex + index;
+                                        const draggedItem = newItems[realIndex];
+                                        const targetRealIndex = moveDistance > 0 ?
+                                            Math.min(realIndex + 1, newItems.length - 1) :
+                                            Math.max(realIndex - 1, 0);
+                                        newItems.splice(realIndex, 1);
+                                        newItems.splice(targetRealIndex, 0, draggedItem);
                                         setItems(newItems);
                                     }
                                 }}
@@ -260,6 +285,38 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ media
                         ))}
                     </motion.div>
             </AnimatePresence>
+
+            {totalPages > 1 && (
+                <div className="flex justify-center items-center mt-12 gap-2">
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 rounded-lg bg-white/5 text-white disabled:opacity-50 hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    >
+                        Prev
+                    </button>
+                    {getPaginationGroup().map((page, idx) => (
+                        page === '...' ? (
+                            <span key={`dots-${idx}`} className="px-2 text-slate-500">...</span>
+                        ) : (
+                            <button
+                                key={`page-${page}`}
+                                onClick={() => setCurrentPage(page as number)}
+                                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer ${currentPage === page ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/30' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'}`}
+                            >
+                                {page}
+                            </button>
+                        )
+                    ))}
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 rounded-lg bg-white/5 text-white disabled:opacity-50 hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

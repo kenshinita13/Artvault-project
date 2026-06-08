@@ -10,9 +10,33 @@ export default function Layout({ user }: { user: any }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
-  const [searchParams] = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '');
+
+  useEffect(() => {
+    setLocalSearch(searchParams.get('search') || '');
+  }, [searchParams]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalSearch(val);
+    if (window.location.pathname === '/home' || window.location.pathname === '/') {
+      if (val) {
+        setSearchParams({ search: val });
+      } else {
+        setSearchParams({});
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (window.location.pathname !== '/home' && window.location.pathname !== '/') {
+         navigate(`/home?search=${encodeURIComponent(localSearch)}`);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -70,15 +94,6 @@ export default function Layout({ user }: { user: any }) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/home?search=${encodeURIComponent(searchQuery.trim())}`);
-    } else {
-      navigate('/home');
-    }
   };
 
   return (
@@ -153,17 +168,17 @@ export default function Layout({ user }: { user: any }) {
           </Link>
         </div>
 
-        <form className="search-form" onSubmit={handleSearch} style={{ position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 20px' }}>
           <input 
             type="text" 
             className="search-input" 
-            placeholder="Search by title, description, or artist..." 
-            style={{ paddingLeft: '40px' }}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search artworks by title, description, or artist..." 
+            style={{ width: '100%', maxWidth: '600px', margin: 0 }}
+            value={localSearch}
+            onChange={handleSearchChange}
+            onKeyDown={handleKeyDown}
           />
-        </form>
+        </div>
 
         <div className="nav-actions">
           {user ? (

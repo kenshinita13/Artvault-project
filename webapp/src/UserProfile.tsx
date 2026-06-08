@@ -45,6 +45,9 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
   const [currentUserRole, setCurrentUserRole] = useState<string>('user');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+
   useEffect(() => {
     if (id) {
       fetchUserProfile();
@@ -53,6 +56,10 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
       fetchCurrentUserRole();
     }
   }, [id, currentUser]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   async function fetchCurrentUserRole() {
     const { data } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
@@ -195,6 +202,26 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
     (a.description && a.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const totalPages = Math.ceil(filteredArtworks.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = filteredArtworks.slice(startIndex, startIndex + itemsPerPage);
+
+  const getPaginationGroup = () => {
+      let pages = [];
+      if (totalPages <= 5) {
+          for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+          if (currentPage <= 3) {
+              pages = [1, 2, 3, 4, '...', totalPages];
+          } else if (currentPage >= totalPages - 2) {
+              pages = [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+          } else {
+              pages = [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+          }
+      }
+      return pages;
+  };
+
   return (
     <>
       <main className="studio-container">
@@ -246,7 +273,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start w-full">
-            {filteredArtworks.map(artwork => (
+            {currentItems.map(artwork => (
               <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)}>
                 <div className="art-preview">
                   <img src={artwork.image_url} alt={artwork.title} />
@@ -270,6 +297,41 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
               </div>
             ))}
           </div>
+        )}
+        
+        {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '40px', gap: '8px' }}>
+                <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="btn btn-secondary"
+                    style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >
+                    Prev
+                </button>
+                {getPaginationGroup().map((page, idx) => (
+                    page === '...' ? (
+                        <span key={`dots-${idx}`} style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>...</span>
+                    ) : (
+                        <button
+                            key={`page-${page}`}
+                            onClick={() => setCurrentPage(page as number)}
+                            className={currentPage === page ? "btn btn-primary" : "btn btn-secondary"}
+                            style={{ width: '40px', padding: '8px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                        >
+                            {page}
+                        </button>
+                    )
+                ))}
+                <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="btn btn-secondary"
+                    style={{ opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                >
+                    Next
+                </button>
+            </div>
         )}
       </main>
 

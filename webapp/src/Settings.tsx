@@ -213,15 +213,20 @@ export default function Settings({ user }: { user: any }) {
 
       {/* Main Content */}
       <div className="settings-content">
-        <div className="settings-header">
-          <h2>
-            {activeTab === 'profile' && 'Profile Settings'}
-            {activeTab === 'security' && 'Security & TOTP'}
-          </h2>
-          <p>
-            {activeTab === 'profile' && 'Manage your public persona and portfolio details'}
-            {activeTab === 'security' && 'Protect your account with Two-Factor Authentication'}
-          </p>
+        <div className="settings-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
+          <div>
+            <h2 style={{ marginTop: 0 }}>
+              {activeTab === 'profile' && 'Profile Settings'}
+              {activeTab === 'security' && 'Security & TOTP'}
+            </h2>
+            <p style={{ marginBottom: 0 }}>
+              {activeTab === 'profile' && 'Manage your public persona and portfolio details'}
+              {activeTab === 'security' && 'Protect your account with Two-Factor Authentication'}
+            </p>
+          </div>
+          <Link to={`/profile/${user.id}`} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', flexShrink: 0 }}>
+             <User size={16} /> Back to Profile
+          </Link>
         </div>
 
         {/* Profile Tab */}

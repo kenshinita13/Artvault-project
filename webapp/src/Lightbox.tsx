@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { X, Flag } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
@@ -107,7 +108,9 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
                 <X size={24} />
               </button>
             </div>
-            <div className="lightbox-artist">By {artistName}</div>
+            <div className="lightbox-artist">
+              By <Link to={`/profile/${artwork.user_id}`} onClick={onClose} style={{ color: '#a855f7', textDecoration: 'none', fontWeight: 'bold' }}>{artistName}</Link>
+            </div>
             
             <div className="lightbox-desc-title">Description</div>
             <div className="lightbox-desc">{artwork.description || 'No description provided for this artwork.'}</div>

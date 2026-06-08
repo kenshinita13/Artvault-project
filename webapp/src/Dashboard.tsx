@@ -33,12 +33,12 @@ export default function Dashboard({ user }: { user: any }) {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
 
   useEffect(() => {
     fetchArtworks();
-  }, [searchQuery]);
+  }, []);
 
   async function fetchArtworks() {
     setLoading(true);
@@ -55,23 +55,19 @@ export default function Dashboard({ user }: { user: any }) {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      let fetchedArtworks = data as unknown as Artwork[];
-      
-      // Client-side filtering if search query exists
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        fetchedArtworks = fetchedArtworks.filter(a => 
-          a.title.toLowerCase().includes(q) || 
-          (a.description && a.description.toLowerCase().includes(q)) ||
-          (a.profiles?.name && a.profiles.name.toLowerCase().includes(q)) ||
-          (a.profiles?.username && a.profiles.username.toLowerCase().includes(q))
-        );
-      }
-      
-      setArtworks(fetchedArtworks);
+      setArtworks(data as unknown as Artwork[]);
     }
     setLoading(false);
   };
+
+  const filteredArtworks = artworks.filter(a => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return a.title.toLowerCase().includes(q) || 
+      (a.description && a.description.toLowerCase().includes(q)) ||
+      (a.profiles?.name && a.profiles.name.toLowerCase().includes(q)) ||
+      (a.profiles?.username && a.profiles.username.toLowerCase().includes(q));
+  });
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,10 +125,10 @@ export default function Dashboard({ user }: { user: any }) {
   return (
     <>
       <main className="gallery-container">
-        <div className="gallery-header" style={{ marginBottom: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+        <div className="gallery-header" style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
             {user && (
-              <button className="btn btn-primary" onClick={() => setShowUpload(true)} style={{ zIndex: 10 }}>
+              <button className="btn btn-primary" onClick={() => setShowUpload(true)} style={{ zIndex: 10, whiteSpace: 'nowrap' }}>
                 <Upload size={16} /> Post Image
               </button>
             )}
@@ -141,16 +137,16 @@ export default function Dashboard({ user }: { user: any }) {
 
         {loading ? (
           <p style={{ color: 'var(--text-secondary)' }}>Loading gallery...</p>
-        ) : artworks.length === 0 ? (
+        ) : filteredArtworks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
             <span style={{ fontSize: '48px' }}>🔍</span>
             <h4 style={{ marginTop: '15px' }}>No Artworks Found</h4>
-            <p style={{ marginTop: '5px' }}>The gallery is currently empty.</p>
+            <p style={{ marginTop: '5px' }}>{searchQuery ? "No artworks match your search." : "The gallery is currently empty."}</p>
           </div>
         ) : (
-          <div style={{ marginTop: '-40px' }}>
+          <div style={{ marginTop: '0' }}>
             <InteractiveBentoGallery 
-              mediaItems={artworks.map((a, i) => {
+              mediaItems={filteredArtworks.map((a, i) => {
                 const patterns = [
                   "col-span-1 row-span-2",
                   "col-span-2 row-span-1",
@@ -172,7 +168,7 @@ export default function Dashboard({ user }: { user: any }) {
               title="Gallery Shots Collection"
               description="Drag and explore our curated collection of shots."
               onItemClick={(item) => {
-                const selected = artworks.find(a => a.id === item.id);
+                const selected = filteredArtworks.find(a => a.id === item.id);
                 if (selected) setActiveArtwork(selected);
               }}
             />
