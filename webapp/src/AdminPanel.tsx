@@ -90,7 +90,6 @@ export default function AdminPanel({ user }: { user: any }) {
     return () => {
       if (interval) clearInterval(interval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, adminSubTab]);
 
   async function fetchAllUsers() {

@@ -1,8 +1,6 @@
 "use client"
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react';
-
 
 export interface MediaItemType {
     id: number | string;
@@ -195,12 +193,8 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ media
                                 layoutId={`media-${item.id}`}
                                 className={`relative overflow-hidden rounded-xl cursor-move break-inside-avoid mb-4`}
                                 onClick={() => {
-                                    if (!isDragging) {
-                                        if (onItemClick) {
-                                            onItemClick(item);
-                                        } else {
-                                            setSelectedItem(item);
-                                        }
+                                    if (!isDragging && onItemClick) {
+                                        onItemClick(item);
                                     }
                                 }}
                                 variants={{
@@ -241,12 +235,8 @@ const InteractiveBentoGallery: React.FC<InteractiveBentoGalleryProps> = ({ media
                                     item={item}
                                     className="w-full h-auto block"
                                     onClick={() => {
-                                        if (!isDragging) {
-                                            if (onItemClick) {
-                                                onItemClick(item);
-                                            } else {
-                                                setSelectedItem(item);
-                                            }
+                                        if (!isDragging && onItemClick) {
+                                            onItemClick(item);
                                         }
                                     }}
                                 />

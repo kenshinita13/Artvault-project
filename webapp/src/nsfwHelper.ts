@@ -18,14 +18,14 @@ export const loadNsfwModel = async () => {
 };
 
 export const checkImageIsSafe = async (file: File): Promise<boolean> => {
-  return new Promise(async (resolve) => {
-    try {
-      const loadedModel = await loadNsfwModel();
-      if (!loadedModel) {
-        // If the AI model fails to load, we allow the upload as a fallback
-        return resolve(true);
-      }
+  try {
+    const loadedModel = await loadNsfwModel();
+    if (!loadedModel) {
+      // If the AI model fails to load, we allow the upload as a fallback
+      return true;
+    }
 
+    return new Promise((resolve) => {
       const img = new Image();
       const reader = new FileReader();
 
@@ -57,10 +57,9 @@ export const checkImageIsSafe = async (file: File): Promise<boolean> => {
       
       reader.onerror = () => resolve(true);
       reader.readAsDataURL(file);
-
-    } catch (err) {
-      console.error("NSFW check error:", err);
-      resolve(true);
-    }
-  });
+    });
+  } catch (err) {
+    console.error("NSFW check error:", err);
+    return true;
+  }
 };
