@@ -16,18 +16,27 @@ export default function Layout({ user }: { user: any }) {
 
   useEffect(() => {
     setLocalSearch(searchParams.get('search') || '');
-  }, [searchParams]);
+  }, [searchParams.get('search')]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (window.location.pathname === '/home' || window.location.pathname === '/') {
+        const currentSearchParam = searchParams.get('search') || '';
+        if (localSearch !== currentSearchParam) {
+          if (localSearch) {
+            setSearchParams({ search: localSearch });
+          } else {
+            setSearchParams({});
+          }
+        }
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [localSearch, setSearchParams, searchParams]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setLocalSearch(val);
-    if (window.location.pathname === '/home' || window.location.pathname === '/') {
-      if (val) {
-        setSearchParams({ search: val });
-      } else {
-        setSearchParams({});
-      }
-    }
+    setLocalSearch(e.target.value);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

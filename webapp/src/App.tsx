@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
-import Layout from './Layout';
-import Dashboard from './Dashboard';
-import Artists from './Artists';
-import UserProfile from './UserProfile';
-import Settings from './Settings';
-
-import AdminPanel from './AdminPanel';
 import { logAudit } from './auditHelper';
-import LandingPage from './LandingPage';
+
+const Layout = lazy(() => import('./Layout'));
+const Dashboard = lazy(() => import('./Dashboard'));
+const Artists = lazy(() => import('./Artists'));
+const UserProfile = lazy(() => import('./UserProfile'));
+const Settings = lazy(() => import('./Settings'));
+const AdminPanel = lazy(() => import('./AdminPanel'));
+const LandingPage = lazy(() => import('./LandingPage'));
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -675,7 +675,7 @@ function App() {
   }
 
   return (
-    <>
+    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>Loading...</div>}>
       <Routes>
         <Route path="/" element={session && !showMfaChallenge ? <Navigate to="/home" replace /> : <LandingPage />} />
         <Route path="/login" element={session && !showMfaChallenge ? <Navigate to="/home" replace /> : <><LandingPage />{renderAuthUI()}</>} />
@@ -695,7 +695,7 @@ function App() {
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>
-    </>
+    </Suspense>
   );
 }
 
