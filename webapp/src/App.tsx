@@ -177,6 +177,52 @@ function App() {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
   }
   
+  const validateAdminAccess = (profile: any, isAdminLogin: boolean): string | null => {
+    if (isAdminLogin && profile?.role !== 'admin') {
+      return 'Access denied. Only administrators can log in here.';
+    }
+    if (!isAdminLogin && profile?.role === 'admin') {
+      return 'Admins must log in through the /admin portal.';
+    }
+    return null;
+  };
+
+  const validateProfileStatus = async (profile: any, userId: string): Promise<string | null> => {
+    if (!profile) return null;
+
+    if (profile.status === 'banned') {
+      await supabase.auth.signOut();
+      return 'Access Denied: Your account has been permanently banned.';
+    }
+
+    if (profile.status === 'suspended' && profile.suspension_end) {
+      const endDate = new Date(profile.suspension_end);
+      if (endDate > new Date()) {
+        await supabase.auth.signOut();
+        return `Access Denied: Account suspended until ${endDate.toLocaleString()}.`;
+      } else {
+        await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', userId);
+      }
+    }
+    return null;
+  };
+
+  const checkMfaRequirements = async (mfaData: any): Promise<boolean> => {
+    if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
+      const factors = await supabase.auth.mfa.listFactors();
+      if (factors.data && factors.data.totp.length > 0) {
+        const verifiedFactors = factors.data.totp.filter((f: any) => f.status === 'verified');
+        if (verifiedFactors.length > 0) {
+          verifiedFactors.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          setMfaFactorIds(verifiedFactors.map((f: any) => f.id));
+          setShowMfaChallenge(true);
+          return true; // MFA is required
+        }
+      }
+    }
+    return false; // MFA is not required
+  };
+
   const handleLogin = async (e: React.FormEvent, isAdminLogin = false) => {
     e.preventDefault();
     setError('');
@@ -188,11 +234,7 @@ function App() {
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
-        setError(error.message);
-        toast.error(error.message);
-        setLoading(false);
-        setIsValidatingLogin(false);
-        return;
+        throw error;
       }
 
       if (data?.user) {
@@ -204,64 +246,30 @@ function App() {
         const profile = profileResponse.data;
         const mfaData = mfaResponse.data;
 
-        if (profile) {
-          if (profile.status === 'banned') {
-            await supabase.auth.signOut();
-            const msg = 'Access Denied: Your account has been permanently banned.';
-            setError(msg);
-            setBanMessage(msg);
-            setLoading(false);
-            setIsValidatingLogin(false);
-            return;
-          }
-
-          if (profile.status === 'suspended' && profile.suspension_end) {
-            const endDate = new Date(profile.suspension_end);
-            if (endDate > new Date()) {
-              await supabase.auth.signOut();
-              const msg = `Access Denied: Account suspended until ${endDate.toLocaleString()}.`;
-              setError(msg);
-              setBanMessage(msg);
-              setLoading(false);
-              setIsValidatingLogin(false);
-              return;
-            } else {
-              await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', data.user.id);
-            }
-          }
-        }
-
-        if (isAdminLogin && profile?.role !== 'admin') {
-          await supabase.auth.signOut();
-          setError('Access denied. Only administrators can log in here.');
-          toast.error('Access denied. Only administrators can log in here.');
+        const statusError = await validateProfileStatus(profile, data.user.id);
+        if (statusError) {
+          setError(statusError);
+          setBanMessage(statusError);
           setLoading(false);
           setIsValidatingLogin(false);
           return;
         }
 
-        if (!isAdminLogin && profile?.role === 'admin') {
+        const adminError = validateAdminAccess(profile, isAdminLogin);
+        if (adminError) {
           await supabase.auth.signOut();
-          setError('Admins must log in through the /admin portal.');
-          toast.error('Admins must log in through the /admin portal.');
+          setError(adminError);
+          toast.error(adminError);
           setLoading(false);
           setIsValidatingLogin(false);
           return;
         }
 
-        if (mfaData && mfaData.nextLevel === 'aal2' && mfaData.currentLevel === 'aal1') {
-          const factors = await supabase.auth.mfa.listFactors();
-          if (factors.data && factors.data.totp.length > 0) {
-            const verifiedFactors = factors.data.totp.filter((f: any) => f.status === 'verified');
-            if (verifiedFactors.length > 0) {
-              verifiedFactors.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-              setMfaFactorIds(verifiedFactors.map((f: any) => f.id));
-              setShowMfaChallenge(true);
-              setLoading(false);
-              setIsValidatingLogin(false);
-              return;
-            }
-          }
+        const requiresMfa = await checkMfaRequirements(mfaData);
+        if (requiresMfa) {
+          setLoading(false);
+          setIsValidatingLogin(false);
+          return;
         }
 
         completeLogin(data, profile);

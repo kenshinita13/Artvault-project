@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
@@ -29,6 +29,17 @@ const fallbackImages = [
 export default function LandingPage() {
   const navigate = useNavigate();
   const [displayImages, setDisplayImages] = useState(fallbackImages);
+  const dbUrlsRef = useRef<string[]>([]);
+
+  const shuffleAndSet = () => {
+    const urls = dbUrlsRef.current;
+    if (urls.length === 0) return;
+    const shuffled = [...urls].sort(() => 0.5 - Math.random());
+    setDisplayImages(fallbackImages.map((fallback, i) => ({
+      ...fallback,
+      url: shuffled[i] || fallback.url
+    })));
+  };
 
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval>;
@@ -38,19 +49,7 @@ export default function LandingPage() {
       const { data } = await supabase.from('artworks').select('image_url').order('created_at', { ascending: false }).limit(20);
       
       if (data && data.length > 0) {
-        const urls = data.map(item => item.image_url).filter(Boolean);
-        
-        const shuffleAndSet = () => {
-          // Shuffle the fetched database URLs
-          const shuffled = [...urls].sort(() => 0.5 - Math.random());
-          
-          // Map them into our layout format, falling back to unsplash if there aren't enough DB images
-          setDisplayImages(fallbackImages.map((fallback, i) => ({
-            ...fallback,
-            url: shuffled[i] || fallback.url
-          })));
-        };
-        
+        dbUrlsRef.current = data.map(item => item.image_url).filter(Boolean);
         shuffleAndSet(); // Run initially
         intervalId = setInterval(shuffleAndSet, 8000); // Reshuffle every 8 seconds
       }
