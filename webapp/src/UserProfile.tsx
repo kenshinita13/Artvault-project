@@ -274,7 +274,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start w-full">
             {currentItems.map(artwork => (
-              <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)}>
+              <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)} onKeyDown={(e) => { if (e.key === 'Enter') setActiveArtwork(artwork); }} role="button" tabIndex={0}>
                 <div className="art-preview">
                   <img src={artwork.image_url} alt={artwork.title} />
                 </div>

@@ -76,11 +76,14 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
   };
 
   return (
-    <div className="modal" style={{ display: 'flex' }} onClick={onClose}>
-      <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+    <div className="modal" style={{ display: 'flex' }} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') onClose(); }} role="button" tabIndex={0}>
+      <div className="lightbox-content" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} role="presentation">
         <div 
           className={`lightbox-img-wrapper ${fullscreen ? 'fullscreen' : ''}`} 
           onClick={() => !fullscreen && setFullscreen(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !fullscreen) setFullscreen(true); }}
+          role="button"
+          tabIndex={0}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -128,10 +131,9 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
         )}
       </div>
 
-      {/* Report Modal */}
       {reportModalOpen && (
-        <div className="modal" style={{ zIndex: 1000000 }} onClick={(e) => { e.stopPropagation(); setReportModalOpen(false); }}>
-          <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal" style={{ zIndex: 1000000 }} onClick={(e) => { e.stopPropagation(); setReportModalOpen(false); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.stopPropagation(); setReportModalOpen(false); } }} role="button" tabIndex={0}>
+          <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} role="presentation">
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Report Artwork</h3>
               <button onClick={() => setReportModalOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
