@@ -21,9 +21,55 @@ interface Artwork {
   };
 }
 
+// Global cache to instantly load artworks when navigating between pages
+let cachedArtworks: Artwork[] | null = null;
+
+const compressImage = (file: File): Promise<File> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1920;
+        const MAX_HEIGHT = 1080;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg', lastModified: Date.now() }));
+          } else {
+            resolve(file); // fallback if compression fails
+          }
+        }, 'image/jpeg', 0.85); // 85% quality provides massive size reduction with almost no visual loss
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 export default function Dashboard({ user }: { user: any }) {
-  const [artworks, setArtworks] = useState<Artwork[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [artworks, setArtworks] = useState<Artwork[]>(cachedArtworks || []);
+  const [loading, setLoading] = useState(!cachedArtworks);
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
   
   // Upload Modal State
@@ -41,7 +87,7 @@ export default function Dashboard({ user }: { user: any }) {
   }, []);
 
   async function fetchArtworks() {
-    setLoading(true);
+    if (!cachedArtworks) setLoading(true);
     // Fetch artworks along with the profile of the artist
     const { data, error } = await supabase
       .from('artworks')
@@ -55,7 +101,8 @@ export default function Dashboard({ user }: { user: any }) {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setArtworks(data as unknown as Artwork[]);
+      cachedArtworks = data as unknown as Artwork[];
+      setArtworks(cachedArtworks);
     }
     setLoading(false);
   };
@@ -84,13 +131,22 @@ export default function Dashboard({ user }: { user: any }) {
         return;
       }
 
-      const fileExt = file.name.split('.').pop();
+      // Compress the image before uploading to save massive bandwidth and storage
+      let fileToUpload = file;
+      let fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+      
+      // We don't compress GIFs or non-images to preserve animations/video
+      if (file.type.startsWith('image/') && fileExt !== 'gif') {
+        fileToUpload = await compressImage(file);
+        fileExt = 'jpg';
+      }
+
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('artworks')
-        .upload(filePath, file);
+        .upload(filePath, fileToUpload);
 
       if (uploadError) throw uploadError;
 
