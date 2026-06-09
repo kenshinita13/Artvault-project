@@ -33,7 +33,7 @@ export default function Dashboard({ user }: { user: any }) {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
 
   useEffect(() => {

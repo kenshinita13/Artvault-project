@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { Search, X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
+import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import './Dashboard.css';
