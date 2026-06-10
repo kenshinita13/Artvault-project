@@ -139,8 +139,8 @@ export default function LandingPage() {
         </div>
 
         {/* Right Content - Floating Collage */}
-        <div className="w-full lg:w-1/2 h-[500px] md:h-[600px] relative mt-16 lg:mt-0 perspective-1000">
-          <div className="relative w-full h-full max-w-lg mx-auto">
+        <div className="w-full lg:w-1/2 h-[500px] md:h-[600px] relative mt-32 lg:mt-0 perspective-1000 flex justify-center">
+          <div className="relative w-[340px] md:w-[420px] h-full flex-shrink-0">
             {displayImages.map((img, idx) => (
               <motion.div
                 key={idx}

@@ -31,6 +31,7 @@ This project has been fully modernized and is built natively on **React**, **Vit
    ```
 
 2. **Install Dependencies**:
+   *(⚠️ **CRITICAL:** Make sure your terminal is inside the `webapp` folder before running this command. Skipping this step will result in errors when opening localhost)*
    ```bash
    npm install
    ```
