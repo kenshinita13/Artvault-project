@@ -16,6 +16,20 @@
   backdrop-filter: blur(12px);
 }
 
+.main-content-wrapper {
+  padding-bottom: 80px;
+}
+@media (min-width: 768px) {
+  .main-content-wrapper {
+    margin-left: 72px;
+    padding-bottom: 0;
+  }
+  .top-navbar-desktop {
+    left: 72px !important;
+    width: calc(100% - 72px) !important;
+  }
+}
+
 .waffle-btn {
   background: none;
   border: none;
@@ -27,6 +41,11 @@
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
+}
+@media (min-width: 768px) {
+  .waffle-btn, .nav-logo.md\:hidden {
+    display: none !important;
+  }
 }
 .waffle-btn:hover {
   color: var(--accent-hover);

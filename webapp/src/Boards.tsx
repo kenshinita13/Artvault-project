@@ -143,11 +143,11 @@ export default function Boards({ user }: { user: any }) {
             {boards.map(board => (
               <div key={board.id} className="art-card" style={{ cursor: 'default', position: 'relative' }}>
                 {/* Preview Collage */}
-                <div style={{ display: 'grid', gridTemplateColumns: board.preview_images.length === 1 ? '1fr' : '1.5fr 1fr', gridTemplateRows: '140px', gap: '2px', overflow: 'hidden', borderRadius: '16px 16px 0 0', background: '#1a1a24' }}>
-                  {board.preview_images.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: (board.preview_images?.length || 0) <= 1 ? '1fr' : '1.5fr 1fr', gridTemplateRows: '140px', gap: '2px', overflow: 'hidden', borderRadius: '16px 16px 0 0', background: '#1a1a24' }}>
+                  {(board.preview_images?.length || 0) > 0 ? (
                     <>
-                      <img src={board.preview_images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', gridRow: board.preview_images.length > 2 ? '1 / 3' : '1' }} />
-                      {board.preview_images.slice(1, 3).map((url, i) => (
+                      <img src={board.preview_images![0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', gridRow: (board.preview_images?.length || 0) > 2 ? '1 / 3' : '1' }} />
+                      {board.preview_images!.slice(1, 3).map((url, i) => (
                         <img key={i} src={url} alt="" style={{ width: '100%', height: '70px', objectFit: 'cover' }} />
                       ))}
                     </>

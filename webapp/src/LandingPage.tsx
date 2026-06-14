@@ -63,7 +63,7 @@ export default function LandingPage() {
         {/* Logo */}
         <div className="relative flex items-center h-full">
           <img
-            src="/artvault_logo.png"
+            src="/Artlogo.png"
             alt="ArtVault Logo"
             className="absolute left-0 top-1/2 -translate-y-1/2 h-[90px] sm:h-[120px] md:h-[160px] w-auto object-contain mix-blend-screen pointer-events-none"
           />

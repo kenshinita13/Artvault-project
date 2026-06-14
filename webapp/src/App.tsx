@@ -442,7 +442,7 @@ function App() {
             {/* Logo Container - Handles large transparent image bounds */}
             <div className="relative w-full h-16 flex items-center justify-center mb-4">
               <img 
-                src="/artvault_logo.png" 
+                src="/Artlogo.png" 
                 alt="ArtVault Logo" 
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[160px] w-auto mix-blend-screen pointer-events-none" 
               />

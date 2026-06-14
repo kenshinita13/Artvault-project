@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield } from 'lucide-react';
+import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield, Home, FolderOpen, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
+import CreatePanel from './CreatePanel';
 import './Dashboard.css';
 
 export default function Layout({ user }: { user: any }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [createPanelOpen, setCreatePanelOpen] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '');
 
@@ -46,6 +50,13 @@ export default function Layout({ user }: { user: any }) {
       }
     }
   };
+
+  // Fetch categories for CreatePanel
+  useEffect(() => {
+    supabase.from('categories').select('*').order('name').then(({ data }) => {
+      if (data) setCategories(data);
+    });
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -105,9 +116,65 @@ export default function Layout({ user }: { user: any }) {
     await supabase.auth.signOut();
   };
 
+  const isActive = (path: string) => location.pathname === path;
+
   return (
     <>
-      {/* Slide-out Drawer Navigation */}
+      {/* ─── LEFT SIDEBAR (Desktop only) ─── */}
+      <nav className="hidden md:flex fixed top-0 left-0 h-screen w-[72px] bg-[#09090b]/95 backdrop-blur-md border-r border-white/5 flex-col items-center py-5 z-[1000] gap-1">
+        {/* Logo */}
+        <Link to="/home" className="mb-6 mt-1">
+          <img src="/Artlogo.png" alt="AV" className="w-10 h-10 object-contain mix-blend-screen" />
+        </Link>
+
+        {/* Nav Items */}
+        <NavIcon to="/home" icon={<Home size={22} />} label="Home" active={isActive('/home')} />
+        {user && <NavIcon to="/boards" icon={<FolderOpen size={22} />} label="My Boards" active={isActive('/boards')} />}
+        {user && (
+          <button
+            onClick={() => setCreatePanelOpen(true)}
+            className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200 ${createPanelOpen ? 'bg-white/15 text-white' : 'text-zinc-500 hover:bg-white/8 hover:text-white'}`}
+          >
+            <Plus size={24} />
+            <span className="absolute left-[60px] px-3 py-1.5 bg-zinc-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg border border-white/5">
+              Create
+            </span>
+          </button>
+        )}
+        {user && <NavIcon to="/artists" icon={<Users size={22} />} label="Artists" active={isActive('/artists')} />}
+
+        {/* Bottom icons */}
+        <div className="mt-auto flex flex-col items-center gap-1 mb-3">
+          {user && <NavIcon to="/settings" icon={<Settings size={22} />} label="Settings" active={isActive('/settings')} />}
+          {profile?.role === 'admin' && <NavIcon to="/admin_panel" icon={<Shield size={22} />} label="Admin" active={isActive('/admin_panel')} />}
+        </div>
+      </nav>
+
+      {/* ─── MOBILE BOTTOM TAB BAR ─── */}
+      <nav className="md:hidden fixed bottom-0 left-0 w-full h-16 bg-[#09090b]/95 backdrop-blur-md border-t border-white/5 flex items-center justify-around z-[1000] px-2">
+        <MobileTab to="/home" icon={<Home size={22} />} label="Home" active={isActive('/home')} />
+        {user && <MobileTab to="/boards" icon={<FolderOpen size={22} />} label="Boards" active={isActive('/boards')} />}
+        {user && (
+          <button
+            onClick={() => setCreatePanelOpen(true)}
+            className="flex flex-col items-center justify-center gap-0.5 text-zinc-500 active:text-white"
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
+              <Plus size={20} />
+            </div>
+          </button>
+        )}
+        {user && <MobileTab to="/settings" icon={<Settings size={22} />} label="Settings" active={isActive('/settings')} />}
+        {user ? (
+          <button onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} className="flex flex-col items-center justify-center gap-0.5 relative">
+            <Avatar userId={user.id} name={user.user_metadata?.name || 'U'} size={28} />
+          </button>
+        ) : (
+          <MobileTab to="/login" icon={<User size={22} />} label="Sign In" active={false} />
+        )}
+      </nav>
+
+      {/* ─── Slide-out Drawer Navigation (hamburger) ─── */}
       <div className={`nav-drawer ${drawerOpen ? 'open' : ''}`}>
         <div className="nav-drawer-header">
           <h3 style={{ margin: 0 }}>🧭 Quick Navigation</h3>
@@ -124,6 +191,9 @@ export default function Layout({ user }: { user: any }) {
           </Link>
           {user && (
             <>
+              <Link to="/boards" className="drawer-item" onClick={() => setDrawerOpen(false)}>
+                <FolderOpen className="drawer-icon" /> My Boards
+              </Link>
               <Link to={`/profile/${user.id}`} className="drawer-item" onClick={() => setDrawerOpen(false)}>
                 <User className="drawer-icon" /> My Public Profile
               </Link>
@@ -156,11 +226,11 @@ export default function Layout({ user }: { user: any }) {
         onClick={() => setDrawerOpen(false)}
       ></div>
 
-      {/* Top Navbar */}
-      <header className="fixed top-0 left-0 w-full h-16 md:h-20 bg-[#09090b]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 md:px-10 z-[999] gap-2">
+      {/* ─── TOP NAVBAR ─── */}
+      <header className="top-navbar-desktop fixed top-0 left-0 w-full h-16 md:h-20 bg-[#09090b]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 md:px-10 z-[999] gap-2">
         <div className="flex items-center gap-1 md:gap-4 shrink-0">
-          <button className="waffle-btn p-1 md:p-2" onClick={() => setDrawerOpen(true)}>
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 md:w-6 md:h-6">
+          <button className="waffle-btn p-1 md:p-2 md:hidden" onClick={() => setDrawerOpen(true)}>
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                 <rect x="3" y="3" width="4" height="4" rx="1" />
                 <rect x="10" y="3" width="4" height="4" rx="1" />
                 <rect x="17" y="3" width="4" height="4" rx="1" />
@@ -172,8 +242,9 @@ export default function Layout({ user }: { user: any }) {
                 <rect x="17" y="17" width="4" height="4" rx="1" />
             </svg>
           </button>
-          <Link to="/home" className="nav-logo flex items-center overflow-visible">
-            <img src="/artvault_logo.png" alt="ArtVault Studio" className="h-[30px] md:h-[70px] scale-[1.8] md:scale-[2.5] origin-left ml-4 md:ml-4 mix-blend-screen block" />
+          {/* Mobile logo */}
+          <Link to="/home" className="nav-logo flex items-center overflow-visible md:hidden">
+            <img src="/Artlogo.png" alt="ArtVault Studio" className="h-[30px] scale-[1.8] origin-left ml-4 mix-blend-screen block" />
           </Link>
         </div>
 
@@ -188,7 +259,7 @@ export default function Layout({ user }: { user: any }) {
           />
         </div>
 
-        <div className="nav-actions shrink-0">
+        <div className="nav-actions shrink-0 hidden md:flex">
           {user ? (
             <div style={{ position: 'relative' }}>
               <button className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
@@ -201,6 +272,9 @@ export default function Layout({ user }: { user: any }) {
                   <span className="dropdown-name">{user.user_metadata?.name || 'User'}</span>
                   <span className="dropdown-email">{user.email}</span>
                 </div>
+                <Link to={`/profile/${user.id}`} className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
+                   <User size={16} /> My Profile
+                </Link>
                 <Link to="/settings" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
                    <Settings size={16} /> Profile Settings
                 </Link>
@@ -223,8 +297,69 @@ export default function Layout({ user }: { user: any }) {
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <Outlet />
+      {/* ─── MAIN CONTENT (offset for sidebar + top bar) ─── */}
+      <div className="main-content-wrapper">
+        <Outlet />
+      </div>
+
+      {/* ─── CREATE PANEL ─── */}
+      {user && (
+        <CreatePanel
+          isOpen={createPanelOpen}
+          onClose={() => setCreatePanelOpen(false)}
+          user={user}
+          categories={categories}
+          onArtworkCreated={() => { /* triggers re-fetch in Dashboard */ window.dispatchEvent(new Event('artwork-created')); }}
+          onBoardCreated={() => { window.dispatchEvent(new Event('board-created')); }}
+        />
+      )}
+
+      {/* Mobile avatar dropdown */}
+      {avatarMenuOpen && user && (
+        <div className="md:hidden fixed inset-0 z-[1001]" onClick={() => setAvatarMenuOpen(false)}>
+          <div className="absolute bottom-20 right-3 w-[240px] bg-[#18181b]/98 border border-white/10 rounded-2xl shadow-xl p-2 flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-white/5">
+              <p className="text-sm font-bold text-white">{user.user_metadata?.name || 'User'}</p>
+              <p className="text-xs text-zinc-500">{user.email}</p>
+            </div>
+            <Link to={`/profile/${user.id}`} className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
+              <User size={16} /> My Profile
+            </Link>
+            <Link to="/settings" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
+              <Settings size={16} /> Settings
+            </Link>
+            <hr className="border-white/5 my-1" />
+            <button className="dropdown-item logout" onClick={handleLogout} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer' }}>
+              <LogOut size={16} /> Logout
+            </button>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+/* ─── Sidebar Icon Component ─── */
+function NavIcon({ to, icon, label, active }: { to: string; icon: React.ReactNode; label: string; active: boolean }) {
+  return (
+    <Link
+      to={to}
+      className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200 ${active ? 'bg-white/15 text-white' : 'text-zinc-500 hover:bg-white/8 hover:text-white'}`}
+    >
+      {icon}
+      <span className="absolute left-[60px] px-3 py-1.5 bg-zinc-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg border border-white/5">
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+/* ─── Mobile Tab Component ─── */
+function MobileTab({ to, icon, label, active }: { to: string; icon: React.ReactNode; label: string; active: boolean }) {
+  return (
+    <Link to={to} className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${active ? 'text-white' : 'text-zinc-500'}`}>
+      {icon}
+      <span>{label}</span>
+    </Link>
   );
 }

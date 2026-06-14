@@ -52,6 +52,10 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [hashtags, setHashtags] = useState<string[]>([]);
+  const [currentHashtag, setCurrentHashtag] = useState('');
+  const [medium, setMedium] = useState('');
+  const [tools, setTools] = useState('');
   const [uploading, setUploading] = useState(false);
 
   // Board form
@@ -63,8 +67,43 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const resetAndClose = () => {
     setActiveTab('menu');
     setTitle(''); setDescription(''); setFile(null); setSelectedCategories([]);
+    setHashtags([]); setCurrentHashtag(''); setMedium(''); setTools('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
     onClose();
+  };
+
+  const extractColor = async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 1, 1);
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          resolve("#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1));
+        } else {
+          resolve("#2a2a35");
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => resolve("#2a2a35");
+    });
+  };
+
+  const handleHashtagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === ',') {
+      e.preventDefault();
+      const tag = currentHashtag.trim().replace(/^#/, '');
+      if (tag && !hashtags.includes(tag)) {
+        setHashtags([...hashtags, tag]);
+      }
+      setCurrentHashtag('');
+    }
   };
 
   const toggleCategory = (catId: string) => {
@@ -96,9 +135,12 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('artworks').getPublicUrl(filePath);
+      
+      const extractedColor = file.type.startsWith('image/') ? await extractColor(fileToUpload) : '#2a2a35';
 
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
-        title, description, image_url: urlData.publicUrl, user_id: user.id
+        title, description, image_url: urlData.publicUrl, user_id: user.id,
+        tags: hashtags, medium, tools, dominant_color: extractedColor
       }).select().single();
       if (dbError) throw dbError;
 
@@ -230,6 +272,47 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Description</label>
                 <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell the story behind your art..." className="search-input" style={{ height: '80px', resize: 'vertical' }} />
+              </div>
+
+              {/* Hashtags */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Tags (Hashtags)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                  {hashtags.map((tag, idx) => (
+                    <span key={idx} style={{ background: 'rgba(168,85,247,0.2)', color: '#c084fc', padding: '4px 10px', borderRadius: '14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      #{tag}
+                      <button type="button" onClick={() => setHashtags(hashtags.filter(t => t !== tag))} style={{ background: 'none', border: 'none', color: '#c084fc', cursor: 'pointer', padding: 0 }}>×</button>
+                    </span>
+                  ))}
+                </div>
+                <input type="text" value={currentHashtag} onChange={e => setCurrentHashtag(e.target.value)} onKeyDown={handleHashtagKeyDown} placeholder="Type a tag and press Enter" className="search-input" />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Medium</label>
+                  <select value={medium} onChange={e => {
+                    setMedium(e.target.value);
+                    if (!['Digital', '3D Render', 'AI Generated'].includes(e.target.value)) {
+                      setTools('');
+                    }
+                  }} className="search-input" style={{ width: '100%', appearance: 'none' }}>
+                    <option value="">Select Medium</option>
+                    <option value="Digital">Digital</option>
+                    <option value="Oil Paint">Oil Paint</option>
+                    <option value="Watercolor">Watercolor</option>
+                    <option value="3D Render">3D Render</option>
+                    <option value="AI Generated">AI Generated</option>
+                    <option value="Photography">Photography</option>
+                    <option value="Pencil/Sketch">Pencil / Sketch</option>
+                  </select>
+                </div>
+                {['Digital', '3D Render', 'AI Generated'].includes(medium) && (
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Software / Tools</label>
+                    <input type="text" value={tools} onChange={e => setTools(e.target.value)} placeholder="e.g. Photoshop, Blender" className="search-input" style={{ width: '100%' }} />
+                  </div>
+                )}
               </div>
 
               {/* Category Tags */}

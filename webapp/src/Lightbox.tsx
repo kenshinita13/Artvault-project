@@ -29,6 +29,18 @@ interface LightboxProps {
   currentUser?: any;
 }
 
+const timeAgo = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d`;
+  return `${Math.floor(days / 7)}w`;
+};
+
 export default function Lightbox({ artwork, artistName, onClose, currentUser }: LightboxProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -61,17 +73,57 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
     if (!fullscreen) setPosition({ x: 0, y: 0 });
   }, [fullscreen]);
 
-  // Fetch Boards
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Fetch all related data
   useEffect(() => {
-    if (currentUser) {
-      supabase.from('boards').select('id, name').eq('user_id', currentUser.id).order('name').then(({ data }) => {
-        if (data) {
-          setUserBoards(data);
-          if (data.length > 0) setSelectedBoardId(data[0].id);
+    if (!artwork || !artwork.id) return;
+
+    const fetchData = async () => {
+      // 1. Check if admin
+      if (currentUser) {
+        supabase.from('profiles').select('role').eq('id', currentUser.id).single().then(({ data }) => {
+          if (data && data.role === 'admin') setIsAdmin(true);
+        });
+      }
+
+      // 2. Fetch Likes
+      const { data: likesData, error: likesError } = await supabase
+        .from('likes')
+        .select('user_id')
+        .eq('artwork_id', artwork.id);
+
+      if (!likesError && likesData) {
+        setLikeCount(likesData.length);
+        if (currentUser) {
+          setLiked(likesData.some(l => l.user_id === currentUser.id));
         }
-      });
-    }
-  }, [currentUser]);
+      }
+
+      // 3. Fetch Comments
+      setLoadingComments(true);
+      const { data: commentsData } = await supabase
+        .from('comments')
+        .select(`*, profiles ( username, name, avatar_url )`)
+        .eq('artwork_id', artwork.id)
+        .order('created_at', { ascending: true });
+      if (commentsData) {
+        setComments(commentsData as Comment[]);
+      }
+      setLoadingComments(false);
+
+      // 4. Fetch User Boards
+      if (currentUser) {
+        supabase.from('boards').select('id, name').eq('user_id', currentUser.id).order('name').then(({ data }) => {
+          if (data) {
+            setUserBoards(data);
+            if (data.length > 0) setSelectedBoardId(data[0].id);
+          }
+        });
+      }
+    };
+    fetchData();
+  }, [artwork, currentUser]);
 
   const handleSaveToBoard = async () => {
     if (!currentUser) { toast.error('Sign in to save'); return; }
@@ -92,43 +144,6 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
     }
     setSavingToBoard(false);
   };
-
-  // Fetch likes
-  useEffect(() => {
-    const fetchLikes = async () => {
-      const { count } = await supabase
-        .from('likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('artwork_id', artwork.id);
-      setLikeCount(count || 0);
-
-      if (currentUser) {
-        const { data } = await supabase
-          .from('likes')
-          .select('id')
-          .eq('artwork_id', artwork.id)
-          .eq('user_id', currentUser.id)
-          .maybeSingle();
-        setLiked(!!data);
-      }
-    };
-    fetchLikes();
-  }, [artwork.id, currentUser]);
-
-  // Fetch comments
-  useEffect(() => {
-    const fetchComments = async () => {
-      setLoadingComments(true);
-      const { data } = await supabase
-        .from('comments')
-        .select(`*, profiles ( username, name, avatar_url )`)
-        .eq('artwork_id', artwork.id)
-        .order('created_at', { ascending: true });
-      setComments((data as Comment[]) || []);
-      setLoadingComments(false);
-    };
-    fetchComments();
-  }, [artwork.id]);
 
   // Scroll to bottom when new comment
   useEffect(() => {
@@ -219,17 +234,7 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
     }
   };
 
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    const days = Math.floor(hrs / 24);
-    if (days < 7) return `${days}d`;
-    return `${Math.floor(days / 7)}w`;
-  };
+
 
   return (
     <div className="modal" style={{ display: 'flex' }} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }} role="button" tabIndex={0}>
@@ -405,6 +410,33 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
                 </div>
               )}
 
+              {/* Advanced Artwork Details */}
+              {(artwork.medium || artwork.tools || (artwork.tags && artwork.tags.length > 0)) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '12px' }}>
+                  {artwork.medium && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#999', fontSize: '13px', fontWeight: 600, width: '60px' }}>Medium</span>
+                      <span style={{ color: '#eee', fontSize: '14px' }}>{artwork.medium}</span>
+                    </div>
+                  )}
+                  {artwork.tools && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#999', fontSize: '13px', fontWeight: 600, width: '60px' }}>Tools</span>
+                      <span style={{ color: '#eee', fontSize: '14px' }}>{artwork.tools}</span>
+                    </div>
+                  )}
+                  {artwork.tags && artwork.tags.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                      {artwork.tags.map((tag: string, idx: number) => (
+                        <span key={idx} style={{ color: '#c084fc', background: 'rgba(168,85,247,0.1)', padding: '4px 10px', borderRadius: '14px', fontSize: '12px', fontWeight: 600 }}>
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* ── Comments Section ── */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>
@@ -428,7 +460,7 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
                               {c.profiles?.username || c.profiles?.name || 'User'}
                             </Link>
                             <span style={{ color: '#555', fontSize: '11px' }}>{timeAgo(c.created_at)}</span>
-                            {currentUser && currentUser.id === c.user_id && (
+                            {currentUser && (currentUser.id === c.user_id || isAdmin) && (
                               <button onClick={() => deleteComment(c.id)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '11px', padding: '2px 6px', borderRadius: '4px', transition: 'all 0.2s' }} onMouseOver={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }} onMouseOut={e => { e.currentTarget.style.color = '#555'; e.currentTarget.style.background = 'none'; }}>
                                 Delete
                               </button>
