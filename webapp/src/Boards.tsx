@@ -78,9 +78,10 @@ export default function Boards({ user }: { user: any }) {
       is_private: isPrivate,
     });
     if (error) {
-      toast.error('Failed to create board');
+      console.error('Supabase error inserting board:', error);
+      toast.error('Failed to create collage: ' + error.message);
     } else {
-      toast.success('Board created!');
+      toast.success('Collage created!');
       setBoardName('');
       setBoardDesc('');
       setIsPrivate(false);
@@ -96,14 +97,14 @@ export default function Boards({ user }: { user: any }) {
     await supabase.from('boards').delete().eq('id', deleteBoard.id);
     setBoards(prev => prev.filter(b => b.id !== deleteBoard.id));
     setDeleteBoard(null);
-    toast.success('Board deleted');
+    toast.success('Collage deleted');
   };
 
   if (!user) {
     return (
       <main className="gallery-container" style={{ textAlign: 'center', paddingTop: '140px' }}>
         <span style={{ fontSize: '64px' }}>📋</span>
-        <h2 style={{ marginTop: '16px', fontSize: '24px' }}>Sign in to view your boards</h2>
+        <h2 style={{ marginTop: '16px', fontSize: '24px' }}>Sign in to view your collages</h2>
         <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>Create collections to save and organize your favorite artworks.</p>
         <Link to="/login" className="btn btn-primary" style={{ marginTop: '20px', display: 'inline-flex' }}>Sign In</Link>
       </main>
@@ -116,26 +117,26 @@ export default function Boards({ user }: { user: any }) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h2 style={{ fontSize: '28px', fontWeight: 700 }}>My Boards</h2>
+            <h2 style={{ fontSize: '28px', fontWeight: 700 }}>My Collages</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
               Organize and save artworks into collections
             </p>
           </div>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> New Board
+            <Plus size={16} /> New Collage
           </button>
         </div>
 
         {/* Boards Grid */}
         {loading ? (
-          <p style={{ color: 'var(--text-secondary)' }}>Loading boards...</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading collages...</p>
         ) : boards.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
             <span style={{ fontSize: '48px' }}>📁</span>
-            <h4 style={{ marginTop: '15px' }}>No Boards Yet</h4>
-            <p style={{ marginTop: '5px' }}>Create your first board to start saving artworks!</p>
+            <h4 style={{ marginTop: '15px' }}>No Collages Yet</h4>
+            <p style={{ marginTop: '5px' }}>Create your first collage to start saving artworks!</p>
             <button className="btn btn-primary" onClick={() => setShowCreate(true)} style={{ marginTop: '20px' }}>
-              <Plus size={16} /> Create Board
+              <Plus size={16} /> Create Collage
             </button>
           </div>
         ) : (
@@ -189,7 +190,7 @@ export default function Boards({ user }: { user: any }) {
         <div className="modal" style={{ display: 'flex' }} onClick={() => setShowCreate(false)}>
           <div className="modal-content" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>📁 Create New Board</h3>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>📁 Create New Collage</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
@@ -197,7 +198,7 @@ export default function Boards({ user }: { user: any }) {
             <div className="modal-body">
               <form onSubmit={handleCreate}>
                 <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Board Name</label>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Collage Name</label>
                   <input
                     type="text"
                     className="search-input"
@@ -226,13 +227,13 @@ export default function Boards({ user }: { user: any }) {
                     style={{ width: '18px', height: '18px', accentColor: '#a855f7' }}
                   />
                   <label htmlFor="private-toggle" style={{ color: 'var(--text-secondary)', fontSize: '14px', cursor: 'pointer' }}>
-                    <Lock size={13} style={{ display: 'inline', marginRight: '4px' }} /> Make this board private
+                    <Lock size={13} style={{ display: 'inline', marginRight: '4px' }} /> Make this collage private
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" disabled={creating}>
-                    {creating ? 'Creating...' : 'Create Board'}
+                    {creating ? 'Creating...' : 'Create Collage'}
                   </button>
                 </div>
               </form>
@@ -246,14 +247,14 @@ export default function Boards({ user }: { user: any }) {
         <div className="modal" style={{ display: 'flex' }} onClick={() => setDeleteBoard(null)}>
           <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete Board</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete Collage</h3>
               <button onClick={() => setDeleteBoard(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
             </div>
             <div className="modal-body">
               <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                Delete <strong>{deleteBoard.name}</strong>? All saved items will be removed from this board.
+                Delete <strong>{deleteBoard.name}</strong>? All saved items will be removed from this collage.
               </p>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-secondary" onClick={() => setDeleteBoard(null)} style={{ flex: 1 }}>Cancel</button>
