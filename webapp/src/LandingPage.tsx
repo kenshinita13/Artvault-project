@@ -173,10 +173,10 @@ export default function LandingPage() {
           DESKTOP HERO  (visible only on lg+ screens)
           Original side-by-side: text left, floating collage right
       ───────────────────────────────────────────────────────── */}
-      <main className="hidden lg:flex relative pt-32 pb-20 px-16 xl:px-24 max-w-[1400px] mx-auto flex-row items-center justify-between min-h-[90vh]">
+      <main className="hidden lg:flex relative pt-32 pb-20 px-8 lg:px-16 xl:px-24 max-w-[1400px] mx-auto flex-row items-center justify-between min-h-[90vh]">
 
         {/* Left Content */}
-        <div className="w-1/2 flex flex-col items-start text-left z-20 pr-10">
+        <div className="w-1/2 flex flex-col items-start text-left z-20 pl-8 lg:pl-12 xl:pl-20 pr-10">
           <motion.h1
             className="text-6xl xl:text-7xl font-extrabold tracking-tight leading-[1.1]"
             initial={{ opacity: 0, y: 30 }}
