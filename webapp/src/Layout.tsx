@@ -157,10 +157,10 @@ export default function Layout({ user }: { user: any }) {
       ></div>
 
       {/* Top Navbar */}
-      <header className="navbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <button className="waffle-btn" onClick={() => setDrawerOpen(true)}>
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+      <header className="fixed top-0 left-0 w-full h-16 md:h-20 bg-[#09090b]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 md:px-10 z-[999] gap-2">
+        <div className="flex items-center gap-1 md:gap-4 shrink-0">
+          <button className="waffle-btn p-1 md:p-2" onClick={() => setDrawerOpen(true)}>
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 md:w-6 md:h-6">
                 <rect x="3" y="3" width="4" height="4" rx="1" />
                 <rect x="10" y="3" width="4" height="4" rx="1" />
                 <rect x="17" y="3" width="4" height="4" rx="1" />
@@ -172,27 +172,26 @@ export default function Layout({ user }: { user: any }) {
                 <rect x="17" y="17" width="4" height="4" rx="1" />
             </svg>
           </button>
-          <Link to="/home" className="nav-logo" style={{ display: 'flex', alignItems: 'center', overflow: 'visible' }}>
-            <img src="/artvault_logo.png" alt="ArtVault Studio" style={{ height: '70px', display: 'block', transform: 'scale(2.5)', transformOrigin: 'center left', marginLeft: '15px', mixBlendMode: 'screen' }} />
+          <Link to="/home" className="nav-logo flex items-center overflow-visible">
+            <img src="/artvault_logo.png" alt="ArtVault Studio" className="h-[30px] md:h-[70px] scale-[1.8] md:scale-[2.5] origin-left ml-4 md:ml-4 mix-blend-screen block" />
           </Link>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 20px' }}>
+        <div className="flex-1 flex justify-center px-2 md:px-5">
           <input 
             type="text" 
-            className="search-input" 
-            placeholder="Search artworks by title, description, or artist..." 
-            style={{ width: '100%', maxWidth: '600px', margin: 0 }}
+            className="search-input text-sm md:text-base w-full max-w-[600px] m-0" 
+            placeholder="Search artworks..." 
             value={localSearch}
             onChange={handleSearchChange}
             onKeyDown={handleKeyDown}
           />
         </div>
 
-        <div className="nav-actions">
+        <div className="nav-actions shrink-0">
           {user ? (
             <div style={{ position: 'relative' }}>
-              <button className="nav-avatar-btn" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
+              <button className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
                 <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
               </button>
               
@@ -217,8 +216,8 @@ export default function Layout({ user }: { user: any }) {
               </div>
             </div>
           ) : (
-            <Link to="/login" className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '13px', background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold' }}>
-               Sign In / Sign Up
+            <Link to="/login" className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm" style={{ background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold' }}>
+               Sign In
             </Link>
           )}
         </div>

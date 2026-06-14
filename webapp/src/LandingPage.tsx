@@ -71,19 +71,19 @@ export default function LandingPage() {
           <img 
             src="/artvault_logo.png" 
             alt="ArtVault Logo" 
-            className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 h-[160px] md:h-[200px] w-auto object-contain mix-blend-screen pointer-events-none" 
+            className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 h-[120px] sm:h-[160px] md:h-[200px] w-auto object-contain mix-blend-screen pointer-events-none" 
           />
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-2 sm:gap-4 z-10">
           <button 
             onClick={() => navigate('/login?mode=login')}
-            className="px-4 py-2 rounded-full font-medium hover:bg-white/10 transition-colors"
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-full font-medium hover:bg-white/10 transition-colors whitespace-nowrap"
           >
             Log in
           </button>
           <button 
             onClick={() => navigate('/login?mode=register')}
-            className="px-4 py-2 rounded-full font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-full font-medium bg-white text-black hover:bg-gray-200 transition-colors whitespace-nowrap"
           >
             Sign up
           </button>
@@ -94,22 +94,22 @@ export default function LandingPage() {
       <main className="relative pt-32 pb-20 px-8 md:px-16 xl:px-24 max-w-[1400px] mx-auto flex flex-col lg:flex-row items-center justify-between min-h-[90vh]">
         
         {/* Left Content */}
-        <div className="w-full lg:w-1/2 flex flex-col items-center text-center z-20 mt-10 lg:mt-0 lg:pr-10">
+        <div className="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left z-20 mt-6 lg:mt-0 lg:pr-10">
           <motion.h1 
-            className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]"
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            Create the <br/>
-            gallery you <br/>
+            Create the <br className="hidden sm:block lg:hidden"/>
+            gallery you <br className="hidden sm:block lg:hidden"/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">
               love on ArtVault
             </span>
           </motion.h1>
           
           <motion.p 
-            className="mt-6 text-lg md:text-xl text-gray-400 max-w-lg"
+            className="mt-4 sm:mt-6 text-base sm:text-lg md:text-xl text-gray-400 max-w-lg"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -118,20 +118,20 @@ export default function LandingPage() {
           </motion.p>
           
           <motion.div 
-            className="mt-10 flex flex-col sm:flex-row gap-4"
+            className="mt-8 sm:mt-10 flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto px-4 sm:px-0"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
             <button 
               onClick={() => navigate('/login?mode=register')}
-              className="px-8 py-4 rounded-full font-semibold text-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25"
+              className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 rounded-full font-semibold text-base sm:text-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25 whitespace-nowrap"
             >
               Join ArtVault for free
             </button>
             <button 
               onClick={() => navigate('/login?mode=login')}
-              className="px-8 py-4 rounded-full font-semibold text-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+              className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 rounded-full font-semibold text-base sm:text-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all whitespace-nowrap"
             >
               I already have an account
             </button>
@@ -139,8 +139,8 @@ export default function LandingPage() {
         </div>
 
         {/* Right Content - Floating Collage */}
-        <div className="w-full lg:w-1/2 h-[500px] md:h-[600px] relative mt-32 lg:mt-0 perspective-1000 flex justify-center">
-          <div className="relative w-[340px] md:w-[420px] h-full flex-shrink-0">
+        <div className="w-full lg:w-1/2 h-[400px] sm:h-[500px] md:h-[600px] relative mt-16 sm:mt-24 lg:mt-0 perspective-1000 flex justify-center">
+          <div className="relative w-[280px] sm:w-[340px] md:w-[420px] h-full flex-shrink-0">
             {displayImages.map((img, idx) => (
               <motion.div
                 key={idx}
@@ -186,13 +186,13 @@ export default function LandingPage() {
       </main>
 
       {/* Secondary Section */}
-      <section className="bg-zinc-900/40 py-32 px-8 md:px-16 border-t border-white/5 text-center flex flex-col items-center justify-center relative overflow-hidden">
+      <section className="bg-zinc-900/40 py-20 sm:py-32 px-6 sm:px-8 md:px-16 border-t border-white/5 text-center flex flex-col items-center justify-center relative overflow-hidden">
         {/* Decorative background glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-purple-600/10 rounded-full blur-[100px] pointer-events-none"></div>
 
         <motion.h2 
-          className="text-4xl md:text-5xl font-extrabold tracking-tight mb-8 text-white relative z-10"
+          className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-6 sm:mb-8 text-white relative z-10"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -201,7 +201,7 @@ export default function LandingPage() {
           Bring your creative ideas to life
         </motion.h2>
         <motion.div 
-          className="text-lg md:text-xl text-gray-400 max-w-3xl leading-relaxed relative z-10 space-y-2"
+          className="text-base sm:text-lg md:text-xl text-gray-400 max-w-3xl leading-relaxed relative z-10 space-y-2 px-4 sm:px-0"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
