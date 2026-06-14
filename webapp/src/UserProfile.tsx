@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { Trash2, X, Upload } from 'lucide-react';
@@ -36,6 +36,7 @@ interface Board {
 
 export default function UserProfile({ currentUser }: { currentUser: any }) {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [collages, setCollages] = useState<Board[]>([]);
@@ -405,7 +406,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
                 {collages.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).map(collage => (
-                  <div key={collage.id} className="board-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'all 0.3s ease', cursor: 'pointer' }}>
+                  <div key={collage.id} className="board-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'all 0.3s ease', cursor: 'pointer' }} onClick={() => navigate('/collage/' + collage.id)}>
                     <div style={{ height: '180px', background: 'var(--bg-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '2px', padding: '2px' }}>
                       {[0, 1, 2, 3].map(i => (
                         <div key={i} style={{ background: 'rgba(255,255,255,0.05)', width: '100%', height: '100%' }}>

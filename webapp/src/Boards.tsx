@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Lock, X, Trash2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
@@ -17,6 +17,7 @@ interface Board {
 }
 
 export default function Boards({ user }: { user: any }) {
+  const navigate = useNavigate();
   const [boards, setBoards] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -142,7 +143,7 @@ export default function Boards({ user }: { user: any }) {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
             {boards.map(board => (
-              <div key={board.id} className="art-card" style={{ cursor: 'default', position: 'relative' }}>
+              <div key={board.id} className="art-card" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => navigate('/collage/' + board.id)}>
                 {/* Preview Collage */}
                 <div style={{ display: 'grid', gridTemplateColumns: (board.preview_images?.length || 0) <= 1 ? '1fr' : '1.5fr 1fr', gridTemplateRows: '140px', gap: '2px', overflow: 'hidden', borderRadius: '16px 16px 0 0', background: '#1a1a24' }}>
                   {(board.preview_images?.length || 0) > 0 ? (
