@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield, Home, FolderOpen, Plus } from 'lucide-react';
+import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield, Home, FolderOpen, Plus, Bell } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
@@ -12,6 +12,9 @@ export default function Layout({ user }: { user: any }) {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [categories, setCategories] = useState<any[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,10 +110,44 @@ export default function Layout({ user }: { user: any }) {
       )
       .subscribe();
 
+    // Fetch notifications
+    const fetchNotifs = async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*, profiles!notifications_actor_id_fkey(name, username, avatar_url), artworks(title, image_url)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (data) {
+        setNotifications(data);
+        setUnreadCount(data.filter((n: any) => !n.is_read).length);
+      }
+    };
+    fetchNotifs();
+
+    // Listen for new notifications
+    const notifChannel = supabase.channel('user-notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
+        fetchNotifs();
+      }).subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(notifChannel);
     };
   }, [user?.id]);
+
+  const markAsRead = async () => {
+    if (unreadCount === 0 || !user) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+    setUnreadCount(0);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  };
+
+  const toggleNotifications = () => {
+    if (!notificationsOpen) markAsRead();
+    setNotificationsOpen(!notificationsOpen);
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -142,6 +179,20 @@ export default function Layout({ user }: { user: any }) {
           </button>
         )}
         {user && <NavIcon to="/artists" icon={<Users size={22} />} label="Artists" active={isActive('/artists')} />}
+        {user && (
+          <button
+            onClick={toggleNotifications}
+            className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200 ${notificationsOpen ? 'bg-white/15 text-white' : 'text-zinc-500 hover:bg-white/8 hover:text-white'}`}
+          >
+            <div className="relative">
+              <Bell size={22} />
+              {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{unreadCount}</span>}
+            </div>
+            <span className="absolute left-[60px] px-3 py-1.5 bg-zinc-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg border border-white/5 z-[2000]">
+              Notifications
+            </span>
+          </button>
+        )}
 
         {/* Bottom icons */}
         <div className="mt-auto flex flex-col items-center gap-1 mb-3">
@@ -335,6 +386,51 @@ export default function Layout({ user }: { user: any }) {
           </div>
         </div>
       )}
+
+      {/* ─── NOTIFICATIONS SLIDE PANEL (Desktop) ─── */}
+      <div 
+        className={`fixed top-0 h-screen w-[340px] bg-[#09090b] border-r border-white/10 z-[990] transition-transform duration-300 ${notificationsOpen ? 'translate-x-[72px]' : '-translate-x-full'} hidden md:flex flex-col shadow-2xl`}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <h2 className="text-2xl font-bold text-white tracking-tight">Updates</h2>
+          <button onClick={() => setNotificationsOpen(false)} className="text-zinc-400 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
+          <h3 className="text-[13px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Recent Activity</h3>
+          {notifications.length === 0 ? (
+            <p className="text-zinc-500 text-sm italic text-center mt-10">You have no new notifications.</p>
+          ) : (
+            notifications.map((n, i) => (
+              <div 
+                key={i} 
+                className={`flex gap-3 p-3 rounded-xl transition-colors cursor-pointer ${n.is_read ? 'hover:bg-white/5' : 'bg-purple-500/10 hover:bg-purple-500/20'}`} 
+                onClick={() => {
+                  setNotificationsOpen(false);
+                  navigate(`/home?search=${encodeURIComponent(n.artworks?.title || '')}`);
+                }}
+              >
+                <div className="mt-1">
+                  <Avatar userId={n.actor_id} name={n.profiles?.name || n.profiles?.username || 'U'} size={36} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] text-zinc-200 leading-snug mb-1">
+                    <span className="font-semibold text-white">{n.profiles?.name || n.profiles?.username}</span> 
+                    {n.type === 'like' ? ' liked your artwork.' : ' commented on your artwork.'}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 font-medium">
+                    {new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </p>
+                </div>
+                {n.artworks?.image_url && (
+                  <img src={n.artworks.image_url} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-white/10" />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </>
   );
 }
