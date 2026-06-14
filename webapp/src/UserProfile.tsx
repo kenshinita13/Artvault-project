@@ -25,11 +25,22 @@ interface Artwork {
   profiles?: Profile;
 }
 
+interface Board {
+  id: string;
+  name: string;
+  description: string;
+  is_private: boolean;
+  preview_images?: string[];
+  item_count?: number;
+}
+
 export default function UserProfile({ currentUser }: { currentUser: any }) {
   const { id } = useParams<{ id: string }>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [collages, setCollages] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'artworks' | 'collages'>('artworks');
   
   // Lightbox State
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
@@ -59,7 +70,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, activeTab]);
 
   async function fetchCurrentUserRole() {
     const { data } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
@@ -85,15 +96,36 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
     }
     setProfile(profileData);
 
-    // Fetch artworks for this profile
-    const { data: artworksData, error: artError } = await supabase
+    // Fetch artworks
+    const { data: artworksData } = await supabase
       .from('artworks')
       .select('*, profiles(name, username, role)')
       .eq('user_id', id)
       .order('created_at', { ascending: false });
 
-    if (!artError && artworksData) {
-      setArtworks(artworksData as unknown as Artwork[]);
+    if (artworksData) setArtworks(artworksData as unknown as Artwork[]);
+
+    // Fetch collages (respecting privacy: if not owner, only public collages are returned by RLS)
+    const { data: boardsData } = await supabase
+      .from('boards')
+      .select('*')
+      .eq('user_id', id)
+      .order('created_at', { ascending: false });
+
+    if (boardsData) {
+      const enrichedBoards = await Promise.all(boardsData.map(async (b) => {
+        const { data: items } = await supabase
+          .from('board_items')
+          .select('artworks(image_url)')
+          .eq('board_id', b.id)
+          .limit(4);
+        return {
+          ...b,
+          item_count: items?.length || 0,
+          preview_images: items?.map((i: any) => i.artworks?.image_url).filter(Boolean) || []
+        };
+      }));
+      setCollages(enrichedBoards);
     }
     
     setLoading(false);
@@ -264,74 +296,145 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           />
         </div>
 
-        {/* Gallery Grid Layout */}
-        {filteredArtworks.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
-            <span style={{ fontSize: '48px' }}>🖼️</span>
-            <h4 style={{ marginTop: '15px' }}>No Artworks Found</h4>
-            <p style={{ marginTop: '5px' }}>{searchQuery ? "No artworks match your search." : "This studio is currently empty."}</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start w-full">
-            {currentItems.map(artwork => (
-              <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)} onKeyDown={(e) => { if (e.key === 'Enter') setActiveArtwork(artwork); }} role="button" tabIndex={0}>
-                <div className="art-preview">
-                  <img src={artwork.image_url} alt={artwork.title} />
-                </div>
-                <div className="art-details">
-                  <div className="art-title">{artwork.title}</div>
-                  <div className="art-desc-preview">{artwork.description || 'No description provided.'}</div>
-                  
-                  <div className="art-meta">
-                    <span className="art-date">{new Date(artwork.created_at).toLocaleDateString()}</span>
-                  </div>
+        {/* Tabs */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '30px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+          <button 
+            onClick={() => setActiveTab('artworks')}
+            style={{ 
+              background: 'none', border: 'none', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+              color: activeTab === 'artworks' ? 'white' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'artworks' ? '2px solid var(--primary-color)' : '2px solid transparent',
+              paddingBottom: '8px'
+            }}
+          >
+            Artworks ({artworks.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab('collages')}
+            style={{ 
+              background: 'none', border: 'none', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+              color: activeTab === 'collages' ? 'white' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'collages' ? '2px solid var(--primary-color)' : '2px solid transparent',
+              paddingBottom: '8px'
+            }}
+          >
+            Collages ({collages.length})
+          </button>
+        </div>
 
-                  <div className="art-actions">
-                    {(currentUser.id === artwork.user_id || currentUserRole === 'admin') && (
-                      <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
+        {/* Gallery / Collages Grid Layout */}
+        {activeTab === 'artworks' ? (
+          <>
+            {filteredArtworks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
+                <span style={{ fontSize: '48px' }}>🖼️</span>
+                <h4 style={{ marginTop: '15px' }}>No Artworks Found</h4>
+                <p style={{ marginTop: '5px' }}>{searchQuery ? "No artworks match your search." : "This studio is currently empty."}</p>
               </div>
-            ))}
-          </div>
-        )}
-        
-        {totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '40px', gap: '8px' }}>
-                <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="btn btn-secondary"
-                    style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
-                >
-                    Prev
-                </button>
-                {getPaginationGroup().map((page, idx) => (
-                    page === '...' ? (
-                        <span key={`dots-${idx}`} style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>...</span>
-                    ) : (
-                        <button
-                            key={`page-${page}`}
-                            onClick={() => setCurrentPage(page as number)}
-                            className={currentPage === page ? "btn btn-primary" : "btn btn-secondary"}
-                            style={{ width: '40px', padding: '8px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                        >
-                            {page}
-                        </button>
-                    )
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start w-full">
+                {currentItems.map(artwork => (
+                  <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)} onKeyDown={(e) => { if (e.key === 'Enter') setActiveArtwork(artwork); }} role="button" tabIndex={0}>
+                    <div className="art-preview">
+                      <img src={artwork.image_url} alt={artwork.title} />
+                    </div>
+                    <div className="art-details">
+                      <div className="art-title">{artwork.title}</div>
+                      <div className="art-desc-preview">{artwork.description || 'No description provided.'}</div>
+                      
+                      <div className="art-meta">
+                        <span className="art-date">{new Date(artwork.created_at).toLocaleDateString()}</span>
+                      </div>
+
+                      <div className="art-actions">
+                        {(currentUser.id === artwork.user_id || currentUserRole === 'admin') && (
+                          <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-                <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="btn btn-secondary"
-                    style={{ opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
-                >
-                    Next
-                </button>
-            </div>
+              </div>
+            )}
+            
+            {totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '40px', gap: '8px' }}>
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="btn btn-secondary"
+                        style={{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                    >
+                        Prev
+                    </button>
+                    {getPaginationGroup().map((page, idx) => (
+                        page === '...' ? (
+                            <span key={`dots-${idx}`} style={{ padding: '0 8px', color: 'var(--text-secondary)' }}>...</span>
+                        ) : (
+                            <button
+                                key={`page-${page}`}
+                                onClick={() => setCurrentPage(page as number)}
+                                className={currentPage === page ? "btn btn-primary" : "btn btn-secondary"}
+                                style={{ width: '40px', padding: '8px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                            >
+                                {page}
+                            </button>
+                        )
+                    ))}
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="btn btn-secondary"
+                        style={{ opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+          </>
+        ) : (
+          <>
+            {collages.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
+                <span style={{ fontSize: '48px' }}>📁</span>
+                <h4 style={{ marginTop: '15px' }}>No Public Collages</h4>
+                <p style={{ marginTop: '5px' }}>This user hasn't created any public collages yet.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
+                {collages.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).map(collage => (
+                  <div key={collage.id} className="board-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'all 0.3s ease', cursor: 'pointer' }}>
+                    <div style={{ height: '180px', background: 'var(--bg-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '2px', padding: '2px' }}>
+                      {[0, 1, 2, 3].map(i => (
+                        <div key={i} style={{ background: 'rgba(255,255,255,0.05)', width: '100%', height: '100%' }}>
+                          {collage.preview_images?.[i] && (
+                            <img src={collage.preview_images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ padding: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: 600 }}>{collage.name}</h3>
+                          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            {collage.item_count} items
+                          </p>
+                        </div>
+                      </div>
+                      {collage.description && (
+                        <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {collage.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
