@@ -127,20 +127,20 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
 
   const handleSaveToBoard = async () => {
     if (!currentUser) { toast.error('Sign in to save'); return; }
-    if (!selectedBoardId) { toast.error('Create a board first'); return; }
+    if (!selectedBoardId) { toast.error('Create a collage first'); return; }
     
     setSavingToBoard(true);
     const { error } = await supabase.from('board_items').insert({
       board_id: selectedBoardId,
-      artwork_id: artwork.id,
-      user_id: currentUser.id
+      artwork_id: artwork.id
     });
     
     if (error) {
-      if (error.code === '23505') toast.error('Already saved to this board');
-      else toast.error('Failed to save');
+      console.error('Supabase error inserting into board:', error);
+      if (error.code === '23505') toast.error('Already saved to this collage');
+      else toast.error('Failed to save: ' + error.message);
     } else {
-      toast.success('Saved to board!');
+      toast.success('Saved to collage!');
     }
     setSavingToBoard(false);
   };
