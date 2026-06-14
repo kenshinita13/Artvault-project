@@ -12,6 +12,7 @@ const UserProfile = lazy(() => import('./UserProfile'));
 const Settings = lazy(() => import('./Settings'));
 const AdminPanel = lazy(() => import('./AdminPanel'));
 const LandingPage = lazy(() => import('./LandingPage'));
+const Boards = lazy(() => import('./Boards'));
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -687,6 +688,7 @@ function App() {
           <Route path="/home" element={<Dashboard user={session?.user || null} />} />
           
           {/* Protected Routes */}
+          <Route path="/boards" element={session ? <Boards user={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/artists" element={session ? <Artists /> : <Navigate to="/login" replace />} />
           <Route path="/profile/:id" element={session ? <UserProfile currentUser={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />

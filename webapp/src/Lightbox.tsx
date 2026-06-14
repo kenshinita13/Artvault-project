@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { X, Flag, Heart, MessageCircle, Share2, MoreHorizontal, Send, ArrowLeft } from 'lucide-react';
+import { X, Flag, Heart, MessageCircle, Share2, MoreHorizontal, Send, ArrowLeft, ChevronDown } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
@@ -17,6 +17,11 @@ interface Comment {
   };
 }
 
+interface Board {
+  id: string;
+  name: string;
+}
+
 interface LightboxProps {
   artwork: any;
   artistName: string;
@@ -29,6 +34,11 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+
+  // Board state
+  const [userBoards, setUserBoards] = useState<Board[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string>('');
+  const [savingToBoard, setSavingToBoard] = useState(false);
 
   // Like state
   const [liked, setLiked] = useState(false);
@@ -50,6 +60,38 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
   useEffect(() => {
     if (!fullscreen) setPosition({ x: 0, y: 0 });
   }, [fullscreen]);
+
+  // Fetch Boards
+  useEffect(() => {
+    if (currentUser) {
+      supabase.from('boards').select('id, name').eq('user_id', currentUser.id).order('name').then(({ data }) => {
+        if (data) {
+          setUserBoards(data);
+          if (data.length > 0) setSelectedBoardId(data[0].id);
+        }
+      });
+    }
+  }, [currentUser]);
+
+  const handleSaveToBoard = async () => {
+    if (!currentUser) { toast.error('Sign in to save'); return; }
+    if (!selectedBoardId) { toast.error('Create a board first'); return; }
+    
+    setSavingToBoard(true);
+    const { error } = await supabase.from('board_items').insert({
+      board_id: selectedBoardId,
+      artwork_id: artwork.id,
+      user_id: currentUser.id
+    });
+    
+    if (error) {
+      if (error.code === '23505') toast.error('Already saved to this board');
+      else toast.error('Failed to save');
+    } else {
+      toast.success('Saved to board!');
+    }
+    setSavingToBoard(false);
+  };
 
   // Fetch likes
   useEffect(() => {
@@ -284,6 +326,31 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
 
               {/* Right actions */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative' }}>
+                {currentUser && userBoards.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.06)', borderRadius: '24px', padding: '4px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <select 
+                        value={selectedBoardId} 
+                        onChange={(e) => setSelectedBoardId(e.target.value)}
+                        style={{ appearance: 'none', background: 'transparent', border: 'none', color: '#fff', fontSize: '14px', fontWeight: 600, padding: '8px 32px 8px 16px', outline: 'none', cursor: 'pointer', minWidth: '120px' }}
+                      >
+                        {userBoards.map(b => (
+                          <option key={b.id} value={b.id} style={{ background: '#1e1e2d', color: '#fff' }}>{b.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#888' }} />
+                    </div>
+                    <button 
+                      onClick={handleSaveToBoard}
+                      disabled={savingToBoard}
+                      style={{ background: '#a855f7', color: '#fff', border: 'none', borderRadius: '20px', padding: '8px 16px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s' }}
+                      onMouseOver={e => e.currentTarget.style.background = '#c084fc'}
+                      onMouseOut={e => e.currentTarget.style.background = '#a855f7'}
+                    >
+                      {savingToBoard ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                )}
                 <button onClick={() => setMoreMenuOpen(!moreMenuOpen)} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
                   <MoreHorizontal size={22} />
                 </button>
