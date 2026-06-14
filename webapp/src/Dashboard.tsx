@@ -297,7 +297,8 @@ export default function Dashboard({ user }: { user: any }) {
         <Lightbox 
           artwork={activeArtwork} 
           artistName={activeArtwork.profiles?.username || 'Unknown Artist'}
-          onClose={() => setActiveArtwork(null)} 
+          onClose={() => setActiveArtwork(null)}
+          currentUser={user}
         />
       )}
 

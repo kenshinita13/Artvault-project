@@ -340,7 +340,8 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
         <Lightbox 
           artwork={activeArtwork} 
           artistName={profile.name} 
-          onClose={() => setActiveArtwork(null)} 
+          onClose={() => setActiveArtwork(null)}
+          currentUser={currentUser}
         />
       )}
 

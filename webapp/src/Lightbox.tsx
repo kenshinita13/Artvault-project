@@ -1,85 +1,208 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { X, Flag } from 'lucide-react';
+import { X, Flag, Heart, MessageCircle, Share2, MoreHorizontal, Send, ArrowLeft } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
+import Avatar from './Avatar';
+
+interface Comment {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  profiles?: {
+    username: string;
+    name: string;
+    avatar_url?: string;
+  };
+}
 
 interface LightboxProps {
   artwork: any;
   artistName: string;
   onClose: () => void;
+  currentUser?: any;
 }
 
-export default function Lightbox({ artwork, artistName, onClose }: LightboxProps) {
+export default function Lightbox({ artwork, artistName, onClose, currentUser }: LightboxProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
-  
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+
+  // Like state
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likeAnimating, setLikeAnimating] = useState(false);
+
+  // Comments state
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+
   // Panning state
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // Reset panning when exiting fullscreen
   useEffect(() => {
-    if (!fullscreen) {
-      setPosition({ x: 0, y: 0 });
-    }
+    if (!fullscreen) setPosition({ x: 0, y: 0 });
   }, [fullscreen]);
+
+  // Fetch likes
+  useEffect(() => {
+    const fetchLikes = async () => {
+      const { count } = await supabase
+        .from('likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('artwork_id', artwork.id);
+      setLikeCount(count || 0);
+
+      if (currentUser) {
+        const { data } = await supabase
+          .from('likes')
+          .select('id')
+          .eq('artwork_id', artwork.id)
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+        setLiked(!!data);
+      }
+    };
+    fetchLikes();
+  }, [artwork.id, currentUser]);
+
+  // Fetch comments
+  useEffect(() => {
+    const fetchComments = async () => {
+      setLoadingComments(true);
+      const { data } = await supabase
+        .from('comments')
+        .select(`*, profiles ( username, name, avatar_url )`)
+        .eq('artwork_id', artwork.id)
+        .order('created_at', { ascending: true });
+      setComments((data as Comment[]) || []);
+      setLoadingComments(false);
+    };
+    fetchComments();
+  }, [artwork.id]);
+
+  // Scroll to bottom when new comment
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments.length]);
+
+  const toggleLike = async () => {
+    if (!currentUser) {
+      toast.error('Sign in to like artworks');
+      return;
+    }
+    if (liked) {
+      await supabase.from('likes').delete().eq('artwork_id', artwork.id).eq('user_id', currentUser.id);
+      setLiked(false);
+      setLikeCount(prev => Math.max(0, prev - 1));
+    } else {
+      setLikeAnimating(true);
+      setTimeout(() => setLikeAnimating(false), 600);
+      await supabase.from('likes').insert({ artwork_id: artwork.id, user_id: currentUser.id });
+      setLiked(true);
+      setLikeCount(prev => prev + 1);
+    }
+  };
+
+  const submitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+    if (!currentUser) {
+      toast.error('Sign in to comment');
+      return;
+    }
+    setSubmittingComment(true);
+    const { data, error } = await supabase
+      .from('comments')
+      .insert({ artwork_id: artwork.id, user_id: currentUser.id, content: commentText.trim() })
+      .select(`*, profiles ( username, name, avatar_url )`)
+      .single();
+    if (error) {
+      toast.error('Failed to post comment');
+    } else {
+      setComments(prev => [...prev, data as Comment]);
+      setCommentText('');
+    }
+    setSubmittingComment(false);
+  };
+
+  const deleteComment = async (commentId: string) => {
+    await supabase.from('comments').delete().eq('id', commentId);
+    setComments(prev => prev.filter(c => c.id !== commentId));
+    toast.success('Comment deleted');
+  };
+
+  const handleShare = async () => {
+    const url = window.location.origin + `/home?artwork=${artwork.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard!');
+    } catch {
+      toast.error('Failed to copy link');
+    }
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!fullscreen) return;
-    e.preventDefault(); // Prevent default image drag
+    e.preventDefault();
     setIsDragging(true);
-    dragStart.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    };
+    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
   };
-
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!fullscreen || !isDragging) return;
-    const newX = e.clientX - dragStart.current.x;
-    const newY = e.clientY - dragStart.current.y;
-    setPosition({ x: newX, y: newY });
+    setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
   };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  const handleMouseUp = () => setIsDragging(false);
 
   const confirmReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reportReason) return;
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("You must be logged in to report.");
-        return;
-      }
-
-      const { error } = await supabase.from('reports').insert({
-        artwork_id: artwork.id,
-        reporter_id: user.id,
-        reason: reportReason
-      });
-
+      if (!user) { toast.error("You must be logged in to report."); return; }
+      const { error } = await supabase.from('reports').insert({ artwork_id: artwork.id, reporter_id: user.id, reason: reportReason });
       if (error) throw error;
       toast.success("Report submitted to administrators for review.");
       setReportModalOpen(false);
       setReportReason('');
     } catch (err: any) {
       toast.error("Error submitting report: " + err.message);
-      console.error(err);
     }
   };
 
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days}d`;
+    return `${Math.floor(days / 7)}w`;
+  };
+
   return (
-    <div className="modal" style={{ display: 'flex' }} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') onClose(); }} role="button" tabIndex={0}>
-      <div className="lightbox-content" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} role="presentation">
-        <div 
-          className={`lightbox-img-wrapper ${fullscreen ? 'fullscreen' : ''}`} 
+    <div className="modal" style={{ display: 'flex' }} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }} role="button" tabIndex={0}>
+      {/* ─── LIGHTBOX CARD ─── */}
+      <div
+        className="lightbox-content"
+        onClick={e => e.stopPropagation()}
+        onKeyDown={e => e.stopPropagation()}
+        role="presentation"
+        style={{ flexDirection: 'row' }}
+      >
+
+        {/* ─── LEFT: Image ─── */}
+        <div
+          className={`lightbox-img-wrapper ${fullscreen ? 'fullscreen' : ''}`}
           onClick={() => !fullscreen && setFullscreen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !fullscreen) setFullscreen(true); }}
           role="button"
@@ -88,51 +211,234 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          style={{ cursor: fullscreen ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in', overflow: 'hidden' }}
+          style={{
+            cursor: fullscreen ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+            overflow: 'hidden',
+            borderRadius: '20px 0 0 20px',
+            background: '#000',
+          }}
         >
           {fullscreen && (
             <button className="fullscreen-close" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }} style={{ zIndex: 100 }}>
               <X size={20} />
             </button>
           )}
-          <img 
-            src={artwork.image_url} 
-            alt={artwork.title} 
+          <img
+            src={artwork.image_url}
+            alt={artwork.title}
             style={fullscreen ? { transform: `translate(${position.x}px, ${position.y}px)`, transition: isDragging ? 'none' : 'transform 0.1s ease-out' } : {}}
             draggable={false}
           />
-          {!fullscreen && <div className="zoom-indicator">🔍 Click Image to Zoom</div>}
+          {!fullscreen && <div className="zoom-indicator">🔍 Click to Zoom</div>}
         </div>
+
+        {/* ─── RIGHT: Info Panel ─── */}
         {!fullscreen && (
-          <div className="lightbox-info">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-              <h2 className="lightbox-title">{artwork.title}</h2>
-              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '24px', cursor: 'pointer', padding: 0 }}>
-                <X size={24} />
-              </button>
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            borderLeft: '1px solid rgba(255,255,255,0.08)',
+            minWidth: 0,
+          }}>
+
+            {/* ── Top Action Bar ── */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 24px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              flexShrink: 0,
+            }}>
+              {/* Left actions */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                  <ArrowLeft size={22} />
+                </button>
+
+                <button
+                  onClick={toggleLike}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '8px',
+                    borderRadius: '50%', display: 'flex', alignItems: 'center', gap: '6px',
+                    color: liked ? '#ef4444' : '#aaa', transition: 'all 0.2s',
+                    transform: likeAnimating ? 'scale(1.3)' : 'scale(1)',
+                  }}
+                  onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                  onMouseOut={e => (e.currentTarget.style.background = 'none')}
+                >
+                  <Heart size={22} fill={liked ? '#ef4444' : 'none'} />
+                  {likeCount > 0 && <span style={{ fontSize: '15px', fontWeight: 700 }}>{likeCount}</span>}
+                </button>
+
+                <button onClick={() => document.getElementById('comment-input')?.focus()} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                  <MessageCircle size={22} />
+                </button>
+
+                <button onClick={handleShare} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                  <Share2 size={22} />
+                </button>
+              </div>
+
+              {/* Right actions */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative' }}>
+                <button onClick={() => setMoreMenuOpen(!moreMenuOpen)} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                  <MoreHorizontal size={22} />
+                </button>
+
+                {moreMenuOpen && (
+                  <div style={{ position: 'absolute', top: '44px', right: 0, background: 'rgba(30,30,35,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '6px 0', minWidth: '160px', zIndex: 100, boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                    <button onClick={() => { setMoreMenuOpen(false); setReportModalOpen(true); }} style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', textAlign: 'left' }}>
+                      <Flag size={15} /> Report Artwork
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="lightbox-artist">
-              By <Link to={`/profile/${artwork.user_id}`} onClick={onClose} style={{ color: '#a855f7', textDecoration: 'none', fontWeight: 'bold' }}>{artistName}</Link>
+
+            {/* ── Artist Info + Description (scrollable middle) ── */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              minHeight: 0,
+            }}>
+              {/* Artist row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Link to={`/profile/${artwork.user_id}`} onClick={onClose} style={{ textDecoration: 'none' }}>
+                  <Avatar userId={artwork.user_id} name={artistName} size={44} />
+                </Link>
+                <div>
+                  <Link to={`/profile/${artwork.user_id}`} onClick={onClose} style={{ color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: '15px', display: 'block' }}>
+                    {artistName}
+                  </Link>
+                  <span style={{ color: '#777', fontSize: '13px' }}>
+                    {new Date(artwork.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Title */}
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.2 }}>
+                {artwork.title}
+              </h2>
+
+              {/* Description */}
+              {artwork.description && (
+                <div>
+                  <p style={{ color: '#999', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', fontWeight: 600 }}>Description</p>
+                  <p style={{ color: '#ccc', fontSize: '15px', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0 }}>
+                    {artwork.description}
+                  </p>
+                </div>
+              )}
+
+              {/* ── Comments Section ── */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
+                <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>
+                  {comments.length} Comment{comments.length !== 1 ? 's' : ''}
+                </p>
+
+                {loadingComments ? (
+                  <p style={{ color: '#555', fontSize: '13px' }}>Loading comments...</p>
+                ) : comments.length === 0 ? (
+                  <p style={{ color: '#555', fontSize: '14px', fontStyle: 'italic' }}>No comments yet. Be the first!</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {comments.map(c => (
+                      <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                        <Link to={`/profile/${c.user_id}`} onClick={onClose} style={{ flexShrink: 0, textDecoration: 'none' }}>
+                          <Avatar userId={c.user_id} name={c.profiles?.name || c.profiles?.username || 'U'} size={32} />
+                        </Link>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                            <Link to={`/profile/${c.user_id}`} onClick={onClose} style={{ color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: '13px' }}>
+                              {c.profiles?.username || c.profiles?.name || 'User'}
+                            </Link>
+                            <span style={{ color: '#555', fontSize: '11px' }}>{timeAgo(c.created_at)}</span>
+                            {currentUser && currentUser.id === c.user_id && (
+                              <button onClick={() => deleteComment(c.id)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '11px', padding: '2px 6px', borderRadius: '4px', transition: 'all 0.2s' }} onMouseOver={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }} onMouseOut={e => { e.currentTarget.style.color = '#555'; e.currentTarget.style.background = 'none'; }}>
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                          <p style={{ color: '#ccc', fontSize: '14px', lineHeight: 1.5, margin: 0, wordBreak: 'break-word' }}>{c.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={commentsEndRef} />
+                  </div>
+                )}
+              </div>
             </div>
-            
-            <div className="lightbox-desc-title">Description</div>
-            <div className="lightbox-desc">{artwork.description || 'No description provided for this artwork.'}</div>
-            
-            <div className="lightbox-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Published on: {new Date(artwork.created_at).toLocaleDateString()}</span>
-              <button 
-                onClick={() => setReportModalOpen(true)} 
-                style={{ background: 'none', border: 'none', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '13px' }}
+
+            {/* ── Comment Input Bar (sticky bottom) ── */}
+            <form onSubmit={submitComment} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '14px 24px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              flexShrink: 0,
+              background: 'rgba(18,18,22,0.6)',
+            }}>
+              {currentUser && (
+                <Avatar userId={currentUser.id} name={currentUser.user_metadata?.name || 'U'} size={32} />
+              )}
+              <input
+                id="comment-input"
+                type="text"
+                placeholder={currentUser ? "Add a comment..." : "Sign in to comment"}
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                disabled={!currentUser || submittingComment}
+                style={{
+                  flex: 1,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '24px',
+                  padding: '10px 16px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.5)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
+              />
+              <button
+                type="submit"
+                disabled={!commentText.trim() || submittingComment}
+                style={{
+                  background: commentText.trim() ? 'linear-gradient(135deg, #a855f7, #ec4899)' : 'rgba(255,255,255,0.06)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: commentText.trim() ? 'pointer' : 'default',
+                  color: commentText.trim() ? '#fff' : '#555',
+                  transition: 'all 0.2s',
+                  flexShrink: 0,
+                }}
               >
-                <Flag size={14} /> Report
+                <Send size={16} />
               </button>
-            </div>
+            </form>
           </div>
         )}
       </div>
 
+      {/* ─── Report Modal ─── */}
       {reportModalOpen && (
-        <div className="modal" style={{ zIndex: 1000000 }} onClick={(e) => { e.stopPropagation(); setReportModalOpen(false); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.stopPropagation(); setReportModalOpen(false); } }} role="button" tabIndex={0}>
+        <div className="modal" style={{ zIndex: 1000000 }} onClick={(e) => { e.stopPropagation(); setReportModalOpen(false); }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setReportModalOpen(false); } }} role="button" tabIndex={0}>
           <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} role="presentation">
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Report Artwork</h3>
@@ -144,29 +450,24 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
               <form onSubmit={confirmReport}>
                 <div className="form-group" style={{ marginBottom: '25px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Reason for Reporting</label>
-                  <textarea 
-                    className="search-input" 
+                  <textarea
+                    className="search-input"
                     value={reportReason}
                     onChange={e => setReportReason(e.target.value)}
                     style={{ height: '100px', resize: 'vertical' }}
                     placeholder="e.g., Inappropriate content, Copyright violation, Spam"
-                    required 
+                    required
                   ></textarea>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setReportModalOpen(false)} style={{ flex: 1 }}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-danger" style={{ flex: 1 }}>
-                    Submit Report
-                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setReportModalOpen(false)} style={{ flex: 1 }}>Cancel</button>
+                  <button type="submit" className="btn btn-danger" style={{ flex: 1 }}>Submit Report</button>
                 </div>
               </form>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

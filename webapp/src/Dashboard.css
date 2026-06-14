@@ -940,3 +940,50 @@
     padding: 30px 20px;
   }
 }
+
+/* Mobile Lightbox: stack image on top, info below */
+@media (max-width: 768px) {
+  .lightbox-content {
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 100vh !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+    overflow-y: auto !important;
+  }
+  .lightbox-img-wrapper {
+    flex: none !important;
+    width: 100% !important;
+    height: 50vh !important;
+    min-height: 280px !important;
+    max-height: 50vh !important;
+    border-radius: 0 !important;
+  }
+  .lightbox-img-wrapper img {
+    object-fit: contain !important;
+  }
+  .lightbox-info {
+    border-left: none !important;
+    border-top: 1px solid var(--panel-border) !important;
+    padding: 20px !important;
+  }
+  .lightbox-title {
+    font-size: 22px !important;
+  }
+  .lightbox-artist {
+    font-size: 16px !important;
+  }
+  .lightbox-desc {
+    font-size: 15px !important;
+  }
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+    gap: 12px !important;
+  }
+  .gallery-container {
+    padding: 90px 12px 30px !important;
+  }
+  .navbar {
+    padding: 0 12px !important;
+  }
+}
