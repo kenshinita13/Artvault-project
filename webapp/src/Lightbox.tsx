@@ -104,7 +104,7 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
       setLoadingComments(true);
       const { data: commentsData } = await supabase
         .from('comments')
-        .select(`*, profiles ( username, name, avatar_url )`)
+        .select(`*, profiles ( username, name )`)
         .eq('artwork_id', artwork.id)
         .order('created_at', { ascending: true });
       if (commentsData) {
@@ -179,7 +179,7 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
     const { data, error } = await supabase
       .from('comments')
       .insert({ artwork_id: artwork.id, user_id: currentUser.id, content: commentText.trim() })
-      .select(`*, profiles ( username, name, avatar_url )`)
+      .select(`*, profiles ( username, name )`)
       .single();
     if (error) {
       console.error('Comment error:', error);
