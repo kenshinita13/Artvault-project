@@ -182,7 +182,8 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
       .select(`*, profiles ( username, name, avatar_url )`)
       .single();
     if (error) {
-      toast.error('Failed to post comment');
+      console.error('Comment error:', error);
+      toast.error('Failed to post comment: ' + error.message);
     } else {
       setComments(prev => [...prev, data as Comment]);
       setCommentText('');
