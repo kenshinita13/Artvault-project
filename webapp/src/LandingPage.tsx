@@ -6,22 +6,22 @@ import { supabase } from './supabaseClient';
 const fallbackImages = [
   {
     url: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=600&auto=format&fit=crop",
-    className: "w-40 h-48 md:w-48 md:h-56 -top-10 left-0",
+    className: "w-32 h-40 sm:w-40 sm:h-48 md:w-48 md:h-56 -top-5 sm:-top-10 left-0",
     delay: 0
   },
   {
     url: "https://images.unsplash.com/photo-1547826039-bfc35e0f1ea8?q=80&w=600&auto=format&fit=crop",
-    className: "w-48 h-64 md:w-64 md:h-80 top-20 left-32 md:left-40 z-10",
+    className: "w-40 h-56 sm:w-48 sm:h-64 md:w-64 md:h-80 top-12 sm:top-20 left-20 sm:left-32 md:left-40 z-10",
     delay: 0.2
   },
   {
     url: "https://images.unsplash.com/photo-1578301978018-3005759f48f7?q=80&w=600&auto=format&fit=crop",
-    className: "w-32 h-40 md:w-40 md:h-48 bottom-0 -right-4 md:right-10",
+    className: "w-28 h-36 sm:w-32 sm:h-40 md:w-40 md:h-48 bottom-4 sm:bottom-0 right-4 sm:-right-4 md:right-10",
     delay: 0.4
   },
   {
     url: "https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=80&w=600&auto=format&fit=crop",
-    className: "w-36 h-36 md:w-44 md:h-44 -bottom-10 left-10",
+    className: "w-28 h-28 sm:w-36 sm:h-36 md:w-44 md:h-44 -bottom-4 sm:-bottom-10 left-4 sm:left-10",
     delay: 0.6
   }
 ];
@@ -91,15 +91,13 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <main className="relative pt-32 pb-20 px-8 md:px-16 xl:px-24 max-w-[1400px] mx-auto flex flex-col lg:flex-row items-center justify-between min-h-[90vh]">
+      <main className="relative pt-28 sm:pt-32 pb-20 px-6 sm:px-8 md:px-16 xl:px-24 max-w-[1400px] mx-auto flex flex-col lg:flex-row items-center justify-between min-h-[90vh]">
         
         {/* Left Content */}
-        <div className="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left z-20 mt-6 lg:mt-0 lg:pr-10">
+        <div className="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left z-20 mt-16 sm:mt-6 lg:mt-0 lg:pr-10">
           <motion.h1 
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] text-white"
+            initial={{ opacity: 1, y: 0 }} /* Removing opacity 0 to ensure it's always visible */
           >
             Create the <br className="hidden sm:block lg:hidden"/>
             gallery you <br className="hidden sm:block lg:hidden"/>
@@ -139,8 +137,8 @@ export default function LandingPage() {
         </div>
 
         {/* Right Content - Floating Collage */}
-        <div className="w-full lg:w-1/2 h-[400px] sm:h-[500px] md:h-[600px] relative mt-16 sm:mt-24 lg:mt-0 perspective-1000 flex justify-center">
-          <div className="relative w-[280px] sm:w-[340px] md:w-[420px] h-full flex-shrink-0">
+        <div className="w-full lg:w-1/2 h-[350px] sm:h-[500px] md:h-[600px] relative mt-12 sm:mt-24 lg:mt-0 perspective-1000 flex justify-center">
+          <div className="relative w-[260px] sm:w-[340px] md:w-[420px] h-full flex-shrink-0 scale-90 sm:scale-100 origin-center">
             {displayImages.map((img, idx) => (
               <motion.div
                 key={idx}
