@@ -262,7 +262,7 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
           style={{
             cursor: fullscreen ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
             overflow: 'hidden',
-            borderRadius: '20px 0 0 20px',
+            borderRadius: fullscreen ? '0' : '20px 0 0 20px',
             background: '#000',
           }}
         >
@@ -274,7 +274,7 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
           <img
             src={artwork.image_url}
             alt={artwork.title}
-            style={fullscreen ? { transform: `translate(${position.x}px, ${position.y}px)`, transition: isDragging ? 'none' : 'transform 0.1s ease-out' } : {}}
+            style={fullscreen ? { transform: `scale(2) translate(${position.x / 2}px, ${position.y / 2}px)`, transition: isDragging ? 'none' : 'transform 0.1s ease-out' } : {}}
             draggable={false}
           />
           {!fullscreen && <div className="zoom-indicator">🔍 Click to Zoom</div>}
