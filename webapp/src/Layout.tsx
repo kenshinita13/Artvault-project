@@ -5,6 +5,7 @@ import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield, Home, Folder
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
+import { useCachedQuery } from './useCachedQuery';
 import './Dashboard.css';
 
 export default function Layout({ user }: { user: any }) {
@@ -15,15 +16,16 @@ export default function Layout({ user }: { user: any }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [categories, setCategories] = useState<any[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '');
 
+  const searchValue = searchParams.get('search') || '';
+
   useEffect(() => {
-    setLocalSearch(searchParams.get('search') || '');
-  }, [searchParams.get('search')]);
+    setLocalSearch(searchValue);
+  }, [searchValue]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -54,12 +56,16 @@ export default function Layout({ user }: { user: any }) {
     }
   };
 
-  // Fetch categories for CreatePanel
-  useEffect(() => {
-    supabase.from('categories').select('*').order('name').then(({ data }) => {
-      if (data) setCategories(data);
-    });
-  }, []);
+  // Cached categories — shared with Dashboard, fetched once across navigation
+  const { data: cachedCategories } = useCachedQuery<any[]>(
+    'categories',
+    async () => {
+      const { data } = await supabase.from('categories').select('*').order('name');
+      return data || [];
+    },
+    { ttl: 10 * 60 * 1000 } // 10 min
+  );
+  const categories = cachedCategories || [];
 
   useEffect(() => {
     if (!user) return;
@@ -453,7 +459,7 @@ function NavIcon({ to, icon, label, active }: { to: string; icon: React.ReactNod
 /* ─── Mobile Tab Component ─── */
 function MobileTab({ to, icon, label, active }: { to: string; icon: React.ReactNode; label: string; active: boolean }) {
   return (
-    <Link to={to} className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${active ? 'text-white' : 'text-zinc-500'}`}>
+    <Link to={to} className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors min-w-[48px] min-h-[48px] ${active ? 'text-white' : 'text-zinc-500'}`}>
       {icon}
       <span>{label}</span>
     </Link>

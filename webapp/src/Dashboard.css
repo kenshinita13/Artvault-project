@@ -18,6 +18,8 @@
 
 .main-content-wrapper {
   padding-bottom: 80px;
+  /* Ensure mobile bottom tab bar doesn't cover content */
+  -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 768px) {
   .main-content-wrapper {
@@ -960,6 +962,46 @@
   }
 }
 
+/* ─── Lightbox Action Buttons (CSS-only hover, no JS handlers) ─── */
+.lb-action-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  transition: background 0.2s, color 0.2s;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+}
+.lb-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.lb-save-btn {
+  background: #a855f7;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  min-height: 44px;
+}
+.lb-save-btn:hover {
+  background: #c084fc;
+}
+.lb-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Mobile Lightbox: stack image on top, info below */
 @media (max-width: 768px) {
   .lightbox-content {
@@ -1019,6 +1061,7 @@
   backdrop-filter: blur(12px);
   z-index: 900;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  /* Use solid bg instead of expensive backdrop-filter on scroll-sticky element */
   scrollbar-width: none; /* Firefox */
 }
 .category-filter-bar::-webkit-scrollbar {
@@ -1070,6 +1113,9 @@
   overflow: hidden;
   cursor: zoom-in;
   background: #1a1a24;
+  /* GPU acceleration for smooth hover transitions */
+  will-change: transform;
+  transform: translateZ(0);
 }
 @media (max-width: 600px) {
   .masonry-item { margin-bottom: 8px; border-radius: 12px; }

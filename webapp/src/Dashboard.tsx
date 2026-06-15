@@ -1,8 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
+import { useCachedQuery, invalidateCache } from './useCachedQuery';
 import './Dashboard.css';
+
+// Supabase image optimization helper — serves WebP at correct size
+function optimizedUrl(url: string, width: number, quality = 75): string {
+  if (!url || !url.includes('supabase.co')) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}width=${width}&quality=${quality}`;
+}
 
 interface Artwork {
   id: string;
@@ -28,15 +36,24 @@ interface Category {
   slug: string;
 }
 
-// Global cache
+// Global artwork cache (simple module-level cache for artworks; categories use useCachedQuery)
 let cachedArtworks: Artwork[] | null = null;
-let cachedCategories: Category[] | null = null;
 
 export default function Dashboard({ user }: { user: any }) {
   const [artworks, setArtworks] = useState<Artwork[]>(cachedArtworks || []);
-  const [categories, setCategories] = useState<Category[]>(cachedCategories || []);
   const [loading, setLoading] = useState(!cachedArtworks);
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
+
+  // Shared cached categories (same cache key as Layout.tsx)
+  const { data: cachedCategories } = useCachedQuery<Category[]>(
+    'categories',
+    async () => {
+      const { data } = await supabase.from('categories').select('*').order('name');
+      return data || [];
+    },
+    { ttl: 10 * 60 * 1000 }
+  );
+  const categories = cachedCategories || [];
   
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
@@ -63,18 +80,6 @@ export default function Dashboard({ user }: { user: any }) {
 
   async function fetchData() {
     if (!cachedArtworks) setLoading(true);
-
-    // Fetch categories but don't break if table is missing
-    if (!cachedCategories) {
-      const { data: catData, error: catError } = await supabase.from('categories').select('*').order('name');
-      if (catData && !catError) {
-        cachedCategories = catData;
-        setCategories(catData);
-      } else {
-        // Fallback to empty categories if table doesn't exist yet
-        setCategories([]);
-      }
-    }
 
     // Fetch artworks
     const { data, error } = await supabase
@@ -193,9 +198,13 @@ export default function Dashboard({ user }: { user: any }) {
                   }}
                 >
                   <img 
-                    src={artwork.image_url} 
+                    src={optimizedUrl(artwork.image_url, 400)}
+                    srcSet={`${optimizedUrl(artwork.image_url, 400)} 400w, ${optimizedUrl(artwork.image_url, 800)} 800w`}
+                    sizes="(max-width: 600px) 50vw, (max-width: 900px) 33vw, 25vw"
                     alt={artwork.title} 
                     loading="lazy"
+                    decoding="async"
+                    style={{ background: artwork.dominant_color || '#1a1a24' }}
                   />
                   <div className="art-card-overlay">
                     <h4 className="art-title truncate">{artwork.title}</h4>

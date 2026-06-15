@@ -302,30 +302,28 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
             }}>
               {/* Left actions */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                <button onClick={onClose} className="lb-action-btn">
                   <ArrowLeft size={22} />
                 </button>
 
                 <button
                   onClick={toggleLike}
+                  className="lb-action-btn"
                   style={{
-                    background: 'none', border: 'none', cursor: 'pointer', padding: '8px',
-                    borderRadius: '50%', display: 'flex', alignItems: 'center', gap: '6px',
-                    color: liked ? '#ef4444' : '#aaa', transition: 'all 0.2s',
+                    gap: '6px',
+                    color: liked ? '#ef4444' : '#aaa',
                     transform: likeAnimating ? 'scale(1.3)' : 'scale(1)',
                   }}
-                  onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                  onMouseOut={e => (e.currentTarget.style.background = 'none')}
                 >
                   <Heart size={22} fill={liked ? '#ef4444' : 'none'} />
                   {likeCount > 0 && <span style={{ fontSize: '15px', fontWeight: 700 }}>{likeCount}</span>}
                 </button>
 
-                <button onClick={() => document.getElementById('comment-input')?.focus()} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                <button onClick={() => document.getElementById('comment-input')?.focus()} className="lb-action-btn">
                   <MessageCircle size={22} />
                 </button>
 
-                <button onClick={handleShare} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                <button onClick={handleShare} className="lb-action-btn">
                   <Share2 size={22} />
                 </button>
               </div>
@@ -349,15 +347,13 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
                     <button 
                       onClick={handleSaveToBoard}
                       disabled={savingToBoard}
-                      style={{ background: '#a855f7', color: '#fff', border: 'none', borderRadius: '20px', padding: '8px 16px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s' }}
-                      onMouseOver={e => e.currentTarget.style.background = '#c084fc'}
-                      onMouseOut={e => e.currentTarget.style.background = '#a855f7'}
+                      className="lb-save-btn"
                     >
                       {savingToBoard ? 'Saving...' : 'Save'}
                     </button>
                   </div>
                 )}
-                <button onClick={() => setMoreMenuOpen(!moreMenuOpen)} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex', transition: 'background 0.2s' }} onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')} onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+                <button onClick={() => setMoreMenuOpen(!moreMenuOpen)} className="lb-action-btn">
                   <MoreHorizontal size={22} />
                 </button>
 
@@ -508,7 +504,12 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
                   outline: 'none',
                   transition: 'border-color 0.2s',
                 }}
-                onFocus={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.5)')}
+                onFocus={e => {
+                  e.currentTarget.style.borderColor = 'rgba(168,85,247,0.5)';
+                  // Scroll input into view when mobile keyboard appears
+                  const el = e.currentTarget;
+                  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                }}
                 onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
               />
               <button

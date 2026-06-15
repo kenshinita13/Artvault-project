@@ -114,18 +114,31 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
       .order('created_at', { ascending: false });
 
     if (boardsData) {
-      const enrichedBoards = await Promise.all(boardsData.map(async (b) => {
-        const { data: items } = await supabase
-          .from('board_items')
-          .select('artworks(image_url)')
-          .eq('board_id', b.id)
-          .limit(4);
+      // Batch-fetch all board items in a single query (fixes N+1 query problem)
+      const boardIds = boardsData.map(b => b.id);
+      const { data: allItems } = boardIds.length > 0
+        ? await supabase
+            .from('board_items')
+            .select('board_id, artworks(image_url)')
+            .in('board_id', boardIds)
+        : { data: [] };
+
+      // Group items by board_id
+      const itemsByBoard = new Map<string, any[]>();
+      for (const item of (allItems || [])) {
+        const list = itemsByBoard.get(item.board_id) || [];
+        list.push(item);
+        itemsByBoard.set(item.board_id, list);
+      }
+
+      const enrichedBoards = boardsData.map(b => {
+        const boardItems = (itemsByBoard.get(b.id) || []).slice(0, 4);
         return {
           ...b,
-          item_count: items?.length || 0,
-          preview_images: items?.map((i: any) => i.artworks?.image_url).filter(Boolean) || []
+          item_count: boardItems.length,
+          preview_images: boardItems.map((i: any) => i.artworks?.image_url).filter(Boolean)
         };
-      }));
+      });
       setCollages(enrichedBoards);
     }
     
@@ -337,7 +350,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
                 {currentItems.map(artwork => (
                   <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)} onKeyDown={(e) => { if (e.key === 'Enter') setActiveArtwork(artwork); }} role="button" tabIndex={0}>
                     <div className="art-preview">
-                      <img src={artwork.image_url} alt={artwork.title} />
+                      <img src={artwork.image_url} alt={artwork.title} loading="lazy" decoding="async" />
                     </div>
                     <div className="art-details">
                       <div className="art-title">{artwork.title}</div>

@@ -3,9 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#0b0c10" />
+    <meta name="description" content="ArtVault Studio — The world's premier platform to discover, showcase, and curate breathtaking digital masterpieces." />
+    <meta name="color-scheme" content="dark" />
     <title>ArtVault Studio</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+
+    <!-- Preconnect to critical origins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://exaaahqhnesijbdixjzc.supabase.co" />
+
+    <!-- Load Google Fonts asynchronously (non-render-blocking) -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" />
+    </noscript>
+
+    <!-- Inline critical styles for instant first paint -->
+    <style>
+      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: #000; color: #fff; font-family: 'Outfit', system-ui, -apple-system, sans-serif; }
+      #root { width: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
