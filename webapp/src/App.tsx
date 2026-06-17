@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy, useCallback } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
@@ -21,8 +21,7 @@ function App() {
   const [isValidatingLogin, setIsValidatingLogin] = useState(false);
   const [banMessage, setBanMessage] = useState<string | null>(null);
 
-  const location = useLocation();
-  const isAdminRoute = location.pathname === '/admin';
+
 
   // MFA Challenge State (kept at App level since it affects routing decisions)
   const [showMfaChallenge, setShowMfaChallenge] = useState(false);

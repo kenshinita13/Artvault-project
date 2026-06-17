@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
-import { useCachedQuery, invalidateCache } from './useCachedQuery';
+import { useCachedQuery } from './useCachedQuery';
 import './Dashboard.css';
 
 // Supabase image optimization helper — serves WebP at correct size
