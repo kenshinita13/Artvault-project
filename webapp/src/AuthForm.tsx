@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
+import { PUBLIC_ROLES, ROLES } from './roles';
+import type { ArtVaultRole } from './roles';
 
 interface AuthFormProps {
   onLoginComplete: (data: any, profile?: any) => void;
@@ -37,7 +39,7 @@ export default function AuthForm({
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
-  const role = 'user';
+  const [role, setRole] = useState<ArtVaultRole>('user');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -246,12 +248,12 @@ export default function AuthForm({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+        className="fixed inset-0 z-[1001] flex items-center justify-center bg-[#e5e0d8]/80 backdrop-blur-md p-4"
       >
         {!isAdminRoute && (
           <button 
             onClick={() => navigate('/')} 
-            className="absolute top-6 right-8 text-white/70 hover:text-white text-3xl transition-colors z-50"
+            className="absolute top-6 right-8 text-zinc-500 hover:text-zinc-900 text-3xl transition-colors z-50"
           >
             ✕
           </button>
@@ -261,12 +263,12 @@ export default function AuthForm({
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="fixed inset-0 bg-black/80 z-[99999] flex justify-center items-center p-4"
+            className="fixed inset-0 bg-[#fdfbf7]/90 z-[99999] flex justify-center items-center p-4"
           >
-            <div className="bg-[#1e1e2d] p-10 rounded-2xl text-center max-w-md w-full border border-red-500/50 shadow-[0_10px_40px_rgba(239,68,68,0.2)]">
+            <div className="bg-white p-10 rounded-2xl text-center max-w-md w-full border border-red-500/50 shadow-[0_10px_40px_rgba(239,68,68,0.2)]">
                 <div className="text-6xl mb-6">🚨</div>
                 <h2 className="text-red-500 mb-4 text-2xl font-bold">Account Restricted</h2>
-                <p className="text-zinc-400 mb-8 text-base leading-relaxed">{banMessage}</p>
+                <p className="text-zinc-600 mb-8 text-base leading-relaxed">{banMessage}</p>
                 <button 
                   onClick={() => setBanMessage(null)} 
                   className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition-colors"
@@ -289,13 +291,13 @@ export default function AuthForm({
               <img 
                 src="/Artlogo.png" 
                 alt="ArtVault Logo" 
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[160px] w-auto mix-blend-screen pointer-events-none" 
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-auto filter brightness-0 pointer-events-none" 
               />
             </div>
-            <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight mt-4">
+            <h2 className="text-3xl font-extrabold text-zinc-900 mb-2 tracking-tight mt-4">
               {isAdminRoute ? 'Admin Portal' : activeForm === 'register' ? 'Join the Studio' : 'Welcome Back'}
             </h2>
-            <p className="text-zinc-400 text-base">
+            <p className="text-zinc-600 text-base">
               {isAdminRoute ? 'Secure access to ArtVault administration.' : activeForm === 'register' ? 'Join the community and share your work.' : 'Access your creative portfolio.'}
             </p>
           </div>
@@ -492,15 +494,33 @@ export default function AuthForm({
                 />
               </div>
 
+              <div className="form-group">
+                <label htmlFor="reg_role" className="block text-sm font-semibold text-zinc-800 mb-3" style={{ color: 'var(--text-primary)' }}>What brings you to ArtVault?</label>
+                <select
+                  id="reg_role"
+                  className="form-control"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as ArtVaultRole)}
+                  style={{ appearance: 'auto', cursor: 'pointer' }}
+                >
+                  {PUBLIC_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLES[r].label}
+                    </option>
+                  ))}
+                </select>
+                <div className="text-sm text-zinc-500 mt-2 leading-snug">
+                  {ROLES[role].description}
+                </div>
+              </div>
 
-
-              <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all mt-4">
+              <button type="submit" disabled={loading} className="w-full bg-[#4a3424] hover:bg-[#382619] text-[#fdfbf7] font-bold py-3 px-4 rounded-xl shadow-lg transition-all mt-4">
                 {loading ? 'Registering...' : 'Onboard Account'}
               </button>
 
-              <div className="text-center mt-6 text-zinc-400 text-sm">
+              <div className="text-center mt-6 text-zinc-600 text-sm">
                 Already registered?{' '}
-                <a href="#" className="text-purple-400 hover:text-purple-300 font-semibold" onClick={(e) => { 
+                <a href="#" className="text-[#4a3424] hover:text-[#382619] font-semibold" onClick={(e) => { 
                   e.preventDefault(); 
                   setError(''); setSuccess('');
                   navigate('/login?mode=login');

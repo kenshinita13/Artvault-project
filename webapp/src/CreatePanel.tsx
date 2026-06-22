@@ -35,8 +35,8 @@ const compressImage = (file: File): Promise<File> => {
         canvas.height = height;
         canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
-          resolve(blob ? new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }) : file);
-        }, 'image/jpeg', 0.85);
+          resolve(blob ? new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' }) : file);
+        }, 'image/webp', 0.90);
       };
       img.onerror = () => resolve(file);
     };
@@ -54,8 +54,10 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [currentHashtag, setCurrentHashtag] = useState('');
-  const [medium, setMedium] = useState('');
-  const [tools, setTools] = useState('');
+  const [materialUsed, setMaterialUsed] = useState('');
+  const [collector, setCollector] = useState('');
+  const [price, setPrice] = useState('');
+  const [creationYear, setCreationYear] = useState('');
   const [uploading, setUploading] = useState(false);
 
   // Board form
@@ -67,7 +69,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const resetAndClose = () => {
     setActiveTab('menu');
     setTitle(''); setDescription(''); setFile(null); setSelectedCategories([]);
-    setHashtags([]); setCurrentHashtag(''); setMedium(''); setTools('');
+    setHashtags([]); setCurrentHashtag(''); setMaterialUsed('');
+    setCollector(''); setPrice(''); setCreationYear('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
     onClose();
   };
@@ -125,7 +128,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       let fileExt = file.name.split('.').pop()?.toLowerCase() || '';
       if (file.type.startsWith('image/') && fileExt !== 'gif') {
         fileToUpload = await compressImage(file);
-        fileExt = 'jpg';
+        fileExt = 'webp';
       }
 
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
@@ -140,7 +143,9 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
         title, description, image_url: urlData.publicUrl, user_id: user.id,
-        tags: hashtags, medium, tools, dominant_color: extractedColor
+        tags: hashtags, material_used: materialUsed,
+        collector_or_pricing: collector, price: price ? Number(price) : null, creation_year: creationYear,
+        dominant_color: extractedColor
       }).select().single();
       if (dbError) throw dbError;
 
@@ -189,14 +194,14 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       {/* Panel */}
       <div style={{
         position: 'fixed', top: 0, left: 0, width: '380px', maxWidth: '90vw',
-        height: '100vh', background: 'rgba(18,18,24,0.98)', borderRight: '1px solid rgba(255,255,255,0.08)',
+        height: '100vh', background: '#fdfbf7', borderRight: '1px solid #e5e0d8',
         zIndex: 99999, display: 'flex', flexDirection: 'column',
-        boxShadow: '10px 0 40px rgba(0,0,0,0.5)', backdropFilter: 'blur(20px)',
+        boxShadow: '10px 0 40px rgba(0,0,0,0.1)', backdropFilter: 'blur(20px)',
         animation: 'slideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
       }}>
         {/* Header */}
-        <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#fff' }}>
+        <div style={{ padding: '24px', borderBottom: '1px solid #e5e0d8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#1a1a1a' }}>
             {activeTab === 'menu' ? 'Create' : activeTab === 'artwork' ? 'Post Artwork' : 'New Board'}
           </h2>
           <button onClick={resetAndClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: '6px', borderRadius: '50%', display: 'flex', transition: 'all 0.2s' }}>
@@ -214,18 +219,18 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 onClick={() => setActiveTab('artwork')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 20px',
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: '16px', cursor: 'pointer', color: '#fff', textAlign: 'left', transition: 'all 0.2s',
+                  background: 'rgba(0,0,0,0.04)', border: '1px solid #e5e0d8',
+                  borderRadius: '16px', cursor: 'pointer', color: '#1a1a1a', textAlign: 'left', transition: 'all 0.2s',
                 }}
-                onMouseOver={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)'; }}
-                onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                onMouseOver={e => { e.currentTarget.style.background = 'rgba(74, 52, 36, 0.1)'; e.currentTarget.style.borderColor = 'rgba(74, 52, 36, 0.3)'; }}
+                onMouseOut={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.borderColor = '#e5e0d8'; }}
               >
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #a855f7, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #4a3424, #382619)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fdfbf7' }}>
                   <ImagePlus size={22} />
                 </div>
                 <div>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Post Artwork</p>
-                  <p style={{ margin: 0, color: '#888', fontSize: '13px', marginTop: '2px' }}>Upload your image with title, description, and tags</p>
+                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Upload your image with title, description, and tags</p>
                 </div>
               </button>
 
@@ -233,18 +238,18 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 onClick={() => setActiveTab('board')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 20px',
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: '16px', cursor: 'pointer', color: '#fff', textAlign: 'left', transition: 'all 0.2s',
+                  background: 'rgba(0,0,0,0.04)', border: '1px solid #e5e0d8',
+                  borderRadius: '16px', cursor: 'pointer', color: '#1a1a1a', textAlign: 'left', transition: 'all 0.2s',
                 }}
-                onMouseOver={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)'; }}
-                onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                onMouseOver={e => { e.currentTarget.style.background = 'rgba(74, 52, 36, 0.1)'; e.currentTarget.style.borderColor = 'rgba(74, 52, 36, 0.3)'; }}
+                onMouseOut={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.borderColor = '#e5e0d8'; }}
               >
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #4a3424, #382619)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fdfbf7' }}>
                   <FolderPlus size={22} />
                 </div>
                 <div>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Create Board</p>
-                  <p style={{ margin: 0, color: '#888', fontSize: '13px', marginTop: '2px' }}>Organize your favorite artworks into a collection</p>
+                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Organize your favorite artworks into a collection</p>
                 </div>
               </button>
             </div>
@@ -253,20 +258,20 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
           {/* ─── Post Artwork Form ─── */}
           {activeTab === 'artwork' && (
             <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#a855f7', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
+              <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
                 ← Back to menu
               </button>
 
               {/* File upload area */}
-              <div style={{ border: '2px dashed rgba(168,85,247,0.3)', borderRadius: '16px', padding: '30px', textAlign: 'center', cursor: 'pointer', position: 'relative', background: file ? 'rgba(168,85,247,0.05)' : 'transparent', transition: 'all 0.2s' }}>
-                <Upload size={28} style={{ color: '#a855f7', marginBottom: '8px' }} />
-                <p style={{ color: '#aaa', fontSize: '14px', margin: 0 }}>{file ? file.name : 'Click or drop image here'}</p>
+              <div style={{ border: '2px dashed rgba(74, 52, 36, 0.3)', borderRadius: '16px', padding: '30px', textAlign: 'center', cursor: 'pointer', position: 'relative', background: file ? 'rgba(74, 52, 36, 0.05)' : 'transparent', transition: 'all 0.2s' }}>
+                <Upload size={28} style={{ color: '#4a3424', marginBottom: '8px' }} />
+                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{file ? file.name : 'Click or drop image here'}</p>
                 <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)} required style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Title</label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Give your artwork a name" required className="search-input" />
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Give your artwork a name" required className="search-input" style={{ width: '100%' }} />
               </div>
 
               <div>
@@ -276,12 +281,12 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
               {/* Hashtags */}
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Tags (Hashtags)</label>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Tags (Hashtags)</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
                   {hashtags.map((tag, idx) => (
-                    <span key={idx} style={{ background: 'rgba(168,85,247,0.2)', color: '#c084fc', padding: '4px 10px', borderRadius: '14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span key={idx} style={{ background: 'rgba(74, 52, 36, 0.1)', color: '#4a3424', padding: '4px 10px', borderRadius: '14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       #{tag}
-                      <button type="button" onClick={() => setHashtags(hashtags.filter(t => t !== tag))} style={{ background: 'none', border: 'none', color: '#c084fc', cursor: 'pointer', padding: 0 }}>×</button>
+                      <button type="button" onClick={() => setHashtags(hashtags.filter(t => t !== tag))} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', padding: 0 }}>×</button>
                     </span>
                   ))}
                 </div>
@@ -290,34 +295,40 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
               <div style={{ display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Medium</label>
-                  <select value={medium} onChange={e => {
-                    setMedium(e.target.value);
-                    if (!['Digital', '3D Render', 'AI Generated'].includes(e.target.value)) {
-                      setTools('');
-                    }
-                  }} className="search-input" style={{ width: '100%', appearance: 'none' }}>
-                    <option value="">Select Medium</option>
-                    <option value="Digital">Digital</option>
-                    <option value="Oil Paint">Oil Paint</option>
-                    <option value="Watercolor">Watercolor</option>
-                    <option value="3D Render">3D Render</option>
-                    <option value="AI Generated">AI Generated</option>
-                    <option value="Photography">Photography</option>
-                    <option value="Pencil/Sketch">Pencil / Sketch</option>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Material Used</label>
+                  <select value={materialUsed} onChange={e => setMaterialUsed(e.target.value)} className="search-input" style={{ width: '100%', appearance: 'none' }}>
+                    <option value="">Select Material</option>
+                    <option value="Oil on canvas">Oil on canvas</option>
+                    <option value="Acrylic on canvas">Acrylic on canvas</option>
+                    <option value="Watercolor on paper">Watercolor on paper</option>
+                    <option value="Charcoal on paper">Charcoal on paper</option>
+                    <option value="Graphite on paper">Graphite on paper</option>
+                    <option value="Pastel on paper">Pastel on paper</option>
+                    <option value="Gouache">Gouache</option>
+                    <option value="Fresco">Fresco</option>
+                    <option value="Mixed Media (Traditional)">Mixed Media (Traditional)</option>
                   </select>
                 </div>
-                {['Digital', '3D Render', 'AI Generated'].includes(medium) && (
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Software / Tools</label>
-                    <input type="text" value={tools} onChange={e => setTools(e.target.value)} placeholder="e.g. Photoshop, Blender" className="search-input" style={{ width: '100%' }} />
-                  </div>
-                )}
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Year Created</label>
+                  <input type="text" value={creationYear} onChange={e => setCreationYear(e.target.value)} placeholder="e.g. 1889" className="search-input" style={{ width: '100%' }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Collector or Pricing Status</label>
+                  <input type="text" value={collector} onChange={e => setCollector(e.target.value)} placeholder="e.g. For Sale, Collected by John" className="search-input" style={{ width: '100%' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Price</label>
+                  <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 5000" className="search-input" style={{ width: '100%' }} />
+                </div>
               </div>
 
               {/* Category Tags */}
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Categories</label>
+                <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Categories</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {categories.map(cat => (
                     <button
@@ -326,9 +337,9 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                       onClick={() => toggleCategory(cat.id)}
                       style={{
                         padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', border: '1px solid',
-                        background: selectedCategories.includes(cat.id) ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.04)',
-                        borderColor: selectedCategories.includes(cat.id) ? '#a855f7' : 'rgba(255,255,255,0.1)',
-                        color: selectedCategories.includes(cat.id) ? '#c084fc' : '#999',
+                        background: selectedCategories.includes(cat.id) ? 'rgba(74, 52, 36, 0.1)' : 'rgba(0,0,0,0.04)',
+                        borderColor: selectedCategories.includes(cat.id) ? '#4a3424' : '#e5e0d8',
+                        color: selectedCategories.includes(cat.id) ? '#4a3424' : '#666',
                       }}
                     >
                       {cat.name}
@@ -346,7 +357,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
           {/* ─── Create Board Form ─── */}
           {activeTab === 'board' && (
             <form onSubmit={handleCreateBoard} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#a855f7', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
+              <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
                 ← Back to menu
               </button>
 

@@ -1,654 +1,595 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
-import { Trash2, Users, BarChart3, Edit2, Shield, X, Activity } from 'lucide-react';
-import './Dashboard.css';
 import { logAudit } from './auditHelper';
+import { ROLES, type ArtVaultRole, canAccessAdmin } from './roles';
+import './AdminPanel.css';
 
+// ─── Types ────────────────────────────────────────────────────────
+type Tab = 'dashboard' | 'users' | 'registry' | 'reports' | 'logs';
+
+// ─── Role Badge ───────────────────────────────────────────────────
+function RoleBadge({ role }: { role: string }) {
+  const def = ROLES[role as ArtVaultRole] || ROLES.user;
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 10px',
+      borderRadius: '20px',
+      fontSize: '11px',
+      fontWeight: 700,
+      letterSpacing: '0.5px',
+      background: def.bg,
+      color: def.color,
+      border: `1px solid ${def.border}`,
+      fontFamily: "'Inter', sans-serif",
+    }}>
+      {def.label}
+    </span>
+  );
+}
+
+// ─── Status Badge ─────────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    active:    { label: 'Active',    color: '#166534', bg: 'rgba(22,101,52,0.1)' },
+    suspended: { label: 'Suspended', color: '#92400e', bg: 'rgba(146,64,14,0.1)' },
+    banned:    { label: 'Banned',    color: '#991b1b', bg: 'rgba(153,27,27,0.1)' },
+  };
+  const s = map[status] || map.active;
+  return (
+    <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color, fontFamily: "'Inter', sans-serif" }}>
+      {s.label}
+    </span>
+  );
+}
+
+// ─── Confirm Modal ────────────────────────────────────────────────
+function ConfirmModal({ title, message, danger = false, onConfirm, onCancel, children }: {
+  title: string; message?: string; danger?: boolean;
+  onConfirm: () => void; onCancel: () => void; children?: React.ReactNode;
+}) {
+  return (
+    <div className="ap-modal-overlay" onClick={onCancel}>
+      <div className="ap-modal" onClick={e => e.stopPropagation()}>
+        <div className="ap-modal-header">
+          <h3 style={{ margin: 0, color: danger ? '#991b1b' : '#1c1917' }}>{title}</h3>
+          <button className="ap-modal-close" onClick={onCancel}>✕</button>
+        </div>
+        <div className="ap-modal-body">
+          {message && <p style={{ color: '#57534e', lineHeight: 1.7, marginBottom: 20 }}>{message}</p>}
+          {children}
+          <div className="ap-modal-actions">
+            <button className="ap-btn ap-btn-ghost" onClick={onCancel}>Cancel</button>
+            <button className={`ap-btn ${danger ? 'ap-btn-danger' : 'ap-btn-primary'}`} onClick={onConfirm}>
+              {danger ? 'Confirm Action' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────
 export default function AdminPanel({ user }: { user: any }) {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('dashboard');
 
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  // Data
+  const [allUsers, setAllUsers]     = useState<any[]>([]);
   const [allArtworks, setAllArtworks] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [adminSubTab, setAdminSubTab] = useState<'stats' | 'users' | 'artworks' | 'reports' | 'logs'>('stats');
+  const [reports, setReports]       = useState<any[]>([]);
+  const [auditLogs, setAuditLogs]   = useState<any[]>([]);
 
-  const ITEMS_PER_PAGE = 10;
-  const [userPage, setUserPage] = useState(1);
-  const [artworkPage, setArtworkPage] = useState(1);
-  const [reportPage, setReportPage] = useState(1);
-  const [logPage, setLogPage] = useState(1);
+  // Search/filter
+  const [userSearch, setUserSearch]       = useState('');
+  const [artworkSearch, setArtworkSearch] = useState('');
+  const [reportSearch, setReportSearch]   = useState('');
+  const [selectedArtist, setSelectedArtist] = useState<any>(null); // for "edit folder" modal
 
-  const renderPagination = (currentPage: number, setPage: (p: number) => void, totalItems: number) => {
-    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-    if (totalPages <= 1) return null;
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', padding: '15px', borderTop: '1px solid var(--panel-border)', marginTop: '10px' }}>
-        <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button>
-        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Page {currentPage} of {totalPages}</span>
-        <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>Next</button>
-      </div>
-    );
-  };
-
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ name: '', username: '' });
-
-  const [suspendModalUser, setSuspendModalUser] = useState<any>(null);
-  const [suspendDays, setSuspendDays] = useState('7');
-  
-  const [banModalUser, setBanModalUser] = useState<any>(null);
-  const [unbanModalUser, setUnbanModalUser] = useState<any>(null);
+  // Modals
+  const [roleModal, setRoleModal]           = useState<any>(null);
+  const [suspendModal, setSuspendModal]     = useState<any>(null);
+  const [banModal, setBanModal]             = useState<any>(null);
+  const [unbanModal, setUnbanModal]         = useState<any>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<any>(null);
-  
   const [deleteArtworkModal, setDeleteArtworkModal] = useState<any>(null);
-  const [editArtworkDescModal, setEditArtworkDescModal] = useState<any>(null);
-  const [editDescForm, setEditDescForm] = useState('');
-  
-  const [takeDownReportModal, setTakeDownReportModal] = useState<any>(null);
-  const [viewReportModal, setViewReportModal] = useState<any>(null);
-  const [reportSearchQuery, setReportSearchQuery] = useState('');
+  const [editArtworkModal, setEditArtworkModal] = useState<any>(null);
+  const [editArtworkForm, setEditArtworkForm] = useState({ title: '', description: '', category: '' });
+  const [suspendDays, setSuspendDays]       = useState('7');
+  const [pendingRole, setPendingRole]       = useState('');
 
+  // Pagination
+  const PER_PAGE = 12;
+  const [userPage, setUserPage]       = useState(1);
+  const [artworkPage, setArtworkPage] = useState(1);
+  const [reportPage, setReportPage]   = useState(1);
+  const [logPage, setLogPage]         = useState(1);
 
-  async function fetchProfile() {
+  // ── Fetch ────────────────────────────────────────────────────────
+  useEffect(() => { init(); }, []);
+
+  async function init() {
     setLoading(true);
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (data) {
       setProfile(data);
-      if (data.role === 'admin') {
-        fetchAllUsers();
-        fetchAllArtworks();
-        fetchAllReports();
-        fetchAuditLogs();
+      if (canAccessAdmin(data.role)) {
+        await Promise.all([fetchUsers(), fetchArtworks(), fetchReports(), fetchLogs()]);
       }
     }
     setLoading(false);
-  };
-
-  async function fetchAuditLogs() {
-    try {
-      const { data } = await supabase.from('audit_logs').select('*, profiles(username)').order('created_at', { ascending: false }).limit(100);
-      if (data) setAuditLogs(data);
-    } catch {
-       console.log('Audit logs table might not exist yet.');
-    }
   }
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (profile?.role === 'admin' && adminSubTab === 'reports') {
-      interval = setInterval(() => {
-        fetchAllReports();
-      }, 5000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [profile, adminSubTab]);
-
-  async function fetchAllUsers() {
+  async function fetchUsers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setAllUsers(data);
-  };
+  }
 
-  async function fetchAllArtworks() {
-    const { data } = await supabase.from('artworks').select(`
-      *,
-      profiles (name, username)
-    `).order('created_at', { ascending: false });
+  async function fetchArtworks() {
+    const { data } = await supabase.from('artworks').select('*, profiles(id, name, username, role)').order('created_at', { ascending: false });
     if (data) setAllArtworks(data);
-  };
-
-  async function fetchAllReports() {
-    try {
-      const { data, error } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Fetch reports error:', error);
-        const { data: rawData } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
-        if (rawData) await populateReporters(rawData);
-      } else if (data) {
-        await populateReporters(data);
-      }
-    } catch {
-      console.log('Reports table might not exist yet.');
-    }
-  };
-
-  async function populateReporters(reportList: any[]) {
-    const reporterIds = [...new Set(reportList.map(r => r.reporter_id).filter(Boolean))];
-    const reviewerIds = [...new Set(reportList.map(r => r.reviewed_by).filter(Boolean))];
-    const allIds = [...new Set([...reporterIds, ...reviewerIds])];
-
-    if (allIds.length > 0) {
-      const { data: profiles } = await supabase.from('profiles').select('*').in('id', allIds);
-      if (profiles) {
-         const profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
-         const populated = reportList.map(r => ({
-           ...r,
-           reporter: profileMap[r.reporter_id] || r.reporter || null,
-           reviewer: profileMap[r.reviewed_by] || r.reviewer || null
-         }));
-         setReports(populated);
-         return;
-      }
-    }
-    setReports(reportList);
   }
 
-  const confirmSuspendUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!suspendModalUser) return;
-    const days = parseInt(suspendDays);
-    if (isNaN(days) || days <= 0) return;
-    
-    const end = new Date();
-    end.setDate(end.getDate() + days);
-    
+  async function fetchReports() {
     try {
-      const { data, error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModalUser.id).select().single();
-      if (error) throw error;
-      if (!data) throw new Error("Update failed. You may not have administrative permissions to modify this user.");
-      
-      setAllUsers(allUsers.map(user => user.id === suspendModalUser.id ? { ...user, status: 'suspended', suspension_end: end.toISOString() } : user));
-      logAudit('User Suspended', `Suspended @${suspendModalUser.username} for ${days} days.`);
-      toast.success(`@${suspendModalUser.username} suspended for ${days} days.`);
-      setSuspendModalUser(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Error enforcing suspension. Please check your admin RLS policies.');
-    }
-  };
-
-  const confirmBanUser = async () => {
-    if (!banModalUser) return;
-    try {
-      const { data, error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModalUser.id).select().single();
-      if (error) throw error;
-      if (!data) throw new Error("Update failed. You may not have administrative permissions to modify this user.");
-      
-      setAllUsers(allUsers.map(user => user.id === banModalUser.id ? { ...user, status: 'banned', suspension_end: null } : user));
-      logAudit('User Banned', `Permanently banned @${banModalUser.username}.`);
-      toast.success(`@${banModalUser.username} has been permanently banned.`);
-      setBanModalUser(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Error enforcing ban. Please check your admin RLS policies.');
-    }
-  };
-  
-  const confirmUnbanUser = async () => {
-    if (!unbanModalUser) return;
-    try {
-      const { data, error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', unbanModalUser.id).select().single();
-      if (error) throw error;
-      if (!data) throw new Error("Update failed. You may not have administrative permissions to modify this user.");
-      
-      setAllUsers(allUsers.map(user => user.id === unbanModalUser.id ? { ...user, status: 'active', suspension_end: null } : user));
-      toast.success(`@${unbanModalUser.username} is now active.`);
-      setUnbanModalUser(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Error enforcing action. Please check your admin RLS policies.');
-    }
-  };
-
-  const handleDismissReport = async (reportId: string) => {
-    try {
-      let err = null;
-      const { error } = await supabase.from('reports').update({ status: 'dismissed', reviewed_by: profile.id }).eq('id', reportId);
-      if (error && error.message.includes('reviewed_by')) {
-          const { error: fallbackErr } = await supabase.from('reports').update({ status: 'dismissed' }).eq('id', reportId);
-          err = fallbackErr;
-      } else {
-          err = error;
-      }
-      if (err) throw err;
-      
-      logAudit('Report Dismissed', `Dismissed report ticket ID: ${reportId}.`);
-      setReports(reports.map(r => r.id === reportId ? { ...r, status: 'dismissed', reviewed_by: profile.id, reviewer: profile } : r));
-      toast.success("Report dismissed.");
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  };
-
-  const confirmTakeDownArtwork = async () => {
-    if (!takeDownReportModal) return;
-    try {
-      if (takeDownReportModal.artworks?.image_url) {
-        const imgUrl = takeDownReportModal.artworks.image_url;
-        const pathParts = imgUrl.split('/artworks/');
-        if (pathParts.length > 1) {
-            await supabase.storage.from('artworks').remove([pathParts[1]]);
+      const { data } = await supabase.from('reports').select('*, artworks(*, profiles(name, username))').order('created_at', { ascending: false });
+      if (data) {
+        const reporterIds = [...new Set(data.map((r: any) => r.reporter_id).filter(Boolean))];
+        if (reporterIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, username, name').in('id', reporterIds);
+          if (profiles) {
+            const pm = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
+            setReports(data.map((r: any) => ({ ...r, reporter: pm[r.reporter_id] || null })));
+            return;
+          }
         }
+        setReports(data);
       }
-      await supabase.from('artworks').delete().eq('id', takeDownReportModal.artwork_id);
-      
-      let err = null;
-      const { error } = await supabase.from('reports').update({ status: 'resolved', reviewed_by: profile.id }).eq('id', takeDownReportModal.id);
-      if (error && error.message.includes('reviewed_by')) {
-          const { error: fallbackErr } = await supabase.from('reports').update({ status: 'resolved' }).eq('id', takeDownReportModal.id);
-          err = fallbackErr;
-      } else {
-          err = error;
-      }
-      if (err) throw err;
-
-      setReports(reports.map(r => r.id === takeDownReportModal.id ? { ...r, status: 'resolved', reviewed_by: profile.id, reviewer: profile } : r));
-      setAllArtworks(allArtworks.filter(a => a.id !== takeDownReportModal.artwork_id));
-      logAudit('Artwork Takedown', `Enforced takedown for reported artwork ID: ${takeDownReportModal.artwork_id}.`);
-      toast.success("Artwork taken down and report resolved.");
-      setTakeDownReportModal(null);
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  };
-
-
-  const confirmDeleteUser = async () => {
-    if (!deleteUserModal) return;
-
-    try {
-      const { error } = await supabase.from('profiles').delete().eq('id', deleteUserModal.id);
-      if (error) throw error;
-      setAllUsers(allUsers.filter(u => u.id !== deleteUserModal.id));
-      logAudit('User Deleted', `Permanently deleted user @${deleteUserModal.username}.`);
-      toast.success("User deleted successfully.");
-      setDeleteUserModal(null);
-    } catch (err: any) {
-      toast.error("Error deleting user: " + err.message);
-    }
-  };
-
-  const handleEditUser = (u: any) => {
-    setEditingUser(u);
-    setEditForm({ name: u.name, username: u.username });
-  };
-
-  const saveEditUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    
-    if (editForm.name === editingUser.name && editForm.username === editingUser.username) {
-        setEditingUser(null);
-        return;
-    }
-
-    try {
-      const { error } = await supabase.from('profiles').update({ name: editForm.name, username: editForm.username }).eq('id', editingUser.id);
-      if (error) throw error;
-      setAllUsers(allUsers.map(user => user.id === editingUser.id ? { ...user, name: editForm.name, username: editForm.username } : user));
-      toast.success("User details updated.");
-      setEditingUser(null);
-    } catch (err: any) {
-      toast.error("Error updating user: " + err.message);
-    }
-  };
-
-  const confirmDeleteArtworkAdmin = async () => {
-    if (!deleteArtworkModal) return;
-    try {
-      await supabase.storage.from('artworks').remove([deleteArtworkModal.image_path]);
-      const { error } = await supabase.from('artworks').delete().eq('id', deleteArtworkModal.id);
-      if (error) throw error;
-      setAllArtworks(allArtworks.filter(a => a.id !== deleteArtworkModal.id));
-      logAudit('Admin Artwork Deletion', `Deleted artwork: ${deleteArtworkModal.title}.`);
-      toast.success("Artwork removed successfully.");
-      setDeleteArtworkModal(null);
-    } catch (err: any) {
-      toast.error("Error removing artwork: " + err.message);
-    }
-  };
-
-  const confirmUpdateArtworkDescr = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editArtworkDescModal || editDescForm === editArtworkDescModal.description) {
-        setEditArtworkDescModal(null);
-        return;
-    }
-
-    try {
-      const { error } = await supabase.from('artworks').update({ description: editDescForm }).eq('id', editArtworkDescModal.id);
-      if (error) throw error;
-      setAllArtworks(allArtworks.map(a => a.id === editArtworkDescModal.id ? { ...a, description: editDescForm } : a));
-      toast.success("Description updated successfully.");
-      setEditArtworkDescModal(null);
-    } catch (err: any) {
-      toast.error("Error updating description: " + err.message);
-    }
-  };
-
-  const handleUpdateUserRole = async (userId: string, newRole: string) => {
-    if (userId === user.id) {
-      toast.error("You cannot change your own role!");
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
-      if (error) throw error;
-      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
-    } catch (err: any) {
-      toast.error("Error updating user: " + err.message);
-    }
-  };
-
-  if (loading) return <div style={{ padding: '100px', textAlign: 'center' }}>Loading Admin Panel...</div>;
-
-  if (profile?.role !== 'admin') {
-    return <div style={{ padding: '100px', textAlign: 'center', color: 'red' }}>Unauthorized Access</div>;
+    } catch { /* table may not exist */ }
   }
 
-  const filteredReports = reports.filter(r => {
-    const q = reportSearchQuery.toLowerCase();
-    const title = r.artworks?.title?.toLowerCase() || '';
-    const reason = r.reason?.toLowerCase() || '';
-    const reporter = r.reporter?.username?.toLowerCase() || '';
-    return title.includes(q) || reason.includes(q) || reporter.includes(q);
+  async function fetchLogs() {
+    try {
+      const { data } = await supabase.from('audit_logs').select('*, profiles(username)').order('created_at', { ascending: false }).limit(200);
+      if (data) setAuditLogs(data);
+    } catch { /* table may not exist */ }
+  }
+
+  // ── Stats ────────────────────────────────────────────────────────
+  const stats = {
+    totalUsers:    allUsers.length,
+    totalArtworks: allArtworks.length,
+    pendingReports: reports.filter(r => r.status === 'pending').length,
+    restricted:    allUsers.filter(u => u.status === 'banned' || u.status === 'suspended').length,
+    admins:        allUsers.filter(u => u.role === 'admin').length,
+    artists:       allUsers.filter(u => u.role === 'artist' || u.role === 'curator').length,
+  };
+
+  // ── Filtered data ─────────────────────────────────────────────────
+  const filteredUsers = allUsers.filter(u => {
+    const q = userSearch.toLowerCase();
+    return !q || u.name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
   });
 
-  return (
-    <div className="settings-container">
-      <div className="settings-sidebar">
-        <ul className="sidebar-menu">
-          <li>
-            <button className={`tab-btn ${adminSubTab === 'stats' ? 'active' : ''}`} onClick={() => setAdminSubTab('stats')}>
-              <BarChart3 size={18} /> Platform Stats
-            </button>
-          </li>
-          <li>
-            <button className={`tab-btn ${adminSubTab === 'users' ? 'active' : ''}`} onClick={() => setAdminSubTab('users')}>
-              <Users size={18} /> Manage Users
-            </button>
-          </li>
-          <li>
-            <button className={`tab-btn ${adminSubTab === 'artworks' ? 'active' : ''}`} onClick={() => setAdminSubTab('artworks')}>
-              <Shield size={18} /> Global Artworks
-            </button>
-          </li>
-          <li>
-            <button className={`tab-btn ${adminSubTab === 'reports' ? 'active' : ''}`} onClick={() => setAdminSubTab('reports')}>
-              <Shield size={18} /> Tickets & Reports
-            </button>
-          </li>
-          <li>
-            <button className={`tab-btn ${adminSubTab === 'logs' ? 'active' : ''}`} onClick={() => { setAdminSubTab('logs'); fetchAuditLogs(); }}>
-              <Activity size={18} /> Audit Logs
-            </button>
-          </li>
-        </ul>
+  const filteredArtworks = allArtworks.filter(a => {
+    const q = artworkSearch.toLowerCase();
+    if (selectedArtist) return a.profiles?.id === selectedArtist.id;
+    return !q || a.title?.toLowerCase().includes(q) || a.profiles?.username?.toLowerCase().includes(q);
+  });
+
+  const filteredReports = reports.filter(r => {
+    const q = reportSearch.toLowerCase();
+    return !q || r.artworks?.title?.toLowerCase().includes(q) || r.reason?.toLowerCase().includes(q) || r.reporter?.username?.toLowerCase().includes(q);
+  });
+
+  // ── Actions ───────────────────────────────────────────────────────
+  const handleChangeRole = async () => {
+    if (!roleModal || !pendingRole) return;
+    if (roleModal.id === user.id) { toast.error("Cannot change your own role."); return; }
+    const { error } = await supabase.from('profiles').update({ role: pendingRole }).eq('id', roleModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllUsers(prev => prev.map(u => u.id === roleModal.id ? { ...u, role: pendingRole } : u));
+    logAudit('Role Changed', `Changed @${roleModal.username} role to ${pendingRole}.`);
+    toast.success(`Role updated to ${ROLES[pendingRole as ArtVaultRole]?.label || pendingRole}.`);
+    setRoleModal(null);
+  };
+
+  const handleSuspend = async () => {
+    if (!suspendModal) return;
+    const days = parseInt(suspendDays);
+    const end = new Date(); end.setDate(end.getDate() + days);
+    const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllUsers(prev => prev.map(u => u.id === suspendModal.id ? { ...u, status: 'suspended', suspension_end: end.toISOString() } : u));
+    logAudit('User Suspended', `Suspended @${suspendModal.username} for ${days} days.`);
+    toast.success(`@${suspendModal.username} suspended for ${days} days.`);
+    setSuspendModal(null);
+  };
+
+  const handleBan = async () => {
+    if (!banModal) return;
+    const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllUsers(prev => prev.map(u => u.id === banModal.id ? { ...u, status: 'banned' } : u));
+    logAudit('User Banned', `Permanently banned @${banModal.username}.`);
+    toast.success(`@${banModal.username} permanently banned.`);
+    setBanModal(null);
+  };
+
+  const handleUnban = async () => {
+    if (!unbanModal) return;
+    const { error } = await supabase.from('profiles').update({ status: 'active', suspension_end: null }).eq('id', unbanModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllUsers(prev => prev.map(u => u.id === unbanModal.id ? { ...u, status: 'active' } : u));
+    toast.success(`@${unbanModal.username} access restored.`);
+    setUnbanModal(null);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUserModal) return;
+    const { error } = await supabase.from('profiles').delete().eq('id', deleteUserModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllUsers(prev => prev.filter(u => u.id !== deleteUserModal.id));
+    logAudit('User Deleted', `Deleted @${deleteUserModal.username}.`);
+    toast.success('User account deleted.');
+    setDeleteUserModal(null);
+  };
+
+  const handleDeleteArtwork = async () => {
+    if (!deleteArtworkModal) return;
+    const url = deleteArtworkModal.image_url;
+    if (url) {
+      const path = url.split('/artworks/')?.[1];
+      if (path) await supabase.storage.from('artworks').remove([path]);
+    }
+    const { error } = await supabase.from('artworks').delete().eq('id', deleteArtworkModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllArtworks(prev => prev.filter(a => a.id !== deleteArtworkModal.id));
+    logAudit('Artwork Deleted', `Admin deleted artwork: ${deleteArtworkModal.title}.`);
+    toast.success('Artwork removed from registry.');
+    setDeleteArtworkModal(null);
+  };
+
+  const handleSaveArtwork = async () => {
+    if (!editArtworkModal) return;
+    const { error } = await supabase.from('artworks').update({
+      title: editArtworkForm.title,
+      description: editArtworkForm.description,
+      category: editArtworkForm.category,
+    }).eq('id', editArtworkModal.id);
+    if (error) { toast.error(error.message); return; }
+    setAllArtworks(prev => prev.map(a => a.id === editArtworkModal.id ? { ...a, ...editArtworkForm } : a));
+    logAudit('Artwork Edited', `Admin edited artwork: ${editArtworkForm.title}.`);
+    toast.success('Artwork record updated.');
+    setEditArtworkModal(null);
+  };
+
+  const handleDismissReport = async (id: string) => {
+    await supabase.from('reports').update({ status: 'dismissed', reviewed_by: profile.id }).eq('id', id);
+    setReports(prev => prev.map(r => r.id === id ? { ...r, status: 'dismissed' } : r));
+    logAudit('Report Dismissed', `Dismissed report ${id}.`);
+    toast.success('Report dismissed.');
+  };
+
+  const handleTakedown = async (report: any) => {
+    if (report.artwork_id) {
+      const url = report.artworks?.image_url;
+      if (url) { const p = url.split('/artworks/')?.[1]; if (p) await supabase.storage.from('artworks').remove([p]); }
+      await supabase.from('artworks').delete().eq('id', report.artwork_id);
+      setAllArtworks(prev => prev.filter(a => a.id !== report.artwork_id));
+    }
+    await supabase.from('reports').update({ status: 'resolved', reviewed_by: profile.id }).eq('id', report.id);
+    setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'resolved' } : r));
+    logAudit('Artwork Takedown', `Enforced takedown for reported artwork.`);
+    toast.success('Artwork removed and report resolved.');
+  };
+
+  // ── Pagination helper ──────────────────────────────────────────────
+  function Pagination({ page, setPage, total }: { page: number; setPage: (p: number) => void; total: number }) {
+    const pages = Math.ceil(total / PER_PAGE);
+    if (pages <= 1) return null;
+    return (
+      <div className="ap-pagination">
+        <button className="ap-page-btn" disabled={page === 1} onClick={() => setPage(page - 1)}>←</button>
+        <span className="ap-page-info">{page} / {pages}</span>
+        <button className="ap-page-btn" disabled={page === pages} onClick={() => setPage(page + 1)}>→</button>
       </div>
+    );
+  }
 
-      <div className="settings-content">
-        <div className="settings-header">
-          <h2>Administrator Gateway</h2>
-          <p>Global oversight and moderation tools</p>
+  // ── Guards ─────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="ap-loading">
+      <div className="ap-loading-spinner" />
+      <p>Loading Admin Panel…</p>
+    </div>
+  );
+
+  if (!profile || !canAccessAdmin(profile.role)) return (
+    <div className="ap-unauthorized">
+      <div className="ap-unauth-icon">⛔</div>
+      <h2>Unauthorized Access</h2>
+      <p>You do not have permission to access the Administrator Panel.</p>
+    </div>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────
+  return (
+    <div className="ap-root">
+
+      {/* Sidebar */}
+      <aside className="ap-sidebar">
+        <div className="ap-sidebar-brand">
+          <span className="ap-sidebar-label">ADMIN GATEWAY</span>
         </div>
+        {([
+          { id: 'dashboard', icon: '◈', label: 'Dashboard',     badge: undefined as number | undefined },
+          { id: 'users',     icon: '◉', label: 'Users & Roles',  badge: undefined as number | undefined },
+          { id: 'registry',  icon: '⊞', label: 'Art Registry',   badge: undefined as number | undefined },
+          { id: 'reports',   icon: '⚑', label: 'Reports',        badge: stats.pendingReports as number | undefined },
+          { id: 'logs',      icon: '≡', label: 'Audit Logs',     badge: undefined as number | undefined },
+        ] as const).map(item => (
+          <button
+            key={item.id}
+            className={`ap-nav-item ${tab === item.id ? 'active' : ''}`}
+            onClick={() => { setTab(item.id); if (item.id === 'logs') fetchLogs(); }}
+          >
+            <span className="ap-nav-icon">{item.icon}</span>
+            <span className="ap-nav-label">{item.label}</span>
+            {item.badge ? <span className="ap-nav-badge">{item.badge}</span> : null}
+          </button>
+        ))}
+      </aside>
 
-        {adminSubTab === 'stats' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                <Users size={32} style={{ color: '#3b82f6', marginBottom: '10px' }} />
-                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{allUsers.length}</div>
-                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Registered Users</div>
-              </div>
+      {/* Main */}
+      <main className="ap-main">
 
-              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, transparent 100%)', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
-                <Shield size={32} style={{ color: '#a855f7', marginBottom: '10px' }} />
-                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{allArtworks.length}</div>
-                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Global Artworks</div>
-              </div>
-
-              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, transparent 100%)', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-                <Activity size={32} style={{ color: '#22c55e', marginBottom: '10px' }} />
-                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{allUsers.filter(u => u.role === 'admin').length}</div>
-                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Admins</div>
-              </div>
-
-              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, transparent 100%)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
-                <BarChart3 size={32} style={{ color: '#eab308', marginBottom: '10px' }} />
-                <div style={{ fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{reports.filter(r => r.status === 'pending').length}</div>
-                <div style={{ color: 'var(--text-secondary)', marginTop: '5px', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Pending Tickets</div>
-              </div>
+        {/* ── DASHBOARD ── */}
+        {tab === 'dashboard' && (
+          <div className="ap-content">
+            <div className="ap-page-header">
+              <h1 className="ap-page-title">Platform Overview</h1>
+              <p className="ap-page-sub">Real-time statistics and activity for Art Vault</p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
-              <div className="content-card">
-                <h3 style={{ marginTop: 0, marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Activity size={18} style={{ color: 'var(--primary)' }} /> Live Audit Feed
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {auditLogs.slice(0, 5).map(log => (
-                    <div key={log.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{log.action}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{log.details}</div>
+            <div className="ap-stat-grid">
+              {[
+                { label: 'Total Users',       value: stats.totalUsers,     icon: '◉', color: '#1c1917' },
+                { label: 'Registered Works',  value: stats.totalArtworks,  icon: '⊞', color: '#b8975a' },
+                { label: 'Active Artists',    value: stats.artists,        icon: '◈', color: '#0f766e' },
+                { label: 'Pending Reports',   value: stats.pendingReports, icon: '⚑', color: stats.pendingReports > 0 ? '#991b1b' : '#78716c' },
+                { label: 'Admin Staff',       value: stats.admins,         icon: '⊛', color: '#92400e' },
+                { label: 'Restricted Accts',  value: stats.restricted,     icon: '⊘', color: '#b91c1c' },
+              ].map((s, i) => (
+                <div key={i} className="ap-stat-card">
+                  <div className="ap-stat-icon" style={{ color: s.color }}>{s.icon}</div>
+                  <div className="ap-stat-value" style={{ color: s.color }}>{s.value}</div>
+                  <div className="ap-stat-label">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="ap-two-col">
+              <div className="ap-card">
+                <h3 className="ap-card-title">Recent Activity</h3>
+                {auditLogs.length === 0 ? (
+                  <p className="ap-empty">No audit logs yet.</p>
+                ) : auditLogs.slice(0, 8).map(log => (
+                  <div key={log.id} className="ap-log-row">
+                    <div>
+                      <div className="ap-log-action">{log.action}</div>
+                      <div className="ap-log-detail">{log.details}</div>
+                    </div>
+                    <div className="ap-log-meta">
+                      <div>{log.profiles ? `@${log.profiles.username}` : 'System'}</div>
+                      <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="ap-card">
+                <h3 className="ap-card-title">Role Distribution</h3>
+                {(['admin','moderator','curator','artist','user'] as ArtVaultRole[]).map(r => {
+                  const count = allUsers.filter(u => u.role === r).length;
+                  const pct = stats.totalUsers ? Math.round((count / stats.totalUsers) * 100) : 0;
+                  return (
+                    <div key={r} className="ap-role-row">
+                      <div className="ap-role-row-left">
+                        <RoleBadge role={r} />
+                        <span className="ap-role-count">{count}</span>
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'right' }}>
-                        <div>{log.profiles ? `@${log.profiles.username}` : 'System'}</div>
-                        <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                      <div className="ap-role-bar-wrap">
+                        <div className="ap-role-bar" style={{ width: `${pct}%`, background: ROLES[r].color }} />
                       </div>
                     </div>
-                  ))}
-                  {auditLogs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontStyle: 'italic' }}>No recent activity to display.</div>}
-                </div>
-              </div>
-
-              <div className="content-card" style={{ background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, transparent 100%)', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#ef4444' }}>Security Overview</h3>
-                <div style={{ padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', marginBottom: '15px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#ef4444', lineHeight: '1' }}>{allUsers.filter(u => u.status === 'banned' || u.status === 'suspended').length}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '5px' }}>Restricted Accounts</div>
-                </div>
-                <div style={{ padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: 'var(--text-primary)', lineHeight: '1' }}>{auditLogs.length}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '5px' }}>Total Events Logged</div>
-                </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
 
-        {adminSubTab === 'users' && (
-          <div className="content-card">
-            <h3>Artist & User Directory</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>Modify roles using the dynamic selector or permanently remove accounts.</p>
-            <div className="data-table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>User Identity</th>
-                    <th>Privilege Role</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allUsers.slice((userPage - 1) * ITEMS_PER_PAGE, userPage * ITEMS_PER_PAGE).map(u => (
-                    <tr key={u.id}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{u.name}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>@{u.username}</div>
-                      </td>
-                      <td>
-                        <select 
-                          value={u.role} 
-                          onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
-                          disabled={u.id === user.id}
-                          className="search-input"
-                          style={{ width: 'auto', padding: '4px 8px', height: 'auto', background: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}
-                        >
-                          <option value="user">Artist</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </td>
-                      <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                        {u.status === 'banned' ? (
-                          <span style={{ color: 'var(--danger)', fontSize: '12px', fontWeight: 'bold' }}>BANNED</span>
-                        ) : u.status === 'suspended' ? (
-                          <span style={{ color: 'var(--warning)', fontSize: '12px', fontWeight: 'bold' }}>SUSPENDED</span>
-                        ) : null}
-                        
-                        {u.status === 'banned' || u.status === 'suspended' ? (
-                          <button className="btn btn-secondary btn-sm" onClick={() => setUnbanModalUser(u)} disabled={u.id === user.id}>
-                            Lift Suspension
-                          </button>
-                        ) : (
-                          <>
-                            <button className="btn btn-secondary btn-sm" onClick={() => { setSuspendModalUser(u); setSuspendDays('7'); }} disabled={u.id === user.id}>
-                              Suspend
-                            </button>
-                            <button className="btn btn-danger btn-sm" onClick={() => setBanModalUser(u)} disabled={u.id === user.id}>
-                              Ban
-                            </button>
-                          </>
-                        )}
-                        <button className="btn btn-primary btn-sm" onClick={() => handleEditUser(u)}>
-                          <Edit2 size={14} /> Edit
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => setDeleteUserModal(u)} disabled={u.id === user.id}>
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {renderPagination(userPage, setUserPage, allUsers.length)}
+        {/* ── USERS & ROLES ── */}
+        {tab === 'users' && (
+          <div className="ap-content">
+            <div className="ap-page-header">
+              <h1 className="ap-page-title">Users & Roles</h1>
+              <p className="ap-page-sub">Manage accounts, assign roles, and enforce restrictions</p>
             </div>
-          </div>
-        )}
-
-        {adminSubTab === 'artworks' && (
-          <div className="content-card">
-            <h3>Global Artworks Management</h3>
-            <div className="data-table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Preview</th>
-                    <th>Artwork Details</th>
-                    <th>Artist</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allArtworks.slice((artworkPage - 1) * ITEMS_PER_PAGE, artworkPage * ITEMS_PER_PAGE).map(a => (
-                    <tr key={a.id}>
-                      <td>
-                        <img src={a.image_url} alt={a.title} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{a.title}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {a.description}
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ fontSize: '13px' }}>@{a.profiles?.username}</div>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { setEditArtworkDescModal(a); setEditDescForm(a.description || ''); }} style={{ marginRight: '8px' }}>
-                          <Edit2 size={14} /> Edit Descr.
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => setDeleteArtworkModal(a)}>
-                          <Trash2 size={14} /> Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {renderPagination(artworkPage, setArtworkPage, allArtworks.length)}
-            </div>
-          </div>
-        )}
-        {adminSubTab === 'reports' && (
-          <div className="content-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3 style={{ margin: 0 }}>Active Moderation Tickets</h3>
-              <input 
-                type="text" 
-                placeholder="Search reports..." 
-                className="search-input" 
-                style={{ width: '250px' }}
-                value={reportSearchQuery}
-                onChange={e => setReportSearchQuery(e.target.value)}
-              />
-            </div>
-            {reports.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)' }}>No active reports.</p>
-            ) : (
-              <div className="data-table-wrapper">
-                <table className="data-table">
+            <div className="ap-card">
+              <div className="ap-toolbar">
+                <input className="ap-search" placeholder="Search by name, username or email…" value={userSearch} onChange={e => { setUserSearch(e.target.value); setUserPage(1); }} />
+                <span className="ap-count">{filteredUsers.length} accounts</span>
+              </div>
+              <div className="ap-table-wrap">
+                <table className="ap-table">
                   <thead>
                     <tr>
+                      <th>User</th>
+                      <th>Role</th>
                       <th>Status</th>
-                      <th>Reported On</th>
-                      <th>Artwork</th>
-                      <th>Report Reason</th>
-                      <th>Reporter</th>
-                      <th>Reviewer</th>
+                      <th>Joined</th>
                       <th style={{ textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredReports.slice((reportPage - 1) * ITEMS_PER_PAGE, reportPage * ITEMS_PER_PAGE).map(r => (
+                    {filteredUsers.slice((userPage-1)*PER_PAGE, userPage*PER_PAGE).map(u => (
+                      <tr key={u.id}>
+                        <td>
+                          <div className="ap-user-cell">
+                            <div>
+                              <div className="ap-user-name">{u.name || '—'}</div>
+                              <div className="ap-user-sub">@{u.username}</div>
+                              <div className="ap-user-email">{u.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td><RoleBadge role={u.role} /></td>
+                        <td><StatusBadge status={u.status || 'active'} /></td>
+                        <td className="ap-date">{new Date(u.created_at).toLocaleDateString()}</td>
+                        <td>
+                          <div className="ap-action-group">
+                            {/* Change Role */}
+                            <button className="ap-btn ap-btn-sm ap-btn-ghost"
+                              disabled={u.id === user.id}
+                              onClick={() => { setRoleModal(u); setPendingRole(u.role || 'user'); }}
+                            >Change Role</button>
+
+                            {/* View Folder */}
+                            <button className="ap-btn ap-btn-sm ap-btn-ghost"
+                              onClick={() => { setSelectedArtist(u); setArtworkSearch(''); setTab('registry'); }}
+                            >View Folder</button>
+
+                            {/* Suspend / Unban */}
+                            {u.status === 'banned' || u.status === 'suspended' ? (
+                              <button className="ap-btn ap-btn-sm ap-btn-ghost" disabled={u.id === user.id} onClick={() => setUnbanModal(u)}>Restore</button>
+                            ) : (
+                              <>
+                                <button className="ap-btn ap-btn-sm ap-btn-ghost" disabled={u.id === user.id} onClick={() => { setSuspendModal(u); setSuspendDays('7'); }}>Suspend</button>
+                                <button className="ap-btn ap-btn-sm ap-btn-danger" disabled={u.id === user.id} onClick={() => setBanModal(u)}>Ban</button>
+                              </>
+                            )}
+                            <button className="ap-btn ap-btn-sm ap-btn-danger" disabled={u.id === user.id} onClick={() => setDeleteUserModal(u)}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination page={userPage} setPage={setUserPage} total={filteredUsers.length} />
+            </div>
+          </div>
+        )}
+
+        {/* ── REGISTRY ── */}
+        {tab === 'registry' && (
+          <div className="ap-content">
+            <div className="ap-page-header">
+              <div>
+                <h1 className="ap-page-title">
+                  {selectedArtist ? `${selectedArtist.name || selectedArtist.username}'s Folder` : 'Art Registry'}
+                </h1>
+                <p className="ap-page-sub">
+                  {selectedArtist ? `Viewing and editing artwork folder for @${selectedArtist.username}` : 'All registered artworks — edit metadata or remove entries'}
+                </p>
+              </div>
+              {selectedArtist && (
+                <button className="ap-btn ap-btn-ghost" onClick={() => setSelectedArtist(null)}>← All Artworks</button>
+              )}
+            </div>
+            <div className="ap-card">
+              <div className="ap-toolbar">
+                <input className="ap-search" placeholder={selectedArtist ? 'Search in this folder…' : 'Search artwork or artist…'} value={artworkSearch} onChange={e => { setArtworkSearch(e.target.value); setArtworkPage(1); }} />
+                <span className="ap-count">{filteredArtworks.length} works</span>
+              </div>
+              <div className="ap-artwork-grid">
+                {filteredArtworks.slice((artworkPage-1)*PER_PAGE, artworkPage*PER_PAGE).map(a => (
+                  <div key={a.id} className="ap-artwork-card">
+                    <img src={a.image_url} alt={a.title} className="ap-artwork-img" />
+                    <div className="ap-artwork-body">
+                      <div className="ap-artwork-title">{a.title}</div>
+                      <div className="ap-artwork-artist">
+                        by @{a.profiles?.username || '—'}
+                        {a.profiles?.role && <RoleBadge role={a.profiles.role} />}
+                      </div>
+                      <div className="ap-artwork-meta">
+                        {a.category && <span>{a.category}</span>}
+                        {a.year && <span>{a.year}</span>}
+                        {a.valuation && <span>₱{Number(a.valuation).toLocaleString()}</span>}
+                      </div>
+                      {a.description && <div className="ap-artwork-desc">{a.description}</div>}
+                    </div>
+                    <div className="ap-artwork-actions">
+                      <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => {
+                        setEditArtworkModal(a);
+                        setEditArtworkForm({ title: a.title || '', description: a.description || '', category: a.category || '' });
+                      }}>Edit</button>
+                      <button className="ap-btn ap-btn-sm ap-btn-danger" onClick={() => setDeleteArtworkModal(a)}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                {filteredArtworks.length === 0 && <p className="ap-empty">No artworks found.</p>}
+              </div>
+              <Pagination page={artworkPage} setPage={setArtworkPage} total={filteredArtworks.length} />
+            </div>
+          </div>
+        )}
+
+        {/* ── REPORTS ── */}
+        {tab === 'reports' && (
+          <div className="ap-content">
+            <div className="ap-page-header">
+              <h1 className="ap-page-title">Reports & Tickets</h1>
+              <p className="ap-page-sub">Review and action moderation reports submitted by users</p>
+            </div>
+            <div className="ap-card">
+              <div className="ap-toolbar">
+                <input className="ap-search" placeholder="Search reports…" value={reportSearch} onChange={e => { setReportSearch(e.target.value); setReportPage(1); }} />
+                <button className="ap-btn ap-btn-ghost ap-btn-sm" onClick={fetchReports}>↻ Refresh</button>
+              </div>
+              <div className="ap-table-wrap">
+                <table className="ap-table">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Artwork</th>
+                      <th>Reason</th>
+                      <th>Reporter</th>
+                      <th>Date</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredReports.slice((reportPage-1)*PER_PAGE, reportPage*PER_PAGE).map(r => (
                       <tr key={r.id}>
                         <td>
-                          <span style={{ 
-                            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
-                            backgroundColor: r.status === 'pending' ? 'rgba(234, 179, 8, 0.15)' : r.status === 'resolved' ? 'rgba(34, 197, 94, 0.15)' : 'var(--panel-border)',
-                            color: r.status === 'pending' ? '#eab308' : r.status === 'resolved' ? '#22c55e' : '#fff',
-                            border: r.status === 'pending' ? '1px solid rgba(234, 179, 8, 0.3)' : r.status === 'resolved' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid transparent'
-                          }}>
-                            {r.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          {new Date(r.created_at).toLocaleDateString()}
+                          <span className={`ap-report-status ${r.status}`}>{r.status.toUpperCase()}</span>
                         </td>
                         <td>
                           {r.artworks ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <img src={r.artworks.image_url} alt="reported" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                            <div className="ap-report-artwork">
+                              <img src={r.artworks.image_url} alt="" className="ap-report-thumb" />
                               <div>
-                                <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{r.artworks.title}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>by @{r.artworks.profiles?.username}</div>
+                                <div className="ap-user-name">{r.artworks.title}</div>
+                                <div className="ap-user-sub">@{r.artworks.profiles?.username}</div>
                               </div>
                             </div>
-                          ) : (
-                            <span style={{ color: 'var(--text-secondary)' }}>Artwork Deleted</span>
-                          )}
+                          ) : <span className="ap-empty-inline">Deleted</span>}
                         </td>
-                        <td style={{ maxWidth: '200px' }}>
-                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {r.reason}
-                          </div>
-                        </td>
-                        <td style={{ fontSize: '13px' }}>
-                          {r.reporter ? `@${r.reporter.username}` : 'Unknown'}
-                        </td>
-                        <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          {r.status !== 'pending' ? (r.reviewer ? `@${r.reviewer.username}` : 'Unknown Admin') : '-'}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button className="btn btn-primary btn-sm" onClick={() => setViewReportModal(r)} style={{ whiteSpace: 'nowrap' }}>
-                              Review Ticket
-                            </button>
+                        <td className="ap-report-reason">{r.reason}</td>
+                        <td className="ap-date">@{r.reporter?.username || '—'}</td>
+                        <td className="ap-date">{new Date(r.created_at).toLocaleDateString()}</td>
+                        <td>
+                          <div className="ap-action-group">
                             {r.status === 'pending' && (
                               <>
-                                <button className="btn btn-danger btn-sm" onClick={() => setTakeDownReportModal(r)} style={{ whiteSpace: 'nowrap' }}>
-                                  Take Down
-                                </button>
-                                <button className="btn btn-secondary btn-sm" onClick={() => handleDismissReport(r.id)} style={{ whiteSpace: 'nowrap' }}>
-                                  Dismiss
-                                </button>
+                                <button className="ap-btn ap-btn-sm ap-btn-danger" onClick={() => handleTakedown(r)}>Take Down</button>
+                                <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => handleDismissReport(r.id)}>Dismiss</button>
                               </>
                             )}
                           </div>
@@ -657,391 +598,136 @@ export default function AdminPanel({ user }: { user: any }) {
                     ))}
                   </tbody>
                 </table>
-                {renderPagination(reportPage, setReportPage, filteredReports.length)}
+                {filteredReports.length === 0 && <p className="ap-empty" style={{ padding: '32px' }}>No reports found.</p>}
               </div>
-            )}
+              <Pagination page={reportPage} setPage={setReportPage} total={filteredReports.length} />
+            </div>
           </div>
         )}
 
-        {adminSubTab === 'logs' && (
-          <div className="content-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3 style={{ margin: 0 }}>System Audit Logs</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => fetchAuditLogs()}>
-                 Refresh Logs
-              </button>
+        {/* ── AUDIT LOGS ── */}
+        {tab === 'logs' && (
+          <div className="ap-content">
+            <div className="ap-page-header">
+              <h1 className="ap-page-title">Audit Logs</h1>
+              <p className="ap-page-sub">Chronological record of all administrative actions</p>
             </div>
-            {auditLogs.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)' }}>No audit logs available. Run setup_audit_logs.sql in Supabase to enable this feature.</p>
-            ) : (
-              <div className="data-table-wrapper">
-                <table className="data-table">
+            <div className="ap-card">
+              <div className="ap-toolbar">
+                <span className="ap-count">{auditLogs.length} events</span>
+                <button className="ap-btn ap-btn-ghost ap-btn-sm" onClick={fetchLogs}>↻ Refresh</button>
+              </div>
+              <div className="ap-table-wrap">
+                <table className="ap-table">
                   <thead>
                     <tr>
                       <th>Timestamp</th>
-                      <th>User/Actor</th>
+                      <th>Actor</th>
                       <th>Action</th>
                       <th>Details</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {auditLogs.slice((logPage - 1) * ITEMS_PER_PAGE, logPage * ITEMS_PER_PAGE).map(log => (
+                    {auditLogs.slice((logPage-1)*PER_PAGE, logPage*PER_PAGE).map(log => (
                       <tr key={log.id}>
-                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          {new Date(log.created_at).toLocaleString()}
-                        </td>
-                        <td>
-                          {log.profiles ? `@${log.profiles.username}` : 'System/Unknown'}
-                        </td>
-                        <td>
-                          <span style={{ fontWeight: 'bold' }}>{log.action}</span>
-                        </td>
-                        <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          {log.details}
-                        </td>
+                        <td className="ap-date">{new Date(log.created_at).toLocaleString()}</td>
+                        <td className="ap-user-sub">{log.profiles ? `@${log.profiles.username}` : 'System'}</td>
+                        <td><span className="ap-log-action-badge">{log.action}</span></td>
+                        <td className="ap-date">{log.details}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {renderPagination(logPage, setLogPage, auditLogs.length)}
+                {auditLogs.length === 0 && <p className="ap-empty" style={{ padding: '32px' }}>No audit logs available. Ensure the audit_logs table exists in Supabase.</p>}
               </div>
-            )}
+              <Pagination page={logPage} setPage={setLogPage} total={auditLogs.length} />
+            </div>
           </div>
         )}
-      </div>
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>Edit User Identity</h3>
-              <button onClick={() => setEditingUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <form onSubmit={saveEditUser}>
-                <div className="form-group" style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Account Email</label>
-                  <input 
-                    type="text" 
-                    className="search-input" 
-                    value="Restricted by Auth Policies" 
-                    disabled 
-                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                  />
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    Email addresses are tied to core authentication credentials and cannot be changed by administrators due to strict security policies.
-                  </div>
+
+      </main>
+
+      {/* ── MODALS ── */}
+
+      {/* Change Role */}
+      {roleModal && (
+        <ConfirmModal title="Change User Role" onConfirm={handleChangeRole} onCancel={() => setRoleModal(null)}>
+          <p style={{ color: '#57534e', marginBottom: 16 }}>Changing role for <strong>@{roleModal.username}</strong>:</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {(['admin','moderator','curator','artist','user'] as ArtVaultRole[]).map(r => (
+              <label key={r} className={`ap-role-option ${pendingRole === r ? 'selected' : ''}`} onClick={() => setPendingRole(r)}>
+                <input type="radio" checked={pendingRole === r} onChange={() => setPendingRole(r)} style={{ display: 'none' }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <RoleBadge role={r} />
+                  <span style={{ fontSize: 12, color: '#78716c', maxWidth: 240, textAlign: 'right' }}>{ROLES[r].description}</span>
                 </div>
-                <div className="form-group" style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Full Name</label>
-                  <input 
-                    type="text" 
-                    className="search-input" 
-                    value={editForm.name}
-                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                    required 
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: '25px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Username</label>
-                  <input 
-                    type="text" 
-                    className="search-input" 
-                    value={editForm.username}
-                    onChange={e => setEditForm({ ...editForm, username: e.target.value })}
-                    required 
-                  />
-                </div>
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                  Save Changes
-                </button>
-              </form>
-            </div>
+              </label>
+            ))}
           </div>
-        </div>
+        </ConfirmModal>
       )}
 
-      {/* Suspend User Modal */}
-      {suspendModalUser && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>Suspend Account</h3>
-              <button onClick={() => setSuspendModalUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <form onSubmit={confirmSuspendUser}>
-                <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                  You are about to suspend <strong>@{suspendModalUser.username}</strong>. They will be immediately disconnected and unable to log in until the suspension expires.
-                </div>
-                <div className="form-group" style={{ marginBottom: '25px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Suspension Duration (Days)</label>
-                  <select 
-                    className="search-input" 
-                    value={suspendDays}
-                    onChange={e => setSuspendDays(e.target.value)}
-                    required 
-                  >
-                    <option value="1">1 Day</option>
-                    <option value="3">3 Days</option>
-                    <option value="7">1 Week</option>
-                    <option value="14">2 Weeks</option>
-                    <option value="30">1 Month</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setSuspendModalUser(null)} style={{ flex: 1 }}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    Enforce Suspension
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+      {/* Suspend */}
+      {suspendModal && (
+        <ConfirmModal title="Suspend Account" danger onConfirm={handleSuspend} onCancel={() => setSuspendModal(null)}
+          message={`Suspend @${suspendModal.username}. They will be unable to log in until the suspension expires.`}>
+          <label className="ap-form-label">Duration</label>
+          <select className="ap-select" value={suspendDays} onChange={e => setSuspendDays(e.target.value)}>
+            <option value="1">1 Day</option>
+            <option value="3">3 Days</option>
+            <option value="7">1 Week</option>
+            <option value="14">2 Weeks</option>
+            <option value="30">1 Month</option>
+          </select>
+        </ConfirmModal>
       )}
 
-      {/* Ban User Modal */}
-      {banModalUser && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Permanent Ban</h3>
-              <button onClick={() => setBanModalUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                You are about to <strong>permanently ban @{banModalUser.username}</strong>. 
-                <br /><br />
-                This action will permanently restrict their access to ArtVault. Their live sessions will be terminated immediately. Are you absolutely sure?
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setBanModalUser(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-danger" onClick={confirmBanUser} style={{ flex: 1 }}>
-                  Yes, Ban User
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Ban */}
+      {banModal && (
+        <ConfirmModal title="Permanently Ban Account" danger
+          message={`You are about to permanently ban @${banModal.username}. Their sessions will be terminated and they will be unable to log in again. This cannot be undone without admin intervention.`}
+          onConfirm={handleBan} onCancel={() => setBanModal(null)} />
       )}
 
-      {/* Unban User Modal */}
-      {unbanModalUser && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--success)' }}>Lift Restriction</h3>
-              <button onClick={() => setUnbanModalUser(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                Are you sure you want to restore access for <strong>@{unbanModalUser.username}</strong>? 
-                This will lift their {unbanModalUser.status === 'banned' ? 'ban' : 'suspension'} and immediately allow them to log in again.
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setUnbanModalUser(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-primary" onClick={confirmUnbanUser} style={{ flex: 1 }}>
-                  Yes, Lift Restriction
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Unban */}
+      {unbanModal && (
+        <ConfirmModal title="Restore Account Access"
+          message={`Restore access for @${unbanModal.username}? This will lift their ${unbanModal.status === 'banned' ? 'ban' : 'suspension'} immediately.`}
+          onConfirm={handleUnban} onCancel={() => setUnbanModal(null)} />
       )}
 
-      {/* Delete User Modal */}
+      {/* Delete User */}
       {deleteUserModal && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete User Account</h3>
-              <button onClick={() => setDeleteUserModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                Are you sure you want to permanently delete <strong>@{deleteUserModal.username}</strong>? 
-                This action will irrevocably destroy their profile and <strong>all</strong> of their uploaded artworks.
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setDeleteUserModal(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-danger" onClick={confirmDeleteUser} style={{ flex: 1 }}>
-                  Yes, Delete User
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal title="Delete User Account" danger
+          message={`Permanently delete @${deleteUserModal.username}? This will irrevocably destroy their profile and all uploaded artworks. This action cannot be undone.`}
+          onConfirm={handleDeleteUser} onCancel={() => setDeleteUserModal(null)} />
       )}
 
-      {/* Delete Artwork Modal */}
+      {/* Delete Artwork */}
       {deleteArtworkModal && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Global Artwork Deletion</h3>
-              <button onClick={() => setDeleteArtworkModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                Are you sure you want to delete <strong>{deleteArtworkModal.title}</strong> globally? 
-                This action cannot be undone.
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setDeleteArtworkModal(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-danger" onClick={confirmDeleteArtworkAdmin} style={{ flex: 1 }}>
-                  Yes, Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal title="Remove Artwork from Registry" danger
+          message={`Permanently remove "${deleteArtworkModal.title}" from the registry? This action cannot be undone.`}
+          onConfirm={handleDeleteArtwork} onCancel={() => setDeleteArtworkModal(null)} />
       )}
 
-      {/* Edit Artwork Description Modal */}
-      {editArtworkDescModal && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>Edit Artwork Description</h3>
-              <button onClick={() => setEditArtworkDescModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
+      {/* Edit Artwork */}
+      {editArtworkModal && (
+        <ConfirmModal title="Edit Artwork Record" onConfirm={handleSaveArtwork} onCancel={() => setEditArtworkModal(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 8 }}>
+            <div>
+              <label className="ap-form-label">Title</label>
+              <input className="ap-input" value={editArtworkForm.title} onChange={e => setEditArtworkForm(f => ({ ...f, title: e.target.value }))} />
             </div>
-            <div className="modal-body">
-              <form onSubmit={confirmUpdateArtworkDescr}>
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Description</label>
-                  <textarea 
-                    className="search-input" 
-                    style={{ height: '100px', resize: 'vertical' }}
-                    value={editDescForm}
-                    onChange={e => setEditDescForm(e.target.value)}
-                  ></textarea>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setEditArtworkDescModal(null)} style={{ flex: 1 }}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    Save Changes
-                  </button>
-                </div>
-              </form>
+            <div>
+              <label className="ap-form-label">Category</label>
+              <input className="ap-input" value={editArtworkForm.category} onChange={e => setEditArtworkForm(f => ({ ...f, category: e.target.value }))} />
+            </div>
+            <div>
+              <label className="ap-form-label">Description</label>
+              <textarea className="ap-input" rows={4} style={{ resize: 'vertical' }} value={editArtworkForm.description} onChange={e => setEditArtworkForm(f => ({ ...f, description: e.target.value }))} />
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Take Down Report Artwork Modal */}
-      {takeDownReportModal && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Take Down Reported Artwork</h3>
-              <button onClick={() => setTakeDownReportModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
-                You are about to enforce a takedown on a reported artwork. This will permanently delete the image from the global showcase and resolve the report. Proceed?
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setTakeDownReportModal(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-danger" onClick={confirmTakeDownArtwork} style={{ flex: 1 }}>
-                  Yes, Enforce Takedown
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* View Full Report Modal */}
-      {viewReportModal && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>Moderation Ticket Details</h3>
-              <button onClick={() => setViewReportModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-                {viewReportModal.artworks ? (
-                  <>
-                    <img src={viewReportModal.artworks.image_url} alt="Reported Artwork" style={{ width: '150px', height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--panel-border)' }} />
-                    <div>
-                      <h4 style={{ margin: '0 0 5px 0' }}>{viewReportModal.artworks.title}</h4>
-                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
-                        Posted by: <strong>@{viewReportModal.artworks.profiles?.username || 'Unknown'}</strong>
-                      </p>
-                      <div style={{ fontSize: '13px', lineHeight: '1.4', color: 'var(--text-secondary)' }}>
-                        {viewReportModal.artworks.description || 'No description provided.'}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ width: '100%', padding: '20px', textAlign: 'center', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--panel-border)' }}>
-                    Artwork has been deleted.
-                  </div>
-                )}
-              </div>
-              
-              <div style={{ padding: '15px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.2)', marginBottom: '20px' }}>
-                <div style={{ marginBottom: '10px', fontSize: '13px', display: 'flex', justifyContent: 'space-between' }}>
-                  <div><strong>Reported By:</strong> {viewReportModal.reporter ? `@${viewReportModal.reporter.username}` : 'Unknown'}</div>
-                  {viewReportModal.status !== 'pending' && (
-                    <div style={{ color: viewReportModal.status === 'resolved' ? '#22c55e' : 'var(--text-secondary)' }}>
-                      <strong>Reviewed By:</strong> {viewReportModal.reviewer ? `@${viewReportModal.reviewer.username}` : 'Unknown Admin'}
-                    </div>
-                  )}
-                </div>
-                <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Reason for Report:</div>
-                <div style={{ fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
-                  {viewReportModal.reason}
-                </div>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {viewReportModal.status === 'pending' && (
-                  <button type="button" className="btn btn-danger" onClick={() => { setViewReportModal(null); setTakeDownReportModal(viewReportModal); }} style={{ flex: 1 }}>
-                    Take Down Artwork
-                  </button>
-                )}
-                <button type="button" className="btn btn-secondary" onClick={() => setViewReportModal(null)} style={{ flex: 1 }}>
-                  Close Ticket
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </ConfirmModal>
       )}
 
     </div>

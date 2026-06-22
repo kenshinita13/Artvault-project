@@ -1,21 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { X, LogOut, LayoutDashboard, Users, User, Settings, Shield, Home, FolderOpen, Plus, Bell } from 'lucide-react';
+import { LogOut, User, Settings, Shield, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
 import { useCachedQuery } from './useCachedQuery';
 import './Dashboard.css';
+import { canUpload, canAccessAdmin } from './roles';
 
 export default function Layout({ user }: { user: any }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -126,7 +125,6 @@ export default function Layout({ user }: { user: any }) {
         .limit(30);
       if (data) {
         setNotifications(data);
-        setUnreadCount(data.filter((n: any) => !n.is_read).length);
       }
     };
     fetchNotifs();
@@ -143,18 +141,6 @@ export default function Layout({ user }: { user: any }) {
     };
   }, [user?.id]);
 
-  const markAsRead = async () => {
-    if (unreadCount === 0 || !user) return;
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
-    setUnreadCount(0);
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-  };
-
-  const toggleNotifications = () => {
-    if (!notificationsOpen) markAsRead();
-    setNotificationsOpen(!notificationsOpen);
-  };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -163,162 +149,38 @@ export default function Layout({ user }: { user: any }) {
 
   return (
     <>
-      {/* ─── LEFT SIDEBAR (Desktop only) ─── */}
-      <nav className="hidden md:flex fixed top-0 left-0 h-screen w-[72px] bg-[#09090b]/95 backdrop-blur-md border-r border-white/5 flex-col items-center py-5 z-[1000] gap-1">
-        {/* Logo */}
-        <Link to="/home" className="mb-6 mt-1">
-          <img src="/Artlogo.png" alt="AV" className="w-10 h-10 object-contain mix-blend-screen" />
-        </Link>
-
-        {/* Nav Items */}
-        <NavIcon to="/home" icon={<Home size={22} />} label="Home" active={isActive('/home')} />
-        {user && <NavIcon to="/boards" icon={<FolderOpen size={22} />} label="My Boards" active={isActive('/boards')} />}
-        {user && (
-          <button
-            onClick={() => setCreatePanelOpen(true)}
-            className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200 ${createPanelOpen ? 'bg-white/15 text-white' : 'text-zinc-500 hover:bg-white/8 hover:text-white'}`}
-          >
-            <Plus size={24} />
-            <span className="absolute left-[60px] px-3 py-1.5 bg-zinc-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg border border-white/5">
-              Create
-            </span>
-          </button>
-        )}
-        {user && <NavIcon to="/artists" icon={<Users size={22} />} label="Artists" active={isActive('/artists')} />}
-        {user && (
-          <button
-            onClick={toggleNotifications}
-            className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200 ${notificationsOpen ? 'bg-white/15 text-white' : 'text-zinc-500 hover:bg-white/8 hover:text-white'}`}
-          >
-            <div className="relative">
-              <Bell size={22} />
-              {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{unreadCount}</span>}
-            </div>
-            <span className="absolute left-[60px] px-3 py-1.5 bg-zinc-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg border border-white/5 z-[2000]">
-              Notifications
-            </span>
-          </button>
-        )}
-
-        {/* Bottom icons */}
-        <div className="mt-auto flex flex-col items-center gap-1 mb-3">
-          {user && <NavIcon to="/settings" icon={<Settings size={22} />} label="Settings" active={isActive('/settings')} />}
-          {profile?.role === 'admin' && <NavIcon to="/admin_panel" icon={<Shield size={22} />} label="Admin" active={isActive('/admin_panel')} />}
-        </div>
-      </nav>
-
-      {/* ─── MOBILE BOTTOM TAB BAR ─── */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full h-16 bg-[#09090b]/95 backdrop-blur-md border-t border-white/5 flex items-center justify-around z-[1000] px-2">
-        <MobileTab to="/home" icon={<Home size={22} />} label="Home" active={isActive('/home')} />
-        {user && <MobileTab to="/boards" icon={<FolderOpen size={22} />} label="Boards" active={isActive('/boards')} />}
-        {user && (
-          <button
-            onClick={() => setCreatePanelOpen(true)}
-            className="flex flex-col items-center justify-center gap-0.5 text-zinc-500 active:text-white"
-          >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
-              <Plus size={20} />
-            </div>
-          </button>
-        )}
-        {user && <MobileTab to="/settings" icon={<Settings size={22} />} label="Settings" active={isActive('/settings')} />}
-        {user ? (
-          <button onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} className="flex flex-col items-center justify-center gap-0.5 relative">
-            <Avatar userId={user.id} name={user.user_metadata?.name || 'U'} size={28} />
-          </button>
-        ) : (
-          <MobileTab to="/login" icon={<User size={22} />} label="Sign In" active={false} />
-        )}
-      </nav>
-
-      {/* ─── Slide-out Drawer Navigation (hamburger) ─── */}
-      <div className={`nav-drawer ${drawerOpen ? 'open' : ''}`}>
-        <div className="nav-drawer-header">
-          <h3 style={{ margin: 0 }}>🧭 Quick Navigation</h3>
-          <button className="close-drawer" onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
-            <X size={24} />
-          </button>
-        </div>
-        <div className="nav-drawer-body">
-          <Link to="/home" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-            <LayoutDashboard className="drawer-icon" /> Global Showcase
-          </Link>
-          <Link to="/artists" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-            <Users className="drawer-icon" /> Artists Directory
-          </Link>
-          {user && (
-            <>
-              <Link to="/boards" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-                <FolderOpen className="drawer-icon" /> My Boards
-              </Link>
-              <Link to={`/profile/${user.id}`} className="drawer-item" onClick={() => setDrawerOpen(false)}>
-                <User className="drawer-icon" /> My Public Profile
-              </Link>
-              <Link to="/settings" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-                <Settings className="drawer-icon" /> Studio Dashboard / Settings
-              </Link>
-            </>
-          )}
-          {profile?.role === 'admin' && (
-            <Link to="/admin_panel" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-              <Shield className="drawer-icon" /> Administrator Panel
-            </Link>
-          )}
-          <hr className="drawer-divider" />
-          {user ? (
-            <button className="drawer-item logout" onClick={handleLogout} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer' }}>
-              <LogOut className="drawer-icon" /> Logout Session
-            </button>
-          ) : (
-            <Link to="/login" className="drawer-item" onClick={() => setDrawerOpen(false)}>
-              <LogOut className="drawer-icon" style={{ transform: 'rotate(180deg)' }} /> Sign In / Sign Up
-            </Link>
-          )}
-        </div>
-      </div>
-      
-      {/* Drawer overlay */}
-      <div 
-        className={`drawer-overlay ${drawerOpen ? 'open' : ''}`} 
-        onClick={() => setDrawerOpen(false)}
-      ></div>
 
       {/* ─── TOP NAVBAR ─── */}
-      <header className="top-navbar-desktop fixed top-0 left-0 w-full h-16 md:h-20 bg-[#09090b]/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 md:px-10 z-[999] gap-2">
+      <header className="top-navbar-desktop fixed top-0 left-0 w-full h-16 md:h-20 flex items-center justify-between px-3 md:px-10 z-[999] gap-2" style={{ background: 'rgba(245,240,232,0.95)', backdropFilter: 'blur(16px)', borderBottom: '1px solid #d6cfc3' }}>
         <div className="flex items-center gap-1 md:gap-4 shrink-0">
-          <button className="waffle-btn p-1 md:p-2 md:hidden" onClick={() => setDrawerOpen(true)}>
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                <rect x="3" y="3" width="4" height="4" rx="1" />
-                <rect x="10" y="3" width="4" height="4" rx="1" />
-                <rect x="17" y="3" width="4" height="4" rx="1" />
-                <rect x="3" y="10" width="4" height="4" rx="1" />
-                <rect x="10" y="10" width="4" height="4" rx="1" />
-                <rect x="17" y="10" width="4" height="4" rx="1" />
-                <rect x="3" y="17" width="4" height="4" rx="1" />
-                <rect x="10" y="17" width="4" height="4" rx="1" />
-                <rect x="17" y="17" width="4" height="4" rx="1" />
-            </svg>
-          </button>
           {/* Mobile logo */}
           <Link to="/home" className="nav-logo flex items-center overflow-visible md:hidden">
-            <img src="/Artlogo.png" alt="ArtVault Studio" className="h-[30px] scale-[1.8] origin-left ml-4 mix-blend-screen block" />
+            <img src="/Artlogo.png" alt="ArtVault Studio" className="h-[30px] scale-[1.8] origin-left ml-4 filter brightness-0 block" />
           </Link>
         </div>
 
         <div className="flex-1 flex justify-center px-2 md:px-5">
-          <input 
-            type="text" 
-            className="search-input text-sm md:text-base w-full max-w-[600px] m-0" 
-            placeholder="Search artworks..." 
-            value={localSearch}
-            onChange={handleSearchChange}
-            onKeyDown={handleKeyDown}
-          />
+          <div className="hidden md:flex items-center gap-10">
+            <Link to="/home" className="text-[12px] font-bold text-[#1c1917] tracking-[2px] uppercase hover:text-[#b8975a] transition-colors">Discover</Link>
+            <Link to="/artists" className="text-[12px] font-bold text-[#78716c] tracking-[2px] uppercase hover:text-[#1c1917] transition-colors">Artists</Link>
+            <Link to="/home" className="text-[12px] font-bold text-[#78716c] tracking-[2px] uppercase hover:text-[#1c1917] transition-colors">Registry</Link>
+            <Link to="/about" className="text-[12px] font-bold text-[#78716c] tracking-[2px] uppercase hover:text-[#1c1917] transition-colors">About</Link>
+          </div>
         </div>
 
-        <div className="nav-actions shrink-0 hidden md:flex">
+        <div className="nav-actions shrink-0 hidden md:flex items-center">
           {user ? (
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {/* Submit Artwork — hidden for admin/moderator staff accounts */}
+              {canUpload(profile?.role) && (
+                <button 
+                  onClick={() => setCreatePanelOpen(true)}
+                  className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm" 
+                  style={{ background: '#b8975a', border: 'none', borderRadius: '4px', color: '#1c1917', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}
+                >
+                  Submit Artwork
+                </button>
+              )}
               <button className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
                 <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
               </button>
@@ -335,9 +197,15 @@ export default function Layout({ user }: { user: any }) {
                 <Link to="/settings" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
                    <Settings size={16} /> Profile Settings
                 </Link>
-                {profile?.role === 'admin' && (
+                {/* Admin/Moderator Panel Links — only shown to respective roles */}
+                {canAccessAdmin(profile?.role) && (
                   <Link to="/admin_panel" className="dropdown-item" onClick={() => { setAvatarMenuOpen(false); }}>
                      <Shield size={16} /> Administrator Panel
+                  </Link>
+                )}
+                {profile?.role === 'moderator' && (
+                  <Link to="/moderation" className="dropdown-item" onClick={() => { setAvatarMenuOpen(false); }}>
+                     <Shield size={16} /> Moderation Panel
                   </Link>
                 )}
                 <hr className="dropdown-divider" />
@@ -347,7 +215,7 @@ export default function Layout({ user }: { user: any }) {
               </div>
             </div>
           ) : (
-            <Link to="/login" className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm" style={{ background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 'bold' }}>
+            <Link to="/login" className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm" style={{ background: '#1c1917', border: '1px solid #1c1917', borderRadius: '4px', color: '#f5f0e8', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}>
                Sign In
             </Link>
           )}
@@ -395,42 +263,48 @@ export default function Layout({ user }: { user: any }) {
 
       {/* ─── NOTIFICATIONS SLIDE PANEL (Desktop) ─── */}
       <div 
-        className={`fixed top-0 h-screen w-[340px] bg-[#09090b] border-r border-white/10 z-[990] transition-transform duration-300 ${notificationsOpen ? 'translate-x-[72px]' : '-translate-x-full'} hidden md:flex flex-col shadow-2xl`}
+        className={`fixed top-0 h-screen w-[340px] z-[990] transition-transform duration-300 ${notificationsOpen ? 'translate-x-[72px]' : '-translate-x-full'} hidden md:flex flex-col`}
+        style={{ background: '#fdfaf5', borderRight: '1px solid #d6cfc3', boxShadow: '6px 0 24px rgba(28,25,23,0.1)' }}
       >
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <h2 className="text-2xl font-bold text-white tracking-tight">Updates</h2>
-          <button onClick={() => setNotificationsOpen(false)} className="text-zinc-400 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10">
-            <X size={20} />
+        <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid #d6cfc3' }}>
+          <div>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 600, color: '#1c1917' }}>Updates</h2>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, letterSpacing: '2px', textTransform: 'uppercase', color: '#78716c', marginTop: 2 }}>Recent Activity</p>
+          </div>
+          <button onClick={() => setNotificationsOpen(false)} style={{ background: 'none', border: 'none', color: '#78716c', cursor: 'pointer', padding: 6, borderRadius: 4, transition: 'color 0.2s' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#1c1917')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#78716c')}
+          >
+            <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
-          <h3 className="text-[13px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Recent Activity</h3>
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 custom-scrollbar">
           {notifications.length === 0 ? (
-            <p className="text-zinc-500 text-sm italic text-center mt-10">You have no new notifications.</p>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#78716c', fontStyle: 'italic', textAlign: 'center', marginTop: 40 }}>No new updates.</p>
           ) : (
             notifications.map((n, i) => (
               <div 
                 key={i} 
-                className={`flex gap-3 p-3 rounded-xl transition-colors cursor-pointer ${n.is_read ? 'hover:bg-white/5' : 'bg-purple-500/10 hover:bg-purple-500/20'}`} 
-                onClick={() => {
-                  setNotificationsOpen(false);
-                  navigate(`/home?search=${encodeURIComponent(n.artworks?.title || '')}`);
-                }}
+                className="flex gap-3 p-3 cursor-pointer transition-colors"
+                style={{ borderRadius: 8, background: n.is_read ? 'transparent' : 'rgba(184,151,90,0.08)', borderBottom: '1px solid #ede7d9' }}
+                onClick={() => { setNotificationsOpen(false); navigate(`/home?search=${encodeURIComponent(n.artworks?.title || '')}`); }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(28,25,23,0.04)')}
+                onMouseLeave={e => (e.currentTarget.style.background = n.is_read ? 'transparent' : 'rgba(184,151,90,0.08)')}
               >
                 <div className="mt-1">
-                  <Avatar userId={n.actor_id} name={n.profiles?.name || n.profiles?.username || 'U'} size={36} />
+                  <Avatar userId={n.actor_id} name={n.profiles?.name || n.profiles?.username || 'U'} size={34} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] text-zinc-200 leading-snug mb-1">
-                    <span className="font-semibold text-white">{n.profiles?.name || n.profiles?.username}</span> 
-                    {n.type === 'like' ? ' liked your artwork.' : ' commented on your artwork.'}
+                  <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#44403c', lineHeight: 1.5, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, color: '#1c1917' }}>{n.profiles?.name || n.profiles?.username}</span>{' '}
+                    {n.type === 'like' ? 'acknowledged your work.' : 'added a note to your work.'}
                   </p>
-                  <p className="text-[11px] text-zinc-500 font-medium">
+                  <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#78716c', letterSpacing: '0.5px' }}>
                     {new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </p>
                 </div>
                 {n.artworks?.image_url && (
-                  <img src={n.artworks.image_url} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-white/10" />
+                  <img src={n.artworks.image_url} alt="" style={{ width: 52, height: 52, borderRadius: 4, objectFit: 'cover', flexShrink: 0, border: '1px solid #d6cfc3' }} />
                 )}
               </div>
             ))
@@ -441,27 +315,4 @@ export default function Layout({ user }: { user: any }) {
   );
 }
 
-/* ─── Sidebar Icon Component ─── */
-function NavIcon({ to, icon, label, active }: { to: string; icon: React.ReactNode; label: string; active: boolean }) {
-  return (
-    <Link
-      to={to}
-      className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200 ${active ? 'bg-white/15 text-white' : 'text-zinc-500 hover:bg-white/8 hover:text-white'}`}
-    >
-      {icon}
-      <span className="absolute left-[60px] px-3 py-1.5 bg-zinc-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg border border-white/5">
-        {label}
-      </span>
-    </Link>
-  );
-}
 
-/* ─── Mobile Tab Component ─── */
-function MobileTab({ to, icon, label, active }: { to: string; icon: React.ReactNode; label: string; active: boolean }) {
-  return (
-    <Link to={to} className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors min-w-[48px] min-h-[48px] ${active ? 'text-white' : 'text-zinc-500'}`}>
-      {icon}
-      <span>{label}</span>
-    </Link>
-  );
-}

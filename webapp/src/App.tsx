@@ -10,9 +10,9 @@ const Artists = lazy(() => import('./Artists'));
 const UserProfile = lazy(() => import('./UserProfile'));
 const Settings = lazy(() => import('./Settings'));
 const AdminPanel = lazy(() => import('./AdminPanel'));
+const ModerationPanel = lazy(() => import('./ModerationPanel'));
 const LandingPage = lazy(() => import('./LandingPage'));
-const Boards = lazy(() => import('./Boards'));
-const CollageView = lazy(() => import('./CollageView'));
+const About = lazy(() => import('./About'));
 const AuthForm = lazy(() => import('./AuthForm'));
 
 function App() {
@@ -166,6 +166,8 @@ function App() {
       
       if (userRole === 'admin') {
         navigate('/admin_panel');
+      } else if (userRole === 'moderator') {
+        navigate('/moderation');
       } else {
         navigate('/home');
       }
@@ -207,14 +209,14 @@ function App() {
         <Route element={<Layout user={session?.user || null} />}>
           {/* Public Route */}
           <Route path="/home" element={<Dashboard user={session?.user || null} />} />
+          <Route path="/about" element={<About />} />
           
           {/* Protected Routes */}
-          <Route path="/boards" element={session ? <Boards user={session.user} /> : <Navigate to="/login" replace />} />
-          <Route path="/collage/:id" element={<CollageView user={session?.user || null} />} />
           <Route path="/artists" element={session ? <Artists /> : <Navigate to="/login" replace />} />
           <Route path="/profile/:id" element={session ? <UserProfile currentUser={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/admin_panel" element={session ? <AdminPanel user={session.user} /> : <Navigate to="/login" replace />} />
+          <Route path="/moderation" element={session ? <ModerationPanel user={session.user} /> : <Navigate to="/login" replace />} />
           
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>

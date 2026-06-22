@@ -316,7 +316,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
             onClick={() => setActiveTab('artworks')}
             style={{ 
               background: 'none', border: 'none', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-              color: activeTab === 'artworks' ? 'white' : 'var(--text-secondary)',
+              color: activeTab === 'artworks' ? 'var(--text-primary)' : 'var(--text-secondary)',
               borderBottom: activeTab === 'artworks' ? '2px solid var(--primary-color)' : '2px solid transparent',
               paddingBottom: '8px'
             }}
@@ -327,7 +327,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
             onClick={() => setActiveTab('collages')}
             style={{ 
               background: 'none', border: 'none', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-              color: activeTab === 'collages' ? 'white' : 'var(--text-secondary)',
+              color: activeTab === 'collages' ? 'var(--text-primary)' : 'var(--text-secondary)',
               borderBottom: activeTab === 'collages' ? '2px solid var(--primary-color)' : '2px solid transparent',
               paddingBottom: '8px'
             }}
@@ -422,7 +422,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
                   <div key={collage.id} className="board-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'all 0.3s ease', cursor: 'pointer' }} onClick={() => navigate('/collage/' + collage.id)}>
                     <div style={{ height: '180px', background: 'var(--bg-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '2px', padding: '2px' }}>
                       {[0, 1, 2, 3].map(i => (
-                        <div key={i} style={{ background: 'rgba(255,255,255,0.05)', width: '100%', height: '100%' }}>
+                        <div key={i} style={{ background: 'rgba(0,0,0,0.05)', width: '100%', height: '100%' }}>
                           {collage.preview_images?.[i] && (
                             <img src={collage.preview_images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           )}
@@ -468,7 +468,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           <div className="modal-content">
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '18px' }}>📤 Post to Your Studio</h3>
-              <button onClick={() => setShowUpload(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+              <button onClick={() => setShowUpload(false)} style={{ background: 'none', border: 'none', color: '#1a1a1a', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
             </div>
@@ -528,7 +528,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           <div className="modal-content" style={{ maxWidth: '400px' }}>
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--danger)' }}>Delete Artwork</h3>
-              <button onClick={() => setDeleteModalArtwork(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+              <button onClick={() => setDeleteModalArtwork(null)} style={{ background: 'none', border: 'none', color: '#1a1a1a', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
             </div>
