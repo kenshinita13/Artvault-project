@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
+import { canAccessAdmin, canAccessModeration } from './roles';
 
 const Layout = lazy(() => import('./Layout'));
 const Dashboard = lazy(() => import('./Dashboard'));
@@ -13,7 +14,54 @@ const AdminPanel = lazy(() => import('./AdminPanel'));
 const ModerationPanel = lazy(() => import('./ModerationPanel'));
 const LandingPage = lazy(() => import('./LandingPage'));
 const About = lazy(() => import('./About'));
+const LegalPage = lazy(() => import('./LegalPage'));
 const AuthForm = lazy(() => import('./AuthForm'));
+
+function RoleGate({
+  user,
+  allow,
+  children,
+}: {
+  user: any;
+  allow: (role: string) => boolean;
+  children: React.ReactNode;
+}) {
+  const [state, setState] = useState<'checking' | 'allowed' | 'denied'>('checking');
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkRole() {
+      if (!user?.id) {
+        setState('denied');
+        return;
+      }
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('role, status')
+        .eq('id', user.id)
+        .single();
+
+      if (!active) return;
+      setState(data && data.status !== 'banned' && allow(data.role) ? 'allowed' : 'denied');
+    }
+
+    setState('checking');
+    checkRole();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, allow]);
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (state === 'checking') {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>Checking Access...</div>;
+  }
+  if (state === 'denied') return <Navigate to="/home" replace />;
+  return <>{children}</>;
+}
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -211,13 +259,29 @@ function App() {
           <Route path="/home" element={<Dashboard user={session?.user || null} mode="discover" />} />
           <Route path="/registry" element={<Dashboard user={session?.user || null} mode="registry" />} />
           <Route path="/about" element={<About />} />
+          <Route path="/privacy" element={<LegalPage type="privacy" />} />
+          <Route path="/terms" element={<LegalPage type="terms" />} />
           
           <Route path="/artists" element={<Artists />} />
           <Route path="/profile/:id" element={<UserProfile currentUser={session?.user || null} />} />
           {/* Protected Routes */}
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
-          <Route path="/admin_panel" element={session ? <AdminPanel user={session.user} /> : <Navigate to="/login" replace />} />
-          <Route path="/moderation" element={session ? <ModerationPanel user={session.user} /> : <Navigate to="/login" replace />} />
+          <Route
+            path="/admin_panel"
+            element={
+              <RoleGate user={session?.user || null} allow={canAccessAdmin}>
+                <AdminPanel user={session?.user || null} />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/moderation"
+            element={
+              <RoleGate user={session?.user || null} allow={canAccessModeration}>
+                <ModerationPanel user={session?.user || null} />
+              </RoleGate>
+            }
+          />
           
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>

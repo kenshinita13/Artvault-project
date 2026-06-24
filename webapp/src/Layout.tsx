@@ -7,7 +7,7 @@ import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
 import { useCachedQuery } from './useCachedQuery';
 import './Dashboard.css';
-import { canUpload, canAccessAdmin } from './roles';
+import { canUpload, canAccessAdmin, canAccessModeration } from './roles';
 
 export default function Layout({ user }: { user: any }) {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
@@ -140,7 +140,7 @@ export default function Layout({ user }: { user: any }) {
                     <Shield size={16} /> Administrator Panel
                   </Link>
                 )}
-                {profile?.role === 'moderator' && (
+                {canAccessModeration(profile?.role) && (
                   <Link to="/moderation" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
                     <Shield size={16} /> Moderation Panel
                   </Link>

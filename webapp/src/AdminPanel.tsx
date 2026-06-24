@@ -8,6 +8,21 @@ import './AdminPanel.css';
 // ─── Types ────────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'users' | 'registry' | 'reports' | 'logs';
 
+const emptyArtworkForm = {
+  title: '',
+  artist_name: '',
+  creation_year: '',
+  material_used: '',
+  art_style: '',
+  dimensions: '',
+  collector_or_pricing: '',
+  price: '',
+  tags: '',
+  category_ids: [] as string[],
+  description: '',
+  image_url: '',
+};
+
 // ─── Role Badge ───────────────────────────────────────────────────
 function RoleBadge({ role }: { role: string }) {
   const def = ROLES[role as ArtVaultRole] || ROLES.user;
@@ -82,6 +97,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const [allArtworks, setAllArtworks] = useState<any[]>([]);
   const [reports, setReports]       = useState<any[]>([]);
   const [auditLogs, setAuditLogs]   = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
 
   // Search/filter
   const [userSearch, setUserSearch]       = useState('');
@@ -97,7 +113,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const [deleteUserModal, setDeleteUserModal] = useState<any>(null);
   const [deleteArtworkModal, setDeleteArtworkModal] = useState<any>(null);
   const [editArtworkModal, setEditArtworkModal] = useState<any>(null);
-  const [editArtworkForm, setEditArtworkForm] = useState({ title: '', description: '', category: '' });
+  const [editArtworkForm, setEditArtworkForm] = useState(emptyArtworkForm);
   const [suspendDays, setSuspendDays]       = useState('7');
   const [pendingRole, setPendingRole]       = useState('');
 
@@ -117,7 +133,7 @@ export default function AdminPanel({ user }: { user: any }) {
     if (data) {
       setProfile(data);
       if (canAccessAdmin(data.role)) {
-        await Promise.all([fetchUsers(), fetchArtworks(), fetchReports(), fetchLogs()]);
+        await Promise.all([fetchUsers(), fetchArtworks(), fetchReports(), fetchLogs(), fetchCategories()]);
       }
     }
     setLoading(false);
@@ -129,8 +145,16 @@ export default function AdminPanel({ user }: { user: any }) {
   }
 
   async function fetchArtworks() {
-    const { data } = await supabase.from('artworks').select('*, profiles(id, name, username, role)').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('artworks')
+      .select('*, profiles(id, name, username, role), artwork_categories(category_id, categories(id, name, slug))')
+      .order('created_at', { ascending: false });
     if (data) setAllArtworks(data);
+  }
+
+  async function fetchCategories() {
+    const { data } = await supabase.from('categories').select('id, name, slug').order('name');
+    if (data) setCategories(data);
   }
 
   async function fetchReports() {
@@ -185,10 +209,14 @@ export default function AdminPanel({ user }: { user: any }) {
     return !q || r.artworks?.title?.toLowerCase().includes(q) || r.reason?.toLowerCase().includes(q) || r.reporter?.username?.toLowerCase().includes(q);
   });
 
+  const isProtectedAccount = (target: any) => target?.id === user.id || target?.role === 'admin';
+
   // ── Actions ───────────────────────────────────────────────────────
   const handleChangeRole = async () => {
     if (!roleModal || !pendingRole) return;
     if (roleModal.id === user.id) { toast.error("Cannot change your own role."); return; }
+    if (roleModal.role === 'admin') { toast.error('Administrator accounts are protected from role changes.'); return; }
+    if (!ROLES[pendingRole as ArtVaultRole]) { toast.error('Invalid role selected.'); return; }
     const { error } = await supabase.from('profiles').update({ role: pendingRole }).eq('id', roleModal.id);
     if (error) { toast.error(error.message); return; }
     setAllUsers(prev => prev.map(u => u.id === roleModal.id ? { ...u, role: pendingRole } : u));
@@ -199,6 +227,7 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const handleSuspend = async () => {
     if (!suspendModal) return;
+    if (isProtectedAccount(suspendModal)) { toast.error('Administrator accounts are protected from suspension.'); return; }
     const days = parseInt(suspendDays);
     const end = new Date(); end.setDate(end.getDate() + days);
     const { error } = await supabase.from('profiles').update({ status: 'suspended', suspension_end: end.toISOString() }).eq('id', suspendModal.id);
@@ -211,6 +240,7 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const handleBan = async () => {
     if (!banModal) return;
+    if (isProtectedAccount(banModal)) { toast.error('Administrator accounts are protected from bans.'); return; }
     const { error } = await supabase.from('profiles').update({ status: 'banned', suspension_end: null }).eq('id', banModal.id);
     if (error) { toast.error(error.message); return; }
     setAllUsers(prev => prev.map(u => u.id === banModal.id ? { ...u, status: 'banned' } : u));
@@ -230,6 +260,7 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const handleDeleteUser = async () => {
     if (!deleteUserModal) return;
+    if (isProtectedAccount(deleteUserModal)) { toast.error('Administrator accounts are protected from deletion.'); return; }
     const { error } = await supabase.from('profiles').delete().eq('id', deleteUserModal.id);
     if (error) { toast.error(error.message); return; }
     setAllUsers(prev => prev.filter(u => u.id !== deleteUserModal.id));
@@ -255,14 +286,55 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const handleSaveArtwork = async () => {
     if (!editArtworkModal) return;
-    const { error } = await supabase.from('artworks').update({
-      title: editArtworkForm.title,
-      description: editArtworkForm.description,
-      category: editArtworkForm.category,
-    }).eq('id', editArtworkModal.id);
+    const parsedPrice = editArtworkForm.price.trim() === '' ? null : Number(editArtworkForm.price);
+    if (parsedPrice !== null && Number.isNaN(parsedPrice)) {
+      toast.error('Valuation must be a valid number.');
+      return;
+    }
+
+    const updates = {
+      title: editArtworkForm.title.trim(),
+      artist_name: editArtworkForm.artist_name.trim() || null,
+      creation_year: editArtworkForm.creation_year.trim() || null,
+      material_used: editArtworkForm.material_used.trim() || null,
+      art_style: editArtworkForm.art_style.trim() || null,
+      dimensions: editArtworkForm.dimensions.trim() || null,
+      collector_or_pricing: editArtworkForm.collector_or_pricing.trim() || null,
+      price: parsedPrice,
+      tags: editArtworkForm.tags
+        .split(',')
+        .map(tag => tag.trim().replace(/^#/, ''))
+        .filter(Boolean),
+      description: editArtworkForm.description.trim(),
+      image_url: editArtworkForm.image_url.trim() || editArtworkModal.image_url,
+    };
+
+    const { error } = await supabase.from('artworks').update(updates).eq('id', editArtworkModal.id);
     if (error) { toast.error(error.message); return; }
-    setAllArtworks(prev => prev.map(a => a.id === editArtworkModal.id ? { ...a, ...editArtworkForm } : a));
-    logAudit('Artwork Edited', `Admin edited artwork: ${editArtworkForm.title}.`);
+
+    const { error: deleteCategoryError } = await supabase
+      .from('artwork_categories')
+      .delete()
+      .eq('artwork_id', editArtworkModal.id);
+    if (deleteCategoryError) { toast.error(deleteCategoryError.message); return; }
+
+    if (editArtworkForm.category_ids.length > 0) {
+      const { error: insertCategoryError } = await supabase.from('artwork_categories').insert(
+        editArtworkForm.category_ids.map(categoryId => ({
+          artwork_id: editArtworkModal.id,
+          category_id: categoryId,
+        }))
+      );
+      if (insertCategoryError) { toast.error(insertCategoryError.message); return; }
+    }
+
+    const artworkCategories = editArtworkForm.category_ids.map(categoryId => ({
+      category_id: categoryId,
+      categories: categories.find(category => category.id === categoryId) || null,
+    }));
+
+    setAllArtworks(prev => prev.map(a => a.id === editArtworkModal.id ? { ...a, ...updates, artwork_categories: artworkCategories } : a));
+    logAudit('Artwork Edited', `Admin edited full artwork record: ${updates.title}.`);
     toast.success('Artwork record updated.');
     setEditArtworkModal(null);
   };
@@ -437,7 +509,9 @@ export default function AdminPanel({ user }: { user: any }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.slice((userPage-1)*PER_PAGE, userPage*PER_PAGE).map(u => (
+                    {filteredUsers.slice((userPage-1)*PER_PAGE, userPage*PER_PAGE).map(u => {
+                      const protectedAccount = isProtectedAccount(u);
+                      return (
                       <tr key={u.id}>
                         <td>
                           <div className="ap-user-cell">
@@ -455,7 +529,7 @@ export default function AdminPanel({ user }: { user: any }) {
                           <div className="ap-action-group">
                             {/* Change Role */}
                             <button className="ap-btn ap-btn-sm ap-btn-ghost"
-                              disabled={u.id === user.id}
+                              disabled={protectedAccount}
                               onClick={() => { setRoleModal(u); setPendingRole(u.role || 'user'); }}
                             >Change Role</button>
 
@@ -466,18 +540,18 @@ export default function AdminPanel({ user }: { user: any }) {
 
                             {/* Suspend / Unban */}
                             {u.status === 'banned' || u.status === 'suspended' ? (
-                              <button className="ap-btn ap-btn-sm ap-btn-ghost" disabled={u.id === user.id} onClick={() => setUnbanModal(u)}>Restore</button>
+                              <button className="ap-btn ap-btn-sm ap-btn-ghost" disabled={protectedAccount} onClick={() => setUnbanModal(u)}>Restore</button>
                             ) : (
                               <>
-                                <button className="ap-btn ap-btn-sm ap-btn-ghost" disabled={u.id === user.id} onClick={() => { setSuspendModal(u); setSuspendDays('7'); }}>Suspend</button>
-                                <button className="ap-btn ap-btn-sm ap-btn-danger" disabled={u.id === user.id} onClick={() => setBanModal(u)}>Ban</button>
+                                <button className="ap-btn ap-btn-sm ap-btn-ghost" disabled={protectedAccount} onClick={() => { setSuspendModal(u); setSuspendDays('7'); }}>Suspend</button>
+                                <button className="ap-btn ap-btn-sm ap-btn-danger" disabled={protectedAccount} onClick={() => setBanModal(u)}>Ban</button>
                               </>
                             )}
-                            <button className="ap-btn ap-btn-sm ap-btn-danger" disabled={u.id === user.id} onClick={() => setDeleteUserModal(u)}>Delete</button>
+                            <button className="ap-btn ap-btn-sm ap-btn-danger" disabled={protectedAccount} onClick={() => setDeleteUserModal(u)}>Delete</button>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    );})}
                   </tbody>
                 </table>
               </div>
@@ -514,20 +588,37 @@ export default function AdminPanel({ user }: { user: any }) {
                     <div className="ap-artwork-body">
                       <div className="ap-artwork-title">{a.title}</div>
                       <div className="ap-artwork-artist">
-                        by @{a.profiles?.username || '—'}
+                        {a.artist_name || 'Unknown original creator'} · registered by @{a.profiles?.username || '—'}
                         {a.profiles?.role && <RoleBadge role={a.profiles.role} />}
                       </div>
                       <div className="ap-artwork-meta">
-                        {a.category && <span>{a.category}</span>}
-                        {a.year && <span>{a.year}</span>}
-                        {a.valuation && <span>₱{Number(a.valuation).toLocaleString()}</span>}
+                        {a.creation_year && <span>{a.creation_year}</span>}
+                        {a.artwork_categories?.map((entry: any) => entry.categories?.name).filter(Boolean).map((name: string) => <span key={name}>{name}</span>)}
+                        {a.material_used && <span>{a.material_used}</span>}
+                        {a.art_style && <span>{a.art_style}</span>}
+                        {a.dimensions && <span>{a.dimensions}</span>}
+                        {a.price != null && <span>${Number(a.price).toLocaleString()}</span>}
+                        {a.collector_or_pricing && <span>{a.collector_or_pricing}</span>}
                       </div>
                       {a.description && <div className="ap-artwork-desc">{a.description}</div>}
                     </div>
                     <div className="ap-artwork-actions">
                       <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => {
                         setEditArtworkModal(a);
-                        setEditArtworkForm({ title: a.title || '', description: a.description || '', category: a.category || '' });
+                        setEditArtworkForm({
+                          title: a.title || '',
+                          artist_name: a.artist_name || '',
+                          creation_year: a.creation_year || '',
+                          material_used: a.material_used || '',
+                          art_style: a.art_style || '',
+                          dimensions: a.dimensions || '',
+                          collector_or_pricing: a.collector_or_pricing || '',
+                          price: a.price != null ? String(a.price) : '',
+                          tags: Array.isArray(a.tags) ? a.tags.join(', ') : '',
+                          category_ids: Array.isArray(a.artwork_categories) ? a.artwork_categories.map((entry: any) => entry.category_id).filter(Boolean) : [],
+                          description: a.description || '',
+                          image_url: a.image_url || '',
+                        });
                       }}>Edit</button>
                       <button className="ap-btn ap-btn-sm ap-btn-danger" onClick={() => setDeleteArtworkModal(a)}>Remove</button>
                     </div>
@@ -713,16 +804,82 @@ export default function AdminPanel({ user }: { user: any }) {
       {/* Edit Artwork */}
       {editArtworkModal && (
         <ConfirmModal title="Edit Artwork Record" onConfirm={handleSaveArtwork} onCancel={() => setEditArtworkModal(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 8 }}>
+          <div className="ap-record-form-grid">
             <div>
               <label className="ap-form-label">Title</label>
               <input className="ap-input" value={editArtworkForm.title} onChange={e => setEditArtworkForm(f => ({ ...f, title: e.target.value }))} />
             </div>
             <div>
-              <label className="ap-form-label">Category</label>
-              <input className="ap-input" value={editArtworkForm.category} onChange={e => setEditArtworkForm(f => ({ ...f, category: e.target.value }))} />
+              <label className="ap-form-label">Original Creator</label>
+              <input className="ap-input" value={editArtworkForm.artist_name} onChange={e => setEditArtworkForm(f => ({ ...f, artist_name: e.target.value }))} placeholder="e.g. Vincent van Gogh" />
             </div>
             <div>
+              <label className="ap-form-label">Year Created</label>
+              <input className="ap-input" value={editArtworkForm.creation_year} onChange={e => setEditArtworkForm(f => ({ ...f, creation_year: e.target.value }))} placeholder="e.g. 1889" />
+            </div>
+            <div>
+              <label className="ap-form-label">Medium</label>
+              <select className="ap-select" value={editArtworkForm.material_used} onChange={e => setEditArtworkForm(f => ({ ...f, material_used: e.target.value }))}>
+                <option value="">Select medium</option>
+                <option value="Oil on canvas">Oil on canvas</option>
+                <option value="Acrylic on canvas">Acrylic on canvas</option>
+                <option value="Watercolor on paper">Watercolor on paper</option>
+                <option value="Charcoal on paper">Charcoal on paper</option>
+                <option value="Graphite on paper">Graphite on paper</option>
+                <option value="Pastel on paper">Pastel on paper</option>
+                <option value="Gouache">Gouache</option>
+                <option value="Fresco">Fresco</option>
+                <option value="Mixed Media (Traditional)">Mixed Media (Traditional)</option>
+              </select>
+            </div>
+            <div>
+              <label className="ap-form-label">Art Style</label>
+              <input className="ap-input" value={editArtworkForm.art_style} onChange={e => setEditArtworkForm(f => ({ ...f, art_style: e.target.value }))} placeholder="e.g. Post-Impressionism" />
+            </div>
+            <div>
+              <label className="ap-form-label">Dimensions</label>
+              <input className="ap-input" value={editArtworkForm.dimensions} onChange={e => setEditArtworkForm(f => ({ ...f, dimensions: e.target.value }))} placeholder="e.g. 73.7 x 92.1 cm" />
+            </div>
+            <div>
+              <label className="ap-form-label">Status / Collector</label>
+              <input className="ap-input" value={editArtworkForm.collector_or_pricing} onChange={e => setEditArtworkForm(f => ({ ...f, collector_or_pricing: e.target.value }))} placeholder="e.g. Institutional Collection" />
+            </div>
+            <div>
+              <label className="ap-form-label">Valuation</label>
+              <input className="ap-input" type="number" value={editArtworkForm.price} onChange={e => setEditArtworkForm(f => ({ ...f, price: e.target.value }))} placeholder="e.g. 25000" />
+            </div>
+            <div className="ap-record-form-wide">
+              <label className="ap-form-label">Image URL</label>
+              <input className="ap-input" value={editArtworkForm.image_url} onChange={e => setEditArtworkForm(f => ({ ...f, image_url: e.target.value }))} />
+            </div>
+            <div className="ap-record-form-wide">
+              <label className="ap-form-label">Collection Categories</label>
+              <div className="ap-category-edit-grid">
+                {categories.map(category => (
+                  <label key={category.id} className="ap-category-edit-option">
+                    <input
+                      type="checkbox"
+                      checked={editArtworkForm.category_ids.includes(category.id)}
+                      onChange={e => setEditArtworkForm(f => ({
+                        ...f,
+                        category_ids: e.target.checked
+                          ? [...f.category_ids, category.id]
+                          : f.category_ids.filter(id => id !== category.id),
+                      }))}
+                    />
+                    <span>{category.name}</span>
+                  </label>
+                ))}
+                {categories.length === 0 && (
+                  <span className="ap-empty-inline">No categories available.</span>
+                )}
+              </div>
+            </div>
+            <div className="ap-record-form-wide">
+              <label className="ap-form-label">Tags</label>
+              <input className="ap-input" value={editArtworkForm.tags} onChange={e => setEditArtworkForm(f => ({ ...f, tags: e.target.value }))} placeholder="oil-on-canvas, traditional-art, museum-record" />
+            </div>
+            <div className="ap-record-form-wide">
               <label className="ap-form-label">Description</label>
               <textarea className="ap-input" rows={4} style={{ resize: 'vertical' }} value={editArtworkForm.description} onChange={e => setEditArtworkForm(f => ({ ...f, description: e.target.value }))} />
             </div>

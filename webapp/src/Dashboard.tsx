@@ -1,12 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
 import { useCachedQuery } from './useCachedQuery';
 import './Dashboard.css';
 
+const IMAGE_URL_REPLACEMENTS: Record<string, string> = {
+  'https://www.artic.edu/iiif/2/8f9f77a5-003f-a185-873d-8c0f71cf5cf1/full/843,/0/default.jpg':
+    'https://upload.wikimedia.org/wikipedia/commons/1/15/Adolph_Menzel_-_Halbfigur_eines_alten_Mannes_%281855%29.jpg',
+  'https://www.artic.edu/iiif/2/7f753e93-8579-abab-6c79-1a35ff67ba53/full/843,/0/default.jpg':
+    'https://upload.wikimedia.org/wikipedia/commons/1/1b/Adolph_Menzel%2C_Study_of_a_Woman%2C_c._1875-1890%2C_NGA_56918.jpg',
+};
+
+function resolveArtworkImageUrl(url: string): string {
+  return IMAGE_URL_REPLACEMENTS[url] || url;
+}
+
 // Supabase image optimization helper — serves WebP at correct size
 function optimizedUrl(url: string, width: number, quality = 80): string {
+  url = resolveArtworkImageUrl(url);
   if (!url || !url.includes('supabase.co')) return url;
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}width=${width}&quality=${quality}`;
@@ -365,13 +377,41 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeMedium, setActiveMedium] = useState('all');
   const [activeArtist, setActiveArtist] = useState('all');
+  const [artistSearch, setArtistSearch] = useState('');
+  const [activeArtistLetter, setActiveArtistLetter] = useState('All');
   const [activePriceRange, setActivePriceRange] = useState('all');
   const [customMinPrice, setCustomMinPrice] = useState<string>('');
   const [customMaxPrice, setCustomMaxPrice] = useState<string>('');
   // Unique artists and mediums for filters
-  const uniqueArtists = Array.from(new Set(
-    artworks.map(a => getOriginalCreator(a)).filter(Boolean)
-  )) as string[];
+  const uniqueArtists = useMemo(() => {
+    return (Array.from(new Set(
+      artworks.map(a => getOriginalCreator(a)).filter(Boolean)
+    )) as string[]).sort((a, b) => a.localeCompare(b));
+  }, [artworks]);
+
+  const artistLetters = useMemo(() => {
+    const letters = new Set<string>();
+    uniqueArtists.forEach((artist) => {
+      const first = artist.trim().charAt(0).toUpperCase();
+      letters.add(/^[A-Z]$/.test(first) ? first : '#');
+    });
+    return ['All', ...Array.from(letters).sort((a, b) => {
+      if (a === '#') return 1;
+      if (b === '#') return -1;
+      return a.localeCompare(b);
+    })];
+  }, [uniqueArtists]);
+
+  const filteredArtistOptions = useMemo(() => {
+    const query = artistSearch.trim().toLowerCase();
+    return uniqueArtists.filter((artist) => {
+      const first = artist.trim().charAt(0).toUpperCase();
+      const letter = /^[A-Z]$/.test(first) ? first : '#';
+      const matchesLetter = activeArtistLetter === 'All' || letter === activeArtistLetter;
+      const matchesSearch = !query || artist.toLowerCase().includes(query);
+      return matchesLetter && matchesSearch;
+    });
+  }, [activeArtistLetter, artistSearch, uniqueArtists]);
 
   const uniqueMediums = Array.from(new Set(
     artworks.map(a => a.material_used).filter(Boolean)
@@ -395,6 +435,17 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
 
   // Sync local search from URL
   useEffect(() => { setLocalSearch(searchQuery); }, [searchQuery]);
+
+  useEffect(() => {
+    const nextSearch = localSearch.trim();
+    const currentSearch = searchQuery.trim();
+    const timeout = window.setTimeout(() => {
+      if (nextSearch === currentSearch) return;
+      setSearchParams(nextSearch ? { search: nextSearch } : {});
+    }, 180);
+
+    return () => window.clearTimeout(timeout);
+  }, [localSearch, searchQuery, setSearchParams]);
 
   async function fetchData() {
     if (!cachedArtworks) setLoading(true);
@@ -435,6 +486,8 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     setActiveCategory('all');
     setActiveMedium('all');
     setActiveArtist('all');
+    setArtistSearch('');
+    setActiveArtistLetter('All');
     setActivePriceRange('all');
     setCustomMinPrice('');
     setCustomMaxPrice('');
@@ -655,18 +708,59 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
         {/* Artist */}
         {uniqueArtists.length > 0 && (
           <div className="filter-section">
-            <h4>Artist</h4>
-            <div className="filter-options">
+            <div className="filter-section-heading-row">
+              <h4>Artist</h4>
+              {activeArtist !== 'all' && (
+                <button type="button" className="filter-mini-reset" onClick={() => setActiveArtist('all')}>
+                  Reset
+                </button>
+              )}
+            </div>
+
+            <div className="artist-filter-tools">
+              <input
+                type="search"
+                value={artistSearch}
+                onChange={(event) => setArtistSearch(event.target.value)}
+                placeholder="Find artist"
+                aria-label="Find artist"
+              />
+
+              <div className="artist-letter-filter" aria-label="Filter artists by first letter">
+                {artistLetters.map((letter) => (
+                  <button
+                    key={letter}
+                    type="button"
+                    className={activeArtistLetter === letter ? 'active' : ''}
+                    onClick={() => setActiveArtistLetter(letter)}
+                  >
+                    {letter}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="filter-options artist-filter-options">
               <label className="filter-option">
-                <input type="radio" name="artist" checked={activeArtist === 'all'} onChange={() => setActiveArtist('all')} />
+                <input
+                  type="radio"
+                  name="artist"
+                  checked={activeArtist === 'all'}
+                  onChange={() => setActiveArtist('all')}
+                />
                 <span>All Artists</span>
               </label>
-              {uniqueArtists.slice(0, 10).map((artist, idx) => (
-                <label key={idx} className="filter-option">
+
+              {filteredArtistOptions.length === 0 ? (
+                <div className="artist-filter-empty">No matching artists</div>
+              ) : (
+                filteredArtistOptions.map((artist) => (
+                <label key={artist} className="filter-option">
                   <input type="radio" name="artist" checked={activeArtist === artist} onChange={() => setActiveArtist(artist)} />
                   <span>{artist}</span>
                 </label>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -720,12 +814,17 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
               />
               {localSearch && (
                 <button type="button" className="search-panel-clear" onClick={() => { setLocalSearch(''); setSearchParams({}); }}>
-                  ×
+                  x
                 </button>
               )}
               <button type="submit" className="search-panel-btn">Search Registry</button>
             </div>
           </form>
+          <div className="search-live-status" aria-live="polite">
+            {searchQuery
+              ? `${filteredArtworks.length} live result${filteredArtworks.length !== 1 ? 's' : ''} for "${searchQuery}"`
+              : `Showing all ${filteredArtworks.length} registered work${filteredArtworks.length !== 1 ? 's' : ''}`}
+          </div>
         </div>
 
         {/* ── Provenance Strip ───────────────────────────────── */}
@@ -860,7 +959,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
       {/* ─── Artwork Lightbox ─── */}
       {activeArtwork && (
         <Lightbox
-          artwork={activeArtwork}
+          artwork={{ ...activeArtwork, image_url: resolveArtworkImageUrl(activeArtwork.image_url) }}
           artistName={activeArtwork.artist_name || activeArtwork.profiles?.username || activeArtwork.profiles?.name || 'Unknown Artist'}
           onClose={() => setActiveArtwork(null)}
           currentUser={user}

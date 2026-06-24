@@ -1,8 +1,24 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import './About.css';
 
 export default function About() {
   const navigate = useNavigate();
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMessage, setNewsletterMessage] = useState('Occasional Art Vault updates, straight to your inbox.');
+
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleNewsletterSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setNewsletterMessage(
+      newsletterEmail.trim()
+        ? 'Thank you. Newsletter signup will be connected before deployment.'
+        : 'Enter an email address to join the Art Vault update list.'
+    );
+  };
 
   return (
     <div className="about-page">
@@ -28,7 +44,7 @@ export default function About() {
             galleries, foundations, estates, private collectors, and artists. We make it simple to organize
             your collection, authenticate provenance, and preserve the stories behind the art you love.
           </p>
-          <button className="about-btn-dark" onClick={() => document.getElementById('mission')?.scrollIntoView({ behavior: 'smooth' })}>
+          <button className="about-btn-dark" onClick={() => scrollToSection('mission')}>
             Our Mission →
           </button>
         </div>
@@ -222,39 +238,45 @@ export default function About() {
           <div className="about-footer-col">
             <p className="about-footer-col-title">COMPANY</p>
             <Link to="/about" className="about-footer-link active">About Us</Link>
-            <button onClick={() => document.getElementById('roadmap')?.scrollIntoView({ behavior: 'smooth' })} className="about-footer-link" style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>Features & Roadmap</button>
-            <a href="#" className="about-footer-link" onClick={e => e.preventDefault()}>Membership</a>
+            <button onClick={() => scrollToSection('roadmap')} className="about-footer-link" style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>Features & Roadmap</button>
+            <Link to="/login" className="about-footer-link">Membership</Link>
           </div>
 
           <div className="about-footer-col">
             <p className="about-footer-col-title">EXPLORE</p>
             <Link to="/home" className="about-footer-link">Discover</Link>
             <Link to="/artists" className="about-footer-link">Artists</Link>
-            <a href="#" className="about-footer-link" onClick={e => e.preventDefault()}>Exhibitions</a>
-            <a href="#" className="about-footer-link" onClick={e => e.preventDefault()}>Collections</a>
+            <Link to="/registry" className="about-footer-link">Exhibitions</Link>
+            <Link to="/registry" className="about-footer-link">Collections</Link>
           </div>
 
           <div className="about-footer-col">
             <p className="about-footer-col-title">RESOURCES</p>
-            <a href="#" className="about-footer-link" onClick={e => e.preventDefault()}>Welcome Guide</a>
+            <button onClick={() => scrollToSection('mission')} className="about-footer-link" style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>Welcome Guide</button>
             <Link to="/about" className="about-footer-link">Contact</Link>
           </div>
 
           <div className="about-footer-col">
             <p className="about-footer-col-title">NEWSLETTER</p>
-            <div className="about-footer-newsletter">
-              <input type="email" placeholder="you@example.com" className="about-footer-input" />
-              <button className="about-footer-send">→</button>
-            </div>
-            <p className="about-footer-newsletter-note">Occasional Art Vault updates, straight to your inbox.</p>
+            <form className="about-footer-newsletter" onSubmit={handleNewsletterSubmit}>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                className="about-footer-input"
+                value={newsletterEmail}
+                onChange={event => setNewsletterEmail(event.target.value)}
+              />
+              <button className="about-footer-send" type="submit">-&gt;</button>
+            </form>
+            <p className="about-footer-newsletter-note">{newsletterMessage}</p>
           </div>
         </div>
 
         <div className="about-footer-bottom">
           <span>© 2026 Art Vault. All rights reserved.</span>
           <div className="about-footer-bottom-links">
-            <a href="#" onClick={e => e.preventDefault()}>Privacy Policy</a>
-            <a href="#" onClick={e => e.preventDefault()}>Terms of Service</a>
+            <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/terms">Terms of Service</Link>
             <Link to="/about">Contact</Link>
           </div>
         </div>

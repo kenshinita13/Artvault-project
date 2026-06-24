@@ -56,6 +56,9 @@ export const UPLOAD_ROLES: ArtVaultRole[] = ['curator', 'artist'];
 /** Public roles — shown in artist listings and public profiles */
 export const PUBLIC_ROLES: ArtVaultRole[] = ['curator', 'artist', 'user'];
 
+/** Roles a visitor can select during public signup. Staff and curator roles require admin assignment. */
+export const REGISTRATION_ROLES: ArtVaultRole[] = ['artist', 'user'];
+
 /** Check if a role has admin panel access */
 export const canAccessAdmin = (role: string): boolean =>
   ADMIN_ROLES.includes(role as ArtVaultRole);

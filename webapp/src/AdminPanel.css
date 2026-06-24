@@ -378,7 +378,7 @@
   border: 1px solid #d6cfc3;
   border-radius: 4px;
   width: 100%;
-  max-width: 520px;
+  max-width: 760px;
   max-height: 85vh;
   overflow-y: auto;
   box-shadow: 0 24px 64px rgba(28,25,23,0.25);
@@ -439,6 +439,40 @@
 }
 .ap-input:focus, .ap-select:focus { border-color: #1c1917; }
 
+.ap-record-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.ap-record-form-wide {
+  grid-column: 1 / -1;
+}
+
+.ap-category-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ap-category-edit-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d6cfc3;
+  border-radius: 4px;
+  padding: 9px 10px;
+  background: #fff;
+  color: #57534e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ap-category-edit-option input {
+  accent-color: #1c1917;
+}
+
 /* ── Role Option ─────────────────────────────────────────────────── */
 .ap-role-option {
   display: block;
@@ -498,4 +532,6 @@
   .ap-sidebar-brand, .ap-nav-label, .ap-nav-badge { display: none; }
   .ap-nav-item { padding: 14px; justify-content: center; }
   .ap-stat-grid { grid-template-columns: 1fr 1fr; }
+  .ap-record-form-grid { grid-template-columns: 1fr; }
+  .ap-category-edit-grid { grid-template-columns: 1fr; }
 }

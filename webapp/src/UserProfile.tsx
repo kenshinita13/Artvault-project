@@ -6,6 +6,7 @@ import { Trash2, X, Upload } from 'lucide-react';
 import Avatar from './Avatar';
 import Lightbox from './Lightbox';
 import { checkImageIsSafe } from './nsfwHelper';
+import { canUpload } from './roles';
 import './Dashboard.css';
 
 interface Profile {
@@ -259,6 +260,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
   const totalPages = Math.ceil(filteredArtworks.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = filteredArtworks.slice(startIndex, startIndex + itemsPerPage);
+  const isOwnProfile = currentUser?.id?.toLowerCase() === profile.id?.toLowerCase();
 
   const getPaginationGroup = () => {
       let pages = [];
@@ -297,7 +299,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
               </span>
             </div>
           </div>
-          {(currentUser?.id?.toLowerCase() === profile.id?.toLowerCase() || currentUserRole === 'admin') && (
+          {isOwnProfile && canUpload(currentUserRole) && (
             <div style={{ marginLeft: 'auto' }}>
               <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
                 <Upload size={16} /> Register Work

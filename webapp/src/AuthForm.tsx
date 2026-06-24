@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
-import { PUBLIC_ROLES, ROLES } from './roles';
+import { REGISTRATION_ROLES, ROLES } from './roles';
 import type { ArtVaultRole } from './roles';
 
 interface AuthFormProps {
@@ -503,7 +503,7 @@ export default function AuthForm({
                   onChange={(e) => setRole(e.target.value as ArtVaultRole)}
                   style={{ appearance: 'auto', cursor: 'pointer' }}
                 >
-                  {PUBLIC_ROLES.map((r) => (
+                  {REGISTRATION_ROLES.map((r) => (
                     <option key={r} value={r}>
                       {ROLES[r].label}
                     </option>
