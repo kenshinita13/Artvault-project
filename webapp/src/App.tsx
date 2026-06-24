@@ -177,7 +177,7 @@ function App() {
   }, [navigate]);
 
   if (isInitializing) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>Loading Collection...</div>;
   }
 
   // Auth UI rendered via the extracted AuthForm component
@@ -195,7 +195,7 @@ function App() {
   );
 
   if (isValidatingLogin) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>Loading Collection...</div>;
   }
 
   return (
@@ -212,9 +212,9 @@ function App() {
           <Route path="/registry" element={<Dashboard user={session?.user || null} mode="registry" />} />
           <Route path="/about" element={<About />} />
           
-          {/* Protected Routes */}
           <Route path="/artists" element={<Artists />} />
-          <Route path="/profile/:id" element={session ? <UserProfile currentUser={session.user} /> : <Navigate to="/login" replace />} />
+          <Route path="/profile/:id" element={<UserProfile currentUser={session?.user || null} />} />
+          {/* Protected Routes */}
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/admin_panel" element={session ? <AdminPanel user={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/moderation" element={session ? <ModerationPanel user={session.user} /> : <Navigate to="/login" replace />} />

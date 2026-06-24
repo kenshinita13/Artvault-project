@@ -34,7 +34,7 @@ interface Board {
   item_count?: number;
 }
 
-export default function UserProfile({ currentUser }: { currentUser: any }) {
+export default function UserProfile({ currentUser }: { currentUser: any | null }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -147,6 +147,10 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser?.id) {
+      toast.error('Please sign in to register artwork.');
+      return;
+    }
     if (!file || !title) return;
 
     try {
@@ -236,11 +240,11 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
   };
 
   if (loading) {
-    return <div style={{ padding: '100px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading Studio...</div>;
+    return <div style={{ padding: '100px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading Collection...</div>;
   }
 
   if (!profile) {
-    return <div style={{ padding: '100px', textAlign: 'center', color: 'var(--danger)' }}>Studio not found.</div>;
+    return <div style={{ padding: '100px', textAlign: 'center', color: 'var(--danger)' }}>Collection profile not found.</div>;
   }
 
   const filteredArtworks = artworks.filter(a => 
@@ -282,17 +286,17 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
             <div className="studio-username">@{profile.username}</div>
             <div className="studio-badges">
               <span className={`badge ${profile.role === 'admin' ? 'admin' : ''}`}>
-                {profile.role === 'admin' ? '🛡️ Administrator' : '🎨 Artist'}
+                {profile.role === 'admin' ? 'Administrator' : 'Collection Contributor'}
               </span>
               <span className="badge">
-                🖼️ {artworks.length} Creations
+                Registered Works {artworks.length}
               </span>
             </div>
           </div>
-          {(currentUser.id?.toLowerCase() === profile.id?.toLowerCase() || currentUserRole === 'admin') && (
+          {(currentUser?.id?.toLowerCase() === profile.id?.toLowerCase() || currentUserRole === 'admin') && (
             <div style={{ marginLeft: 'auto' }}>
               <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
-                <Upload size={16} /> Post Artwork
+                <Upload size={16} /> Register Work
               </button>
             </div>
           )}
@@ -321,7 +325,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
               paddingBottom: '8px'
             }}
           >
-            Artworks ({artworks.length})
+            Registered Works ({artworks.length})
           </button>
           <button 
             onClick={() => setActiveTab('collages')}
@@ -332,18 +336,18 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
               paddingBottom: '8px'
             }}
           >
-            Collages ({collages.length})
+            Portfolios ({collages.length})
           </button>
         </div>
 
-        {/* Gallery / Collages Grid Layout */}
+        {/* Collection / Portfolio Grid Layout */}
         {activeTab === 'artworks' ? (
           <>
             {filteredArtworks.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
-                <span style={{ fontSize: '48px' }}>🖼️</span>
-                <h4 style={{ marginTop: '15px' }}>No Artworks Found</h4>
-                <p style={{ marginTop: '5px' }}>{searchQuery ? "No artworks match your search." : "This studio is currently empty."}</p>
+                <span className="registry-empty-icon">AV</span>
+                <h4 style={{ marginTop: '15px' }}>No Registered Works Found</h4>
+                <p style={{ marginTop: '5px' }}>{searchQuery ? "No registered works match your search." : "This collection profile is currently empty."}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start w-full">
@@ -361,7 +365,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
                       </div>
 
                       <div className="art-actions">
-                        {(currentUser.id === artwork.user_id || currentUserRole === 'admin') && (
+                        {(currentUser?.id === artwork.user_id || currentUserRole === 'admin') && (
                           <button onClick={(e) => handleDeleteClick(e, artwork)} className="btn btn-danger" style={{ flex: 1 }}>
                             <Trash2 size={14} /> Delete
                           </button>
@@ -412,9 +416,9 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
           <>
             {collages.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
-                <span style={{ fontSize: '48px' }}>📁</span>
-                <h4 style={{ marginTop: '15px' }}>No Public Collages</h4>
-                <p style={{ marginTop: '5px' }}>This user hasn't created any public collages yet.</p>
+                <span className="registry-empty-icon">AV</span>
+                <h4 style={{ marginTop: '15px' }}>No Public Portfolios</h4>
+                <p style={{ marginTop: '5px' }}>This contributor has not created any public portfolios yet.</p>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
@@ -467,7 +471,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
         <div className="modal">
           <div className="modal-content">
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>📤 Post to Your Studio</h3>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Register Work to Collection</h3>
               <button onClick={() => setShowUpload(false)} style={{ background: 'none', border: 'none', color: '#1a1a1a', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
@@ -498,7 +502,6 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
                 <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Select Image</label>
                   <div className="file-upload-wrapper">
-                    <span style={{ fontSize: '24px', marginBottom: '5px' }}>📁</span>
                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                       {file ? file.name : 'Click to choose file'}
                     </span>
@@ -513,7 +516,7 @@ export default function UserProfile({ currentUser }: { currentUser: any }) {
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '25px' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setShowUpload(false)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" disabled={uploading}>
-                    {uploading ? 'Publishing...' : 'Publish to Studio'}
+                    {uploading ? 'Registering...' : 'Register Work'}
                   </button>
                 </div>
               </form>

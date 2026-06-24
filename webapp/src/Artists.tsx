@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
 import { Link } from 'react-router-dom';
+import { supabase } from './supabaseClient';
 import Avatar from './Avatar';
 import './Dashboard.css';
 
@@ -16,10 +16,9 @@ export default function Artists() {
   const [artists, setArtists] = useState<ArtistProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
-
   async function fetchArtists() {
     setLoading(true);
-    // Fetch profiles
+
     const { data: profiles, error: profileError } = await supabase
       .from('profiles')
       .select('*');
@@ -30,9 +29,6 @@ export default function Artists() {
       return;
     }
 
-    // Fetch upload counts
-    // In Supabase, doing an aggregate join is easiest done by a separate count query or an RPC.
-    // For simplicity with small datasets, we'll just fetch all artworks and count them in memory.
     const { data: artworks, error: artError } = await supabase
       .from('artworks')
       .select('user_id');
@@ -43,22 +39,20 @@ export default function Artists() {
       return;
     }
 
-    const uploadCounts = artworks.reduce((acc: Record<string, number>, art: any) => {
+    const uploadCounts = (artworks || []).reduce((acc: Record<string, number>, art: any) => {
       acc[art.user_id] = (acc[art.user_id] || 0) + 1;
       return acc;
     }, {});
 
-    const fullProfiles = profiles.map((p: any) => ({
+    const fullProfiles = (profiles || []).map((p: any) => ({
       ...p,
       total_uploads: uploadCounts[p.id] || 0
     }));
 
-    // Sort by uploads descending
     fullProfiles.sort((a, b) => b.total_uploads - a.total_uploads);
-
     setArtists(fullProfiles);
     setLoading(false);
-  };
+  }
 
   useEffect(() => {
     fetchArtists();
@@ -67,16 +61,16 @@ export default function Artists() {
   return (
     <main className="directory-container">
       <div className="directory-header">
-        <h2>👥 ArtVault Creators</h2>
-        <p>Discover and browse portfolio studios of our digital artists</p>
+        <h2>ArtVault Contributors</h2>
+        <p>Browse collection holders, curators, and registered artwork portfolios</p>
       </div>
 
       {loading ? (
         <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Loading directory...</p>
       ) : artists.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
-          <span style={{ fontSize: '48px' }}>👥</span>
-          <h4 style={{ marginTop: '15px' }}>No Artists Found</h4>
+          <span className="registry-empty-icon">AV</span>
+          <h4 style={{ marginTop: '15px' }}>No Contributors Found</h4>
         </div>
       ) : (
         <div className="profiles-grid">
@@ -87,19 +81,19 @@ export default function Artists() {
               </div>
               <div className="artist-name">{artist.name}</div>
               <div className="artist-handle">@{artist.username}</div>
-              
+
               <div className={`artist-badge ${artist.role === 'admin' ? 'admin-badge' : ''}`}>
-                {artist.role === 'admin' ? '🛡️ Administrator' : '🎨 Artist'}
+                {artist.role === 'admin' ? 'Administrator' : 'Collection Contributor'}
               </div>
 
               <div className="artist-stats">
                 <div className="stat-item">
-                  🎨 Creations: <strong>{artist.total_uploads}</strong>
+                  Registered Works <strong>{artist.total_uploads}</strong>
                 </div>
               </div>
 
               <Link to={`/profile/${artist.id}`} className="btn btn-primary" style={{ width: '100%', marginTop: 'auto' }}>
-                View Studio Profile
+                View Collection Profile
               </Link>
             </div>
           ))}
