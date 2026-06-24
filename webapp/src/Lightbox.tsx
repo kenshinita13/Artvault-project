@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { X, Flag, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
@@ -58,12 +57,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   const catalogRows: { label: string; value: React.ReactNode; highlight?: boolean }[] = [
-    displayArtist && { label: 'Artist', value: (
-      <Link to={`/profile/${artwork.user_id}`} onClick={onClose}
-        style={{ color: '#1c1917', textDecoration: 'none', fontWeight: 600 }}>
-        {displayArtist}
-      </Link>
-    )},
+    displayArtist && { label: 'Artist', value: displayArtist },
     artwork.creation_year  && { label: 'Year',         value: artwork.creation_year },
     category               && { label: 'Collection',   value: category },
     artwork.material_used  && { label: 'Medium',        value: artwork.material_used },
@@ -200,15 +194,13 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
                 display: 'flex', alignItems: 'center', gap: '12px',
                 padding: '20px 24px', borderBottom: '1px solid #ede7d9',
               }}>
-                <Link to={`/profile/${artwork.user_id}`} onClick={onClose} style={{ textDecoration: 'none', flexShrink: 0 }}>
+                <div style={{ flexShrink: 0 }}>
                   <Avatar userId={artwork.user_id} name={displayArtist} size={40} />
-                </Link>
+                </div>
                 <div style={{ minWidth: 0 }}>
-                  <Link to={`/profile/${artwork.user_id}`} onClick={onClose} style={{ textDecoration: 'none' }}>
-                    <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 700, color: '#1c1917', fontSize: '14px', letterSpacing: '0.2px' }}>
-                      {displayArtist}
-                    </div>
-                  </Link>
+                  <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 700, color: '#1c1917', fontSize: '14px', letterSpacing: '0.2px' }}>
+                    {displayArtist}
+                  </div>
                   <div style={{ fontFamily: "'Inter', sans-serif", color: '#a8a29e', fontSize: '11px', letterSpacing: '1px', marginTop: '2px', textTransform: 'uppercase' }}>
                     Artist
                   </div>

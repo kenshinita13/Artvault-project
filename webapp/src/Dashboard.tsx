@@ -294,12 +294,12 @@ function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: 
 // ═══════════════════════════════════════════════════════════════
 // MAIN DASHBOARD COMPONENT
 // ═══════════════════════════════════════════════════════════════
-export default function Dashboard({ user }: { user: any }) {
+export default function Dashboard({ user, mode = 'discover' }: { user: any; mode?: 'discover' | 'registry' }) {
   const [artworks, setArtworks] = useState<Artwork[]>(cachedArtworks || []);
   const [loading, setLoading] = useState(!cachedArtworks);
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
   const [stats, setStats] = useState<RegistryStats>({ total: 0, withArtist: 0, withProvenance: 0 });
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(mode === 'registry' ? 'list' : 'grid');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(264);
   const [sidebarVisible, setSidebarVisible] = useState(true);
@@ -491,7 +491,7 @@ export default function Dashboard({ user }: { user: any }) {
   }, [artworks.length]);
 
   const featuredArtwork = artworks[featuredIndex] || null;
-  const showFeatured = !loading && featuredArtwork && !searchQuery && activeCategory === 'all' && activeMedium === 'all' && activeArtist === 'all' && activePriceRange === 'all';
+  const showFeatured = mode === 'discover' && !loading && featuredArtwork && !searchQuery && activeCategory === 'all' && activeMedium === 'all' && activeArtist === 'all' && activePriceRange === 'all';
 
   return (
     <div className="dashboard-layout">
@@ -656,7 +656,7 @@ export default function Dashboard({ user }: { user: any }) {
         {/* ── Registry Masthead ──────────────────────────────── */}
         <div className="registry-masthead">
           <div className="registry-masthead-left">
-            <span className="registry-masthead-title">Collection Registry</span>
+            <span className="registry-masthead-title">{mode === 'registry' ? 'Accession Registry' : 'Collection Registry'}</span>
             {searchQuery && (
               <span className="registry-search-context">
                 Results for <em>"{searchQuery}"</em>
@@ -665,17 +665,17 @@ export default function Dashboard({ user }: { user: any }) {
           </div>
           <div className="registry-masthead-stats">
             <div className="masthead-stat">
-              <span className="masthead-stat-value">{loading ? '—' : stats.total.toLocaleString()}</span>
+              <span className="masthead-stat-value">{loading ? '-' : stats.total.toLocaleString()}</span>
               <span className="masthead-stat-label">Registered Works</span>
             </div>
             <div className="masthead-stat-divider" />
             <div className="masthead-stat">
-              <span className="masthead-stat-value">{loading ? '—' : stats.withArtist.toLocaleString()}</span>
+              <span className="masthead-stat-value">{loading ? '-' : stats.withArtist.toLocaleString()}</span>
               <span className="masthead-stat-label">Verified Artists</span>
             </div>
             <div className="masthead-stat-divider" />
             <div className="masthead-stat">
-              <span className="masthead-stat-value">{loading ? '—' : stats.withProvenance.toLocaleString()}</span>
+              <span className="masthead-stat-value">{loading ? '-' : stats.withProvenance.toLocaleString()}</span>
               <span className="masthead-stat-label">Provenance Records</span>
             </div>
           </div>
@@ -692,7 +692,7 @@ export default function Dashboard({ user }: { user: any }) {
                 ref={searchInputRef}
                 type="text"
                 className="search-panel-input"
-                placeholder="Search by artist, medium, title, or period…"
+                placeholder="Search by artist, medium, title, or period..."
                 value={localSearch}
                 onChange={e => setLocalSearch(e.target.value)}
               />
@@ -707,12 +707,14 @@ export default function Dashboard({ user }: { user: any }) {
         </div>
 
         {/* ── Provenance Strip ───────────────────────────────── */}
-        <div className="provenance-strip">
-          <span className="provenance-strip-icon">⊛</span>
-          <p className="provenance-strip-text">
-            Every work in the ArtVault Registry maintains documented ownership, exhibition history, and legal provenance in accordance with institutional archival standards.
-          </p>
-        </div>
+        {mode === 'discover' && (
+          <div className="provenance-strip">
+            <span className="provenance-strip-icon">AV</span>
+            <p className="provenance-strip-text">
+              Every work in the ArtVault Registry maintains documented ownership, exhibition history, and legal provenance in accordance with institutional archival standards.
+            </p>
+          </div>
+        )}
 
         {/* ── Featured Acquisition ──────────────────────────── */}
         {showFeatured && featuredArtwork && (
@@ -725,9 +727,11 @@ export default function Dashboard({ user }: { user: any }) {
             <div className="museum-rule-inline">
               <span className="museum-rule-text">
                 {searchQuery
-                  ? `Search Results · ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
+                  ? `Search Results - ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
                   : activeFiltersCount > 0
-                  ? `Filtered Registry · ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
+                  ? `Filtered Registry - ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
+                  : mode === 'registry'
+                  ? 'Accession Index'
                   : 'Full Collection Registry'}
               </span>
             </div>
@@ -760,7 +764,7 @@ export default function Dashboard({ user }: { user: any }) {
           </div>
         ) : filteredArtworks.length === 0 ? (
           <div className="registry-empty">
-            <div className="registry-empty-icon">◎</div>
+            <div className="registry-empty-icon">AV</div>
             <h3 className="registry-empty-title">No Works Found</h3>
             <p className="registry-empty-desc">
               {searchQuery
@@ -793,7 +797,7 @@ export default function Dashboard({ user }: { user: any }) {
                   onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
                 >
-                  ← Previous
+                  Previous
                 </button>
                 <div className="pagination-pages">
                   {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
@@ -823,7 +827,7 @@ export default function Dashboard({ user }: { user: any }) {
                   onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
                 >
-                  Next →
+                  Next
                 </button>
               </div>
             )}
