@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { LogOut, User, Settings, Shield } from 'lucide-react';
+import { Archive, Home, Info, LogOut, Settings, Shield, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
@@ -79,6 +79,13 @@ export default function Layout({ user }: { user: any }) {
     `text-[12px] font-bold tracking-[2px] uppercase transition-colors ${
       location.pathname === path ? 'text-[#1c1917]' : 'text-[#78716c] hover:text-[#1c1917]'
     }`;
+
+  const mobileNavItems = [
+    { path: '/home', label: 'Discover', icon: Home },
+    { path: '/registry', label: 'Registry', icon: Archive },
+    { path: '/artists', label: 'Artists', icon: Users },
+    { path: '/about', label: 'About', icon: Info },
+  ];
 
   return (
     <>
@@ -159,6 +166,19 @@ export default function Layout({ user }: { user: any }) {
       <div className="main-content-wrapper">
         <Outlet />
       </div>
+
+      <nav className="mobile-bottom-nav" aria-label="Mobile primary navigation">
+        {mobileNavItems.map(({ path, label, icon: Icon }) => (
+          <Link
+            key={path}
+            to={path}
+            className={`mobile-bottom-nav-item ${location.pathname === path ? 'active' : ''}`}
+          >
+            <Icon size={18} strokeWidth={1.8} />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
 
       {user && (
         <CreatePanel

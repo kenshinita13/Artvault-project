@@ -22,6 +22,7 @@ interface Artwork {
   description: string;
   image_url: string;
   created_at: string;
+  artist_name?: string;
   profiles?: Profile;
 }
 
@@ -51,6 +52,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
   const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [artistName, setArtistName] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
   const [deleteModalArtwork, setDeleteModalArtwork] = useState<Artwork | null>(null);
@@ -190,6 +192,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
         .insert({
           title,
           description,
+          artist_name: artistName.trim() || null,
           image_url: urlData.publicUrl,
           user_id: currentUser.id
         });
@@ -202,6 +205,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
       toast.success('Artwork published successfully!');
       setTitle('');
       setDescription('');
+      setArtistName('');
       setFile(null);
       setShowUpload(false);
       fetchUserProfile();
@@ -358,6 +362,12 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
                     </div>
                     <div className="art-details">
                       <div className="art-title">{artwork.title}</div>
+                      <div className="catalog-artist" style={{ marginBottom: '6px' }}>
+                        {artwork.artist_name || profile.name}
+                      </div>
+                      <div className="catalog-registrant" style={{ marginBottom: '10px' }}>
+                        Registered by {profile.name}
+                      </div>
                       <div className="art-desc-preview">{artwork.description || 'No description provided.'}</div>
                       
                       <div className="art-meta">
@@ -488,6 +498,19 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
                     placeholder="e.g. Starry Night" 
                     required 
                   />
+                </div>
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Original Creator / Artist</label>
+                  <input
+                    type="text"
+                    className="search-input"
+                    value={artistName}
+                    onChange={e => setArtistName(e.target.value)}
+                    placeholder="e.g. Vincent van Gogh; leave blank if this is your own work"
+                  />
+                  <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                    This profile remains the registered owner of the record.
+                  </p>
                 </div>
                 <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Description</label>

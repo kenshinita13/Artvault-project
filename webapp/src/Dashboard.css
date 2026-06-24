@@ -32,6 +32,50 @@
   }
 }
 
+.mobile-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 998;
+  display: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 66px;
+  padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+  background: rgba(245, 240, 232, 0.96);
+  border-top: 1px solid var(--beige);
+  backdrop-filter: blur(16px);
+}
+
+.mobile-bottom-nav-item {
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--charcoal-light);
+  text-decoration: none;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.mobile-bottom-nav-item.active {
+  color: var(--charcoal);
+  background: rgba(184, 151, 90, 0.14);
+}
+
+@media (max-width: 767px) {
+  .mobile-bottom-nav {
+    display: grid;
+  }
+}
+
 /* ─── Waffle / Hamburger Button ─── */
 .waffle-btn {
   background: none;
@@ -1828,7 +1872,16 @@
   font-size: 14px;
   color: var(--charcoal-mid);
   letter-spacing: 0.5px;
-  margin-bottom: 20px;
+  margin-bottom: 4px;
+}
+
+.featured-registrant {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--charcoal-light);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 18px;
 }
 
 .featured-desc {
@@ -2089,6 +2142,14 @@
   text-transform: uppercase;
 }
 
+.catalog-registrant {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--charcoal-light);
+  letter-spacing: 0.5px;
+  margin: -6px 0 12px 0;
+}
+
 .catalog-meta-row {
   margin-top: auto;
   display: flex;
@@ -2347,6 +2408,40 @@
   .search-panel-btn { display: none; }
   .registry-masthead { padding: 12px 16px; }
   .registry-masthead-title { font-size: 14px; }
+
+  .directory-container,
+  .studio-container {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .studio-header-card {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+    padding: 28px 18px;
+  }
+
+  .studio-meta {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .studio-meta h1,
+  .studio-username {
+    overflow-wrap: anywhere;
+  }
+
+  .studio-badges {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    white-space: normal;
+    text-align: center;
+  }
 }
 
 /* ─── Adjustable / Collapsible Sidebar Styles ─── */

@@ -53,11 +53,13 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
   };
 
   const registryNo = `AV-${artwork.id?.slice(0, 6).toUpperCase()}`;
-  const displayArtist = artwork.artist_name || artistName;
+  const registeredBy = artwork.profiles?.name || artwork.profiles?.username || artistName || 'ArtVault Contributor';
+  const displayArtist = artwork.artist_name || registeredBy;
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   const catalogRows: { label: string; value: React.ReactNode; highlight?: boolean }[] = [
-    displayArtist && { label: 'Artist', value: displayArtist },
+    displayArtist && { label: 'Original Creator', value: displayArtist },
+    registeredBy && { label: 'Registered By', value: registeredBy },
     artwork.creation_year  && { label: 'Year',         value: artwork.creation_year },
     category               && { label: 'Collection',   value: category },
     artwork.material_used  && { label: 'Medium',        value: artwork.material_used },
@@ -195,14 +197,14 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
                 padding: '20px 24px', borderBottom: '1px solid #ede7d9',
               }}>
                 <div style={{ flexShrink: 0 }}>
-                  <Avatar userId={artwork.user_id} name={displayArtist} size={40} />
+                  <Avatar userId={artwork.user_id} name={registeredBy} size={40} />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 700, color: '#1c1917', fontSize: '14px', letterSpacing: '0.2px' }}>
-                    {displayArtist}
+                    {registeredBy}
                   </div>
                   <div style={{ fontFamily: "'Inter', sans-serif", color: '#a8a29e', fontSize: '11px', letterSpacing: '1px', marginTop: '2px', textTransform: 'uppercase' }}>
-                    Artist
+                    Registered Owner
                   </div>
                 </div>
               </div>

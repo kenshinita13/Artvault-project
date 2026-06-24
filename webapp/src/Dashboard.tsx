@@ -21,6 +21,14 @@ function getRegistryNumber(id: string): string {
   return `AV-${id.slice(0, 6).toUpperCase()}`;
 }
 
+function getRegisteredBy(artwork: Artwork): string {
+  return artwork.profiles?.name || artwork.profiles?.username || 'ArtVault Contributor';
+}
+
+function getOriginalCreator(artwork: Artwork): string {
+  return artwork.artist_name || getRegisteredBy(artwork);
+}
+
 interface Artwork {
   id: string;
   user_id: string;
@@ -98,7 +106,8 @@ function ListIcon() {
 
 // ── Catalog Card (grid view) ──────────────────────────────────
 function CatalogCard({ artwork, onClick }: { artwork: Artwork; onClick: () => void }) {
-  const artistDisplay = artwork.artist_name || artwork.profiles?.name || artwork.profiles?.username || 'Unknown Artist';
+  const artistDisplay = getOriginalCreator(artwork);
+  const registeredBy = getRegisteredBy(artwork);
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   return (
@@ -123,6 +132,7 @@ function CatalogCard({ artwork, onClick }: { artwork: Artwork; onClick: () => vo
         <p className="catalog-registry-no">{getRegistryNumber(artwork.id)}</p>
         <h3 className="catalog-title">{artwork.title}</h3>
         <p className="catalog-artist">{artistDisplay}</p>
+        <p className="catalog-registrant">Registered by {registeredBy}</p>
         <div className="catalog-meta-row">
           {artwork.creation_year && (
             <span className="catalog-meta-item">
@@ -156,7 +166,8 @@ function CatalogCard({ artwork, onClick }: { artwork: Artwork; onClick: () => vo
 
 // ── Catalog Row (list view) ───────────────────────────────────
 function CatalogRow({ artwork, onClick }: { artwork: Artwork; onClick: () => void }) {
-  const artistDisplay = artwork.artist_name || artwork.profiles?.name || artwork.profiles?.username || 'Unknown Artist';
+  const artistDisplay = getOriginalCreator(artwork);
+  const registeredBy = getRegisteredBy(artwork);
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   return (
@@ -171,6 +182,7 @@ function CatalogRow({ artwork, onClick }: { artwork: Artwork; onClick: () => voi
         </div>
         <h3 className="catalog-title">{artwork.title}</h3>
         <p className="catalog-artist">{artistDisplay}</p>
+        <p className="catalog-registrant">Registered by {registeredBy}</p>
       </div>
       <div className="catalog-row-meta">
         {artwork.creation_year && (
@@ -213,7 +225,8 @@ function CatalogRow({ artwork, onClick }: { artwork: Artwork; onClick: () => voi
 
 // ── Featured Acquisition panel ────────────────────────────────
 function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: () => void }) {
-  const artistDisplay = artwork.artist_name || artwork.profiles?.name || artwork.profiles?.username || 'Unknown Artist';
+  const artistDisplay = getOriginalCreator(artwork);
+  const registeredBy = getRegisteredBy(artwork);
   const regNo = getRegistryNumber(artwork.id);
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
@@ -232,10 +245,19 @@ function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: 
         </div>
         <h2 className="featured-title">{artwork.title}</h2>
         <p className="featured-artist">{artistDisplay}</p>
+        <p className="featured-registrant">Registered by {registeredBy}</p>
         {artwork.description && (
           <p className="featured-desc">{artwork.description.slice(0, 180)}{artwork.description.length > 180 ? '…' : ''}</p>
         )}
         <div className="featured-catalog-table">
+          <div className="featured-row">
+            <span className="featured-row-label">Original Creator</span>
+            <span className="featured-row-value">{artistDisplay}</span>
+          </div>
+          <div className="featured-row">
+            <span className="featured-row-label">Registered By</span>
+            <span className="featured-row-value">{registeredBy}</span>
+          </div>
           {category && (
             <div className="featured-row">
               <span className="featured-row-label">Collection</span>
@@ -348,7 +370,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   const [customMaxPrice, setCustomMaxPrice] = useState<string>('');
   // Unique artists and mediums for filters
   const uniqueArtists = Array.from(new Set(
-    artworks.map(a => a.artist_name || a.profiles?.name).filter(Boolean)
+    artworks.map(a => getOriginalCreator(a)).filter(Boolean)
   )) as string[];
 
   const uniqueMediums = Array.from(new Set(
@@ -439,7 +461,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
       }
     }
     if (activeArtist !== 'all') {
-      const name = a.artist_name || a.profiles?.name;
+      const name = getOriginalCreator(a);
       if (name !== activeArtist) return false;
     }
     if (!searchQuery) return true;

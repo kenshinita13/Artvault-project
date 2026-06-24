@@ -54,6 +54,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [artistName, setArtistName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [currentHashtag, setCurrentHashtag] = useState('');
@@ -73,7 +74,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
   const resetAndClose = () => {
     setActiveTab('menu');
-    setTitle(''); setDescription(''); setFile(null); setSelectedCategories([]);
+    setTitle(''); setDescription(''); setFile(null); setArtistName(''); setSelectedCategories([]);
     setHashtags([]); setCurrentHashtag(''); setMaterialUsed(''); setArtStyle('');
     setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
@@ -158,6 +159,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
         title, description, image_url: urlData.publicUrl, user_id: user.id,
+        artist_name: artistName.trim() || null,
         tags: hashtags, material_used: materialUsed, art_style: artStyle,
         collector_or_pricing: collector, price: price ? Number(price) : null, creation_year: creationYear,
         dimensions,
@@ -304,6 +306,21 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Artwork Title</label>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Nocturne in Gold" required className="search-input" style={{ width: '100%' }} />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Original Creator / Artist</label>
+                <input
+                  type="text"
+                  value={artistName}
+                  onChange={e => setArtistName(e.target.value)}
+                  placeholder="e.g. Vincent van Gogh; leave blank if this is your own work"
+                  className="search-input"
+                  style={{ width: '100%' }}
+                />
+                <p style={{ margin: '6px 0 0', color: '#8a8178', fontSize: '11px', lineHeight: 1.5 }}>
+                  The logged-in account remains the registered owner of this record.
+                </p>
               </div>
 
               <div>
