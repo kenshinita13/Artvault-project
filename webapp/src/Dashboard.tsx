@@ -34,9 +34,11 @@ interface Artwork {
   medium?: string;
   artist_name?: string;
   material_used?: string;
+  art_style?: string;
   collector_or_pricing?: string;
   price?: number;
   creation_year?: string;
+  dimensions?: string;
   dominant_color?: string;
 }
 
@@ -134,6 +136,18 @@ function CatalogCard({ artwork, onClick }: { artwork: Artwork; onClick: () => vo
               <span className="catalog-meta-value">{artwork.material_used}</span>
             </span>
           )}
+          {artwork.art_style && (
+            <span className="catalog-meta-item">
+              <span className="catalog-meta-label">Style</span>
+              <span className="catalog-meta-value">{artwork.art_style}</span>
+            </span>
+          )}
+          {artwork.dimensions && (
+            <span className="catalog-meta-item">
+              <span className="catalog-meta-label">Size</span>
+              <span className="catalog-meta-value">{artwork.dimensions}</span>
+            </span>
+          )}
         </div>
       </div>
     </article>
@@ -169,6 +183,18 @@ function CatalogRow({ artwork, onClick }: { artwork: Artwork; onClick: () => voi
           <div className="catalog-meta-item">
             <span className="catalog-meta-label">Medium</span>
             <span className="catalog-meta-value">{artwork.material_used}</span>
+          </div>
+        )}
+        {artwork.art_style && (
+          <div className="catalog-meta-item">
+            <span className="catalog-meta-label">Style</span>
+            <span className="catalog-meta-value">{artwork.art_style}</span>
+          </div>
+        )}
+        {artwork.dimensions && (
+          <div className="catalog-meta-item">
+            <span className="catalog-meta-label">Dimensions</span>
+            <span className="catalog-meta-value">{artwork.dimensions}</span>
           </div>
         )}
         {artwork.collector_or_pricing && (
@@ -226,6 +252,18 @@ function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: 
             <div className="featured-row">
               <span className="featured-row-label">Medium</span>
               <span className="featured-row-value">{artwork.material_used}</span>
+            </div>
+          )}
+          {artwork.art_style && (
+            <div className="featured-row">
+              <span className="featured-row-label">Art Style</span>
+              <span className="featured-row-value">{artwork.art_style}</span>
+            </div>
+          )}
+          {artwork.dimensions && (
+            <div className="featured-row">
+              <span className="featured-row-label">Dimensions</span>
+              <span className="featured-row-value">{artwork.dimensions}</span>
             </div>
           )}
           {artwork.collector_or_pricing && (
@@ -350,7 +388,7 @@ export default function Dashboard({ user }: { user: any }) {
       setStats({
         total: data.length,
         withArtist: new Set(data.map((a: any) => a.artist_name || a.profiles?.name || a.profiles?.username).filter(Boolean)).size,
-        withProvenance: data.filter((a: any) => a.material_used || a.creation_year || a.collector_or_pricing).length,
+        withProvenance: data.filter((a: any) => a.material_used || a.art_style || a.creation_year || a.collector_or_pricing || a.dimensions).length,
       });
     } else if (error) {
       const { data: safeData } = await supabase
@@ -361,7 +399,11 @@ export default function Dashboard({ user }: { user: any }) {
         const d = safeData.map((art: any) => ({ ...art, artwork_categories: [] }));
         cachedArtworks = d as unknown as Artwork[];
         setArtworks(cachedArtworks);
-        setStats({ total: d.length, withArtist: new Set(d.map((a: any) => a.artist_name || a.profiles?.name || a.profiles?.username).filter(Boolean)).size, withProvenance: 0 });
+        setStats({
+          total: d.length,
+          withArtist: new Set(d.map((a: any) => a.artist_name || a.profiles?.name || a.profiles?.username).filter(Boolean)).size,
+          withProvenance: d.filter((a: any) => a.material_used || a.art_style || a.creation_year || a.collector_or_pricing || a.dimensions).length,
+        });
       }
     }
     setLoading(false);
@@ -413,6 +455,8 @@ export default function Dashboard({ user }: { user: any }) {
       (a.profiles?.name?.toLowerCase().includes(q)) ||
       (a.profiles?.username?.toLowerCase().includes(q)) ||
       (a.material_used?.toLowerCase().includes(q)) ||
+      (a.art_style?.toLowerCase().includes(q)) ||
+      (a.dimensions?.toLowerCase().includes(q)) ||
       (a.tags?.some((t: string) => t.toLowerCase().includes(q)))
     );
   });

@@ -255,7 +255,7 @@ export default function AuthForm({
             onClick={() => navigate('/')} 
             className="absolute top-6 right-8 text-zinc-500 hover:text-zinc-900 text-3xl transition-colors z-50"
           >
-            ✕
+            x
           </button>
         )}
         
@@ -266,7 +266,7 @@ export default function AuthForm({
             className="fixed inset-0 bg-[#fdfbf7]/90 z-[99999] flex justify-center items-center p-4"
           >
             <div className="bg-white p-10 rounded-2xl text-center max-w-md w-full border border-red-500/50 shadow-[0_10px_40px_rgba(239,68,68,0.2)]">
-                <div className="text-6xl mb-6">🚨</div>
+                <div className="text-5xl mb-6" aria-hidden="true">!</div>
                 <h2 className="text-red-500 mb-4 text-2xl font-bold">Account Restricted</h2>
                 <p className="text-zinc-600 mb-8 text-base leading-relaxed">{banMessage}</p>
                 <button 
@@ -308,7 +308,7 @@ export default function AuthForm({
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', textAlign: 'center', fontSize: '14px' }}>
               Please enter the 6-digit code from Google Authenticator to verify your identity.
             </p>
-            {error && <div className="alert error">❌ {error}</div>}
+            {error && <div className="alert error">{error}</div>}
             
             <form onSubmit={e => handleMfaSubmit(e)}>
               <div className="form-group">
@@ -330,7 +330,7 @@ export default function AuthForm({
             </form>
             <div className="form-footer">
               <a href="#" onClick={(e) => { e.preventDefault(); supabase.auth.signOut(); setShowMfaChallenge(false); setIsValidatingLogin(false); }}>
-                Cancel & Logout
+                Cancel and Logout
               </a>
             </div>
           </div>
@@ -338,8 +338,8 @@ export default function AuthForm({
         
         {!isAdminRoute && activeForm === 'login' && !showMfaChallenge && (
           <div className="form-box active">
-            {error && <div className="alert error">❌ {error}</div>}
-            {success && <div className="alert success">✅ {success}</div>}
+            {error && <div className="alert error">{error}</div>}
+            {success && <div className="alert success">{success}</div>}
 
             <form onSubmit={(e) => handleLogin(e, false)}>
               <div className="form-group">
@@ -389,14 +389,14 @@ export default function AuthForm({
 
         {isAdminRoute && !showMfaChallenge && (
           <div className="form-box active" style={{ borderTop: '4px solid #7494ec' }}>
-            <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '15px' }}>🛡️</div>
+            <div style={{ fontSize: '42px', textAlign: 'center', marginBottom: '15px', fontWeight: 700 }}>AV</div>
             
             <div style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(234, 179, 8, 0.2)', fontSize: '14px' }}>
-              <strong>⚠️ Restricted Access:</strong> This area is for administrators only.
+              <strong>Restricted Access:</strong> This area is for administrators only.
             </div>
 
-            {error && <div className="alert error">❌ {error}</div>}
-            {success && <div className="alert success">✅ {success}</div>}
+            {error && <div className="alert error">{error}</div>}
+            {success && <div className="alert success">{success}</div>}
 
             <form onSubmit={(e) => handleLogin(e, true)}>
               <div className="form-group">
@@ -428,7 +428,7 @@ export default function AuthForm({
               </div>
 
               <button type="submit" disabled={loading} style={{ background: '#7494ec', marginTop: '20px' }}>
-                {loading ? 'Authenticating...' : '🔐 Login as Administrator'}
+                {loading ? 'Authenticating...' : 'Login as Administrator'}
               </button>
             </form>
           </div>
@@ -437,8 +437,8 @@ export default function AuthForm({
         {!isAdminRoute && activeForm === 'register' && !showMfaChallenge && (
           <div className="form-box active">
 
-            {error && <div className="alert error">❌ {error}</div>}
-            {success && <div className="alert success">✅ {success}</div>}
+            {error && <div className="alert error">{error}</div>}
+            {success && <div className="alert success">{success}</div>}
 
             <form onSubmit={handleRegister}>
               <div className="form-group">

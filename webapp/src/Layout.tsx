@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { LogOut, User, Settings, Shield, X } from 'lucide-react';
+import { Bell, LogOut, User, Settings, Shield, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
@@ -16,7 +16,6 @@ export default function Layout({ user }: { user: any }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '');
 
@@ -42,18 +41,6 @@ export default function Layout({ user }: { user: any }) {
 
     return () => clearTimeout(timer);
   }, [localSearch, setSearchParams, searchParams]);
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalSearch(e.target.value);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      if (window.location.pathname !== '/home' && window.location.pathname !== '/') {
-         navigate(`/home?search=${encodeURIComponent(localSearch)}`);
-      }
-    }
-  };
 
   // Cached categories — shared with Dashboard, fetched once across navigation
   const { data: cachedCategories } = useCachedQuery<any[]>(
@@ -145,7 +132,7 @@ export default function Layout({ user }: { user: any }) {
     await supabase.auth.signOut();
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
     <>
@@ -178,9 +165,36 @@ export default function Layout({ user }: { user: any }) {
                   className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm" 
                   style={{ background: '#b8975a', border: 'none', borderRadius: '4px', color: '#1c1917', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}
                 >
-                  Submit Artwork
+                  Register Work
                 </button>
               )}
+              <button
+                className="lb-action-btn"
+                onClick={() => setNotificationsOpen(true)}
+                title="Recent activity"
+                style={{ color: '#78716c', position: 'relative' }}
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: 3,
+                    right: 3,
+                    minWidth: 16,
+                    height: 16,
+                    padding: '0 4px',
+                    borderRadius: 8,
+                    background: '#6b2737',
+                    color: '#fdfaf5',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    lineHeight: '16px',
+                    textAlign: 'center',
+                  }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
               <button className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
                 <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
               </button>
@@ -314,5 +328,3 @@ export default function Layout({ user }: { user: any }) {
     </>
   );
 }
-
-

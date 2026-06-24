@@ -12,7 +12,7 @@ interface LightboxProps {
   currentUser?: any;
 }
 
-export default function Lightbox({ artwork, artistName, onClose, currentUser }: LightboxProps) {
+export default function Lightbox({ artwork, artistName, onClose }: LightboxProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
@@ -67,6 +67,8 @@ export default function Lightbox({ artwork, artistName, onClose, currentUser }: 
     artwork.creation_year  && { label: 'Year',         value: artwork.creation_year },
     category               && { label: 'Collection',   value: category },
     artwork.material_used  && { label: 'Medium',        value: artwork.material_used },
+    artwork.art_style      && { label: 'Art Style',     value: artwork.art_style },
+    artwork.dimensions     && { label: 'Dimensions',    value: artwork.dimensions },
     artwork.collector_or_pricing && { label: 'Status',  value: artwork.collector_or_pricing },
     artwork.price != null  && { label: 'Valuation',     value: `$${Number(artwork.price).toLocaleString()}`, highlight: true },
     { label: 'Registry No.', value: registryNo },

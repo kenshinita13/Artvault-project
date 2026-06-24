@@ -208,11 +208,12 @@ function App() {
         {/* Publically Accessible Layout */}
         <Route element={<Layout user={session?.user || null} />}>
           {/* Public Route */}
-          <Route path="/home" element={<Dashboard user={session?.user || null} />} />
+          <Route path="/home" element={<Dashboard user={session?.user || null} mode="discover" />} />
+          <Route path="/registry" element={<Dashboard user={session?.user || null} mode="registry" />} />
           <Route path="/about" element={<About />} />
           
           {/* Protected Routes */}
-          <Route path="/artists" element={session ? <Artists /> : <Navigate to="/login" replace />} />
+          <Route path="/artists" element={<Artists />} />
           <Route path="/profile/:id" element={session ? <UserProfile currentUser={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
           <Route path="/admin_panel" element={session ? <AdminPanel user={session.user} /> : <Navigate to="/login" replace />} />

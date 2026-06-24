@@ -44,6 +44,9 @@ const compressImage = (file: File): Promise<File> => {
   });
 };
 
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+const formatFileSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
 export default function CreatePanel({ isOpen, onClose, user, categories, onArtworkCreated, onBoardCreated }: CreatePanelProps) {
   const [activeTab, setActiveTab] = useState<'menu' | 'artwork' | 'board'>('menu');
   
@@ -55,9 +58,11 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [currentHashtag, setCurrentHashtag] = useState('');
   const [materialUsed, setMaterialUsed] = useState('');
+  const [artStyle, setArtStyle] = useState('');
   const [collector, setCollector] = useState('');
   const [price, setPrice] = useState('');
   const [creationYear, setCreationYear] = useState('');
+  const [dimensions, setDimensions] = useState('');
   const [uploading, setUploading] = useState(false);
 
   // Board form
@@ -69,8 +74,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const resetAndClose = () => {
     setActiveTab('menu');
     setTitle(''); setDescription(''); setFile(null); setSelectedCategories([]);
-    setHashtags([]); setCurrentHashtag(''); setMaterialUsed('');
-    setCollector(''); setPrice(''); setCreationYear('');
+    setHashtags([]); setCurrentHashtag(''); setMaterialUsed(''); setArtStyle('');
+    setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
     onClose();
   };
@@ -118,6 +123,10 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !title) return;
+    if (file.size > MAX_UPLOAD_SIZE) {
+      toast.error(`Image must be 10MB or smaller. Selected file is ${formatFileSize(file.size)}.`);
+      return;
+    }
     setUploading(true);
 
     try {
@@ -129,6 +138,12 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       if (file.type.startsWith('image/') && fileExt !== 'gif') {
         fileToUpload = await compressImage(file);
         fileExt = 'webp';
+      }
+
+      if (fileToUpload.size > MAX_UPLOAD_SIZE) {
+        toast.error(`Compressed image is still above 10MB (${formatFileSize(fileToUpload.size)}). Please choose a smaller image.`);
+        setUploading(false);
+        return;
       }
 
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
@@ -143,8 +158,9 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
         title, description, image_url: urlData.publicUrl, user_id: user.id,
-        tags: hashtags, material_used: materialUsed,
+        tags: hashtags, material_used: materialUsed, art_style: artStyle,
         collector_or_pricing: collector, price: price ? Number(price) : null, creation_year: creationYear,
+        dimensions,
         dominant_color: extractedColor
       }).select().single();
       if (dbError) throw dbError;
@@ -156,7 +172,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
         );
       }
 
-      toast.success('Artwork published!');
+      toast.success('Artwork registered in the catalog.');
       resetAndClose();
       onArtworkCreated?.();
     } catch (err: any) {
@@ -173,8 +189,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
     const { error } = await supabase.from('boards').insert({
       user_id: user.id, name: boardName.trim(), description: boardDesc.trim(), is_private: isPrivate
     });
-    if (error) toast.error('Failed to create board');
-    else { toast.success('Board created!'); resetAndClose(); onBoardCreated?.(); }
+    if (error) toast.error('Failed to create portfolio');
+    else { toast.success('Portfolio created.'); resetAndClose(); onBoardCreated?.(); }
     setCreatingBoard(false);
   };
 
@@ -202,7 +218,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
         {/* Header */}
         <div style={{ padding: '24px', borderBottom: '1px solid #e5e0d8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#1a1a1a' }}>
-            {activeTab === 'menu' ? 'Create' : activeTab === 'artwork' ? 'Post Artwork' : 'New Board'}
+            {activeTab === 'menu' ? 'Create Record' : activeTab === 'artwork' ? 'Register Artwork' : 'New Portfolio'}
           </h2>
           <button onClick={resetAndClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: '6px', borderRadius: '50%', display: 'flex', transition: 'all 0.2s' }}>
             <X size={22} />
@@ -229,8 +245,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   <ImagePlus size={22} />
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Post Artwork</p>
-                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Upload your image with title, description, and tags</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Register Artwork</p>
+                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Create a catalog entry with image, metadata, and provenance notes</p>
                 </div>
               </button>
 
@@ -248,8 +264,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   <FolderPlus size={22} />
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Create Board</p>
-                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Organize your favorite artworks into a collection</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Create Portfolio</p>
+                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Organize works by artist, collector, or collection</p>
                 </div>
               </button>
             </div>
@@ -259,29 +275,45 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
           {activeTab === 'artwork' && (
             <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
-                ← Back to menu
+                Back to menu
               </button>
 
               {/* File upload area */}
               <div style={{ border: '2px dashed rgba(74, 52, 36, 0.3)', borderRadius: '16px', padding: '30px', textAlign: 'center', cursor: 'pointer', position: 'relative', background: file ? 'rgba(74, 52, 36, 0.05)' : 'transparent', transition: 'all 0.2s' }}>
                 <Upload size={28} style={{ color: '#4a3424', marginBottom: '8px' }} />
-                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{file ? file.name : 'Click or drop image here'}</p>
-                <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)} required style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{file ? `${file.name} (${formatFileSize(file.size)})` : 'Click or drop image here'}</p>
+                <p style={{ color: '#8c6e3d', fontSize: '11px', margin: '6px 0 0', letterSpacing: '0.5px', textTransform: 'uppercase' }}>10MB maximum, optimized to WebP</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => {
+                    const selected = e.target.files?.[0] || null;
+                    if (selected && selected.size > MAX_UPLOAD_SIZE) {
+                      toast.error(`Image must be 10MB or smaller. Selected file is ${formatFileSize(selected.size)}.`);
+                      e.currentTarget.value = '';
+                      setFile(null);
+                      return;
+                    }
+                    setFile(selected);
+                  }}
+                  required
+                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Title</label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Give your artwork a name" required className="search-input" style={{ width: '100%' }} />
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Artwork Title</label>
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Nocturne in Gold" required className="search-input" style={{ width: '100%' }} />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Description</label>
-                <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell the story behind your art..." className="search-input" style={{ height: '80px', resize: 'vertical' }} />
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Catalog Notes</label>
+                <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Provenance, exhibition history, condition notes, or collection context" className="search-input" style={{ height: '80px', resize: 'vertical' }} />
               </div>
 
               {/* Hashtags */}
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Tags (Hashtags)</label>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Catalog Tags</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
                   {hashtags.map((tag, idx) => (
                     <span key={idx} style={{ background: 'rgba(74, 52, 36, 0.1)', color: '#4a3424', padding: '4px 10px', borderRadius: '14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -315,10 +347,20 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 </div>
               </div>
 
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Art Style</label>
+                <input type="text" value={artStyle} onChange={e => setArtStyle(e.target.value)} placeholder="e.g. Renaissance portrait, modern abstraction" className="search-input" style={{ width: '100%' }} />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Dimensions</label>
+                <input type="text" value={dimensions} onChange={e => setDimensions(e.target.value)} placeholder="e.g. 23 x 46 in, framed" className="search-input" style={{ width: '100%' }} />
+              </div>
+
               <div style={{ display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Collector or Pricing Status</label>
-                  <input type="text" value={collector} onChange={e => setCollector(e.target.value)} placeholder="e.g. For Sale, Collected by John" className="search-input" style={{ width: '100%' }} />
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Collector / Status</label>
+                  <input type="text" value={collector} onChange={e => setCollector(e.target.value)} placeholder="e.g. Private Collection, Available" className="search-input" style={{ width: '100%' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Price</label>
@@ -328,7 +370,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
               {/* Category Tags */}
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Categories</label>
+                <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Portfolio Categories</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {categories.map(cat => (
                     <button
@@ -349,7 +391,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               </div>
 
               <button type="submit" className="btn btn-primary" disabled={uploading} style={{ width: '100%', marginTop: '8px' }}>
-                {uploading ? 'Publishing...' : '🎨 Publish Artwork'}
+                {uploading ? 'Registering...' : 'Register Artwork'}
               </button>
             </form>
           )}
@@ -358,11 +400,11 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
           {activeTab === 'board' && (
             <form onSubmit={handleCreateBoard} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
-                ← Back to menu
+                Back to menu
               </button>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Board Name</label>
+                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Portfolio Name</label>
                 <input type="text" value={boardName} onChange={e => setBoardName(e.target.value)} placeholder='e.g. "Renaissance Masterpieces"' required className="search-input" />
               </div>
 
@@ -373,11 +415,11 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <input type="checkbox" id="create-private" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#a855f7' }} />
-                <label htmlFor="create-private" style={{ color: '#999', fontSize: '14px', cursor: 'pointer' }}>Make this board private</label>
+                <label htmlFor="create-private" style={{ color: '#999', fontSize: '14px', cursor: 'pointer' }}>Make this portfolio private</label>
               </div>
 
               <button type="submit" className="btn btn-primary" disabled={creatingBoard} style={{ width: '100%', marginTop: '8px' }}>
-                {creatingBoard ? 'Creating...' : '📁 Create Board'}
+                {creatingBoard ? 'Creating...' : 'Create Portfolio'}
               </button>
             </form>
           )}
