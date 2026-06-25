@@ -2872,6 +2872,61 @@
 }
 
 @media (max-width: 800px) {
+  .dashboard-layout {
+    padding-top: 80px;
+  }
+
+  .registry-content {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .registry-masthead {
+    align-items: flex-start;
+    padding: 14px 18px;
+    gap: 8px;
+  }
+
+  .registry-masthead-left {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .registry-search-context {
+    width: 100%;
+    border-left: none;
+    padding-left: 0;
+  }
+
+  .search-panel {
+    padding: 14px 18px;
+  }
+
+  .search-panel-inner {
+    align-items: stretch;
+    min-height: 46px;
+  }
+
+  .search-panel-icon {
+    margin-left: 12px;
+    align-self: center;
+  }
+
+  .search-panel-input {
+    min-height: 46px;
+    font-size: 13px;
+  }
+
+  .search-live-status {
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .provenance-strip {
+    align-items: flex-start;
+    padding: 12px 18px;
+  }
+
   .featured-acquisition {
     grid-template-columns: 1fr;
     height: auto;
@@ -2892,11 +2947,102 @@
     padding: 24px 20px;
   }
   .featured-title { font-size: 20px; }
+  .featured-header {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .featured-section-label,
+  .featured-reg-no {
+    letter-spacing: 1.8px;
+  }
+  .featured-row {
+    display: grid;
+    grid-template-columns: minmax(96px, 34%) minmax(0, 1fr);
+    padding: 9px 12px;
+    gap: 10px;
+  }
+  .featured-row-label {
+    width: auto;
+    min-width: 0;
+    flex: none;
+    letter-spacing: 1.4px;
+  }
+  .featured-view-btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
   .registry-masthead-stats { display: none; }
-  .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .collection-header {
+    align-items: flex-start;
+    gap: 12px;
+    flex-direction: column;
+    padding: 14px 18px;
+  }
+  .collection-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .museum-rule-inline {
+    min-width: 0;
+  }
+  .museum-rule-text {
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .museum-rule-inline::after {
+    width: 32px;
+    flex-shrink: 0;
+  }
+  .catalog-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 10px;
+    background: var(--ivory);
+  }
+  .catalog-card {
+    border: 1px solid var(--beige);
+  }
+  .catalog-card-image {
+    padding-bottom: 68%;
+  }
+  .catalog-card-body {
+    padding: 15px 16px 17px;
+  }
+  .catalog-title {
+    font-size: 16px;
+  }
+  .catalog-card-badge-row {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+  .catalog-badge {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
   .catalog-row { grid-template-columns: 80px 1fr; }
   .catalog-row-meta, .catalog-row-action { display: none; }
-  .catalog-row-info { border-left: none; }
+  .catalog-row-info {
+    border-left: none;
+    padding: 12px 14px;
+  }
+  .catalog-row-top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .catalog-artist,
+  .catalog-registrant {
+    overflow-wrap: anywhere;
+  }
+  .registry-pagination {
+    padding: 24px 12px 86px;
+  }
+  .pagination-pages {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
   .artist-directory-shell {
     grid-template-columns: 1fr;
     gap: 14px;
@@ -2943,10 +3089,92 @@
 }
 
 @media (max-width: 540px) {
-  .catalog-grid { grid-template-columns: 1fr 1fr; }
   .search-panel-btn { display: none; }
-  .registry-masthead { padding: 12px 16px; }
+  .registry-masthead { padding: 12px 14px; }
   .registry-masthead-title { font-size: 14px; }
+
+  .mobile-filter-toggle {
+    top: 80px;
+    padding: 12px 14px;
+  }
+
+  .mobile-filter-btn {
+    min-height: 40px;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .filter-sidebar {
+    width: min(330px, 88vw) !important;
+    padding: 56px 18px 84px;
+  }
+
+  .search-panel {
+    padding: 12px 14px;
+  }
+
+  .search-panel-inner {
+    border-radius: 6px;
+  }
+
+  .featured-image-panel {
+    height: 280px;
+    min-height: 280px;
+    padding: 14px;
+  }
+
+  .featured-image-panel img {
+    max-height: 252px;
+  }
+
+  .featured-info-panel {
+    padding: 20px 16px;
+  }
+
+  .featured-title {
+    font-size: 19px;
+  }
+
+  .featured-desc {
+    font-size: 12.5px;
+  }
+
+  .featured-catalog-table {
+    margin-bottom: 18px;
+  }
+
+  .featured-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .catalog-grid {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .catalog-card-image {
+    padding-bottom: 72%;
+  }
+
+  .catalog-meta-row {
+    gap: 8px;
+  }
+
+  .catalog-meta-value {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .catalog-row {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .catalog-row-thumb {
+    width: 76px;
+    height: 76px;
+  }
 
   .directory-container,
   .studio-container {
