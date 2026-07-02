@@ -50,4 +50,4 @@ This project has been fully modernized and is built natively on **React**, **Vit
 ## 🛡️ Default Admin Account
 - **Email**: `admin@artvault.com`
 - **Password**: `admin`
-- **localhost:XXXX/ADMIN**
+- **http://localhost:5173/admin**
