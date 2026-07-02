@@ -1,11 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
 import { REGISTRATION_ROLES, ROLES } from './roles';
+import { getAuthRedirectUrl } from './authRedirects';
 import type { ArtVaultRole } from './roles';
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+            ux_mode?: 'popup' | 'redirect';
+          }) => void;
+          renderButton: (
+            parent: HTMLElement,
+            options: {
+              theme?: 'outline' | 'filled_blue' | 'filled_black';
+              size?: 'large' | 'medium' | 'small';
+              text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
+              shape?: 'rectangular' | 'pill' | 'circle' | 'square';
+              width?: number;
+            }
+          ) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
 
 interface AuthFormProps {
   onLoginComplete: (data: any, profile?: any) => void;
@@ -16,6 +44,130 @@ interface AuthFormProps {
   setShowMfaChallenge: (v: boolean) => void;
   mfaFactorIds: string[];
   setMfaFactorIds: (ids: string[]) => void;
+}
+
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '365434914690-os7tc8fj7tb731v9tf1j33enjggt54ct.apps.googleusercontent.com';
+
+const TRUSTED_INTERNAL_DOMAINS = new Set(['artvault.com']);
+
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+  '10minutemail.com',
+  '20minutemail.com',
+  'mailinator.com',
+  'guerrillamail.com',
+  'guerrillamail.net',
+  'tempmail.com',
+  'temp-mail.org',
+  'throwawaymail.com',
+  'yopmail.com',
+  'sharklasers.com',
+  'getairmail.com',
+  'trashmail.com',
+  'maildrop.cc',
+  'dispostable.com',
+  'fakeinbox.com',
+  'emailondeck.com',
+  'moakt.com',
+  'mohmal.com',
+]);
+
+const COMMON_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'ymail.com',
+  'rocketmail.com',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'msn.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'aol.com',
+  'proton.me',
+  'protonmail.com',
+  'zoho.com',
+  'zohomail.com',
+  'gmx.com',
+  'gmx.net',
+  'mail.com',
+  'fastmail.com',
+  'tutanota.com',
+  'tuta.com',
+  'hey.com',
+  'pm.me',
+  'live.com.ph',
+  'yahoo.com.ph',
+]);
+
+function validateRegistrationEmail(rawEmail: string): string | null {
+  const trimmedEmail = rawEmail.trim().toLowerCase();
+  const basicEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!basicEmailPattern.test(trimmedEmail)) {
+    return 'Please enter a valid email address.';
+  }
+
+  const [, domain = ''] = trimmedEmail.split('@');
+  const domainParts = domain.split('.');
+  const tld = domainParts[domainParts.length - 1] || '';
+
+  if (TRUSTED_INTERNAL_DOMAINS.has(domain)) return null;
+
+  if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
+    return 'Temporary or disposable email addresses are not allowed.';
+  }
+
+  if (domain.includes('..') || domain.startsWith('-') || domain.endsWith('-')) {
+    return 'Please use a valid email domain.';
+  }
+
+  if (!/^[a-z0-9.-]+$/.test(domain) || !/^[a-z]{2,24}$/.test(tld)) {
+    return 'Please use a valid email domain.';
+  }
+
+  if (!COMMON_EMAIL_DOMAINS.has(domain)) {
+    return 'Please use a supported email provider such as Gmail, Yahoo, Outlook, iCloud, Proton, Zoho, or ArtVault.';
+  }
+
+  return null;
+}
+
+function clearLocalSupabaseAuthStorage() {
+  if (typeof window === 'undefined') return;
+
+  [window.localStorage, window.sessionStorage].forEach((storage) => {
+    Object.keys(storage).forEach((key) => {
+      if (key.startsWith('sb-') || key.toLowerCase().includes('supabase')) {
+        storage.removeItem(key);
+      }
+    });
+  });
+}
+
+function loadGoogleIdentityScript() {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (window.google?.accounts?.id) return Promise.resolve();
+
+  return new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Google sign-in could not load.')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Google sign-in could not load.'));
+    document.head.appendChild(script);
+  });
 }
 
 export default function AuthForm({
@@ -45,6 +197,8 @@ export default function AuthForm({
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
+  const loginGoogleButtonRef = useRef<HTMLDivElement | null>(null);
+  const registerGoogleButtonRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -165,6 +319,102 @@ export default function AuthForm({
     }
   };
 
+  const handleGoogleCredential = useCallback(async (response: { credential?: string }) => {
+    if (!response.credential) {
+      setError('Google sign-in did not return a credential. Please try again.');
+      toast.error('Google sign-in failed.');
+      setLoading(false);
+      setIsValidatingLogin(false);
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    setIsValidatingLogin(true);
+    clearLocalSupabaseAuthStorage();
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: response.credential,
+    });
+
+    if (error || !data?.user) {
+      const message = error?.message || 'Google sign-in failed. Please try again.';
+      setError(message);
+      toast.error(message);
+      setLoading(false);
+      setIsValidatingLogin(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, status, suspension_end')
+      .eq('id', data.user.id)
+      .single();
+
+    const statusError = await validateProfileStatus(profile, data.user.id);
+    if (statusError) {
+      setError(statusError);
+      setBanMessage(statusError);
+      setLoading(false);
+      setIsValidatingLogin(false);
+      return;
+    }
+
+    const adminError = validateAdminAccess(profile, false);
+    if (adminError) {
+      await supabase.auth.signOut();
+      setError(adminError);
+      toast.error(adminError);
+      setLoading(false);
+      setIsValidatingLogin(false);
+      return;
+    }
+
+    onLoginComplete(data, profile);
+    setLoading(false);
+  }, [onLoginComplete, setBanMessage, setIsValidatingLogin]);
+
+  useEffect(() => {
+    if (isAdminRoute || showMfaChallenge) return;
+
+    const target = activeForm === 'login' ? loginGoogleButtonRef.current : registerGoogleButtonRef.current;
+    if (!target) return;
+
+    let cancelled = false;
+    target.innerHTML = '';
+
+    loadGoogleIdentityScript()
+      .then(() => {
+        if (cancelled || !window.google?.accounts?.id || !target) return;
+
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredential,
+          ux_mode: 'popup',
+        });
+        window.google.accounts.id.renderButton(target, {
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          width: Math.min(target.clientWidth || 360, 400),
+        });
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      target.innerHTML = '';
+    };
+  }, [activeForm, handleGoogleCredential, isAdminRoute, showMfaChallenge]);
+
   const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -216,11 +466,20 @@ export default function AuthForm({
     setSuccess('');
     setLoading(true);
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailValidationError = validateRegistrationEmail(normalizedEmail);
+    if (emailValidationError) {
+      setError(emailValidationError);
+      toast.error(emailValidationError);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
-        emailRedirectTo: window.location.origin + '/home',
+        emailRedirectTo: getAuthRedirectUrl('/home'),
         data: {
           name,
           username,
@@ -372,6 +631,13 @@ export default function AuthForm({
                 {loading ? 'Authenticating...' : 'Enter Studio'}
               </button>
 
+              <div
+                className="mt-4 w-full overflow-hidden border border-[#d6c7ad] bg-[#fdfbf7] p-1 shadow-[0_10px_24px_rgba(37,31,24,0.08)]"
+                style={{ borderRadius: '14px' }}
+              >
+                <div ref={loginGoogleButtonRef} className="flex min-h-[44px] w-full items-center justify-center" aria-label="Continue with Google" />
+              </div>
+
               <div className="form-footer">
                 New to ArtVault?{' '}
                 <a href="#" onClick={(e) => { 
@@ -473,11 +739,14 @@ export default function AuthForm({
                   type="email" 
                   id="reg_email" 
                   className="form-control" 
-                  placeholder="e.g. leo@artvault.com" 
+                  placeholder="e.g. leo@gmail.com"
                   required 
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                 />
+                <div className="text-sm text-zinc-500 mt-2 leading-snug">
+                  Use a real inbox. Temporary or fake-looking email domains are blocked.
+                </div>
               </div>
 
               <div className="form-group">
@@ -517,6 +786,13 @@ export default function AuthForm({
               <button type="submit" disabled={loading} className="w-full bg-[#4a3424] hover:bg-[#382619] text-[#fdfbf7] font-bold py-3 px-4 rounded-xl shadow-lg transition-all mt-4">
                 {loading ? 'Registering...' : 'Onboard Account'}
               </button>
+
+              <div
+                className="mt-4 w-full overflow-hidden border border-[#d6c7ad] bg-[#fdfbf7] p-1 shadow-[0_10px_24px_rgba(37,31,24,0.08)]"
+                style={{ borderRadius: '14px' }}
+              >
+                <div ref={registerGoogleButtonRef} className="flex min-h-[44px] w-full items-center justify-center" aria-label="Continue with Google" />
+              </div>
 
               <div className="text-center mt-6 text-zinc-600 text-sm">
                 Already registered?{' '}
