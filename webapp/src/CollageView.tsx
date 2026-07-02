@@ -91,10 +91,16 @@ export default function CollageView({ user }: { user: any }) {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', marginBottom: '30px' }}>
           <button 
-            onClick={() => navigate(-1)} 
-            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex', transition: 'background 0.2s' }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-            onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+            onClick={() => {
+              if (window.history.length > 2) {
+                navigate(-1);
+              } else {
+                navigate(`/profile/${board.user_id}?tab=collages`);
+              }
+            }} 
+            style={{ background: 'rgba(0,0,0,0.04)', border: 'none', color: 'var(--charcoal, #1c1917)', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex', transition: 'background 0.2s' }}
+            onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
+            onMouseOut={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
           >
             <ArrowLeft size={20} />
           </button>

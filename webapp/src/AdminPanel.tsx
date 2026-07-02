@@ -3,10 +3,22 @@ import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 import { logAudit } from './auditHelper';
 import { ROLES, type ArtVaultRole, canAccessAdmin } from './roles';
+import CreatePanel from './CreatePanel';
 import './AdminPanel.css';
 
 // ─── Types ────────────────────────────────────────────────────────
 type Tab = 'dashboard' | 'users' | 'registry' | 'reports' | 'logs';
+
+interface AdminBoard {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  is_private: boolean;
+  created_at: string;
+  updated_at?: string;
+  item_count?: number;
+}
 
 const emptyArtworkForm = {
   title: '',
@@ -91,6 +103,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [createPanelOpen, setCreatePanelOpen] = useState(false);
 
   // Data
   const [allUsers, setAllUsers]     = useState<any[]>([]);
@@ -98,6 +111,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const [reports, setReports]       = useState<any[]>([]);
   const [auditLogs, setAuditLogs]   = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [allBoards, setAllBoards] = useState<AdminBoard[]>([]);
 
   // Search/filter
   const [userSearch, setUserSearch]       = useState('');
@@ -114,6 +128,17 @@ export default function AdminPanel({ user }: { user: any }) {
   const [deleteArtworkModal, setDeleteArtworkModal] = useState<any>(null);
   const [editArtworkModal, setEditArtworkModal] = useState<any>(null);
   const [editArtworkForm, setEditArtworkForm] = useState(emptyArtworkForm);
+  const [portfolioModal, setPortfolioModal] = useState<AdminBoard | null>(null);
+  const [portfolioForm, setPortfolioForm] = useState({ name: '', description: '', is_private: false });
+  const [portfolioArtworkIds, setPortfolioArtworkIds] = useState<string[]>([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioArtworkSearch, setPortfolioArtworkSearch] = useState('');
+  const [portfolioStyleFilter, setPortfolioStyleFilter] = useState('all');
+  const [portfolioMediumFilter, setPortfolioMediumFilter] = useState('all');
+  const [portfolioDateFilter, setPortfolioDateFilter] = useState('all');
+  const [portfolioPreviewModal, setPortfolioPreviewModal] = useState<AdminBoard | null>(null);
+  const [portfolioPreviewArtworks, setPortfolioPreviewArtworks] = useState<any[]>([]);
+  const [portfolioPreviewLoading, setPortfolioPreviewLoading] = useState(false);
   const [suspendDays, setSuspendDays]       = useState('7');
   const [pendingRole, setPendingRole]       = useState('');
 
@@ -133,7 +158,7 @@ export default function AdminPanel({ user }: { user: any }) {
     if (data) {
       setProfile(data);
       if (canAccessAdmin(data.role)) {
-        await Promise.all([fetchUsers(), fetchArtworks(), fetchReports(), fetchLogs(), fetchCategories()]);
+        await Promise.all([fetchUsers(), fetchArtworks(), fetchReports(), fetchLogs(), fetchCategories(), fetchBoards()]);
       }
     }
     setLoading(false);
@@ -155,6 +180,27 @@ export default function AdminPanel({ user }: { user: any }) {
   async function fetchCategories() {
     const { data } = await supabase.from('categories').select('id, name, slug').order('name');
     if (data) setCategories(data);
+  }
+
+  async function fetchBoards() {
+    const { data } = await supabase
+      .from('boards')
+      .select('id, user_id, name, description, is_private, created_at, updated_at')
+      .order('created_at', { ascending: false });
+
+    if (!data) return;
+
+    const boardIds = data.map((board: any) => board.id);
+    const { data: items } = boardIds.length > 0
+      ? await supabase.from('board_items').select('board_id').in('board_id', boardIds)
+      : { data: [] };
+
+    const counts = (items || []).reduce((acc: Record<string, number>, item: any) => {
+      acc[item.board_id] = (acc[item.board_id] || 0) + 1;
+      return acc;
+    }, {});
+
+    setAllBoards(data.map((board: any) => ({ ...board, item_count: counts[board.id] || 0 })));
   }
 
   async function fetchReports() {
@@ -200,8 +246,14 @@ export default function AdminPanel({ user }: { user: any }) {
 
   const filteredArtworks = allArtworks.filter(a => {
     const q = artworkSearch.toLowerCase();
-    if (selectedArtist) return a.profiles?.id === selectedArtist.id;
-    return !q || a.title?.toLowerCase().includes(q) || a.profiles?.username?.toLowerCase().includes(q);
+    const matchesArtist = selectedArtist ? a.profiles?.id === selectedArtist.id : true;
+    const matchesQuery = !q
+      || a.title?.toLowerCase().includes(q)
+      || a.artist_name?.toLowerCase().includes(q)
+      || a.profiles?.username?.toLowerCase().includes(q)
+      || a.material_used?.toLowerCase().includes(q)
+      || a.art_style?.toLowerCase().includes(q);
+    return matchesArtist && matchesQuery;
   });
 
   const filteredReports = reports.filter(r => {
@@ -210,6 +262,52 @@ export default function AdminPanel({ user }: { user: any }) {
   });
 
   const isProtectedAccount = (target: any) => target?.id === user.id || target?.role === 'admin';
+  const selectedArtistBoards = selectedArtist
+    ? allBoards.filter(board => board.user_id === selectedArtist.id)
+    : [];
+  const selectedArtistArtworks = selectedArtist
+    ? allArtworks.filter(artwork => artwork.profiles?.id === selectedArtist.id)
+    : [];
+  const portfolioStyleOptions = Array.from(
+    new Set(selectedArtistArtworks.map(artwork => artwork.art_style).filter(Boolean))
+  ).sort((a, b) => String(a).localeCompare(String(b)));
+  const portfolioMediumOptions = Array.from(
+    new Set(selectedArtistArtworks.map(artwork => artwork.material_used).filter(Boolean))
+  ).sort((a, b) => String(a).localeCompare(String(b)));
+  const filteredPortfolioArtworks = selectedArtistArtworks.filter(artwork => {
+    const q = portfolioArtworkSearch.trim().toLowerCase();
+    const postedAt = artwork.created_at ? new Date(artwork.created_at) : null;
+    const now = new Date();
+    const daysOld = postedAt
+      ? (now.getTime() - postedAt.getTime()) / (1000 * 60 * 60 * 24)
+      : Number.POSITIVE_INFINITY;
+
+    const searchable = [
+      artwork.title,
+      artwork.artist_name,
+      artwork.art_style,
+      artwork.material_used,
+      artwork.creation_year,
+      artwork.description,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const matchesSearch = !q || searchable.includes(q);
+    const matchesStyle = portfolioStyleFilter === 'all' || artwork.art_style === portfolioStyleFilter;
+    const matchesMedium = portfolioMediumFilter === 'all' || artwork.material_used === portfolioMediumFilter;
+    const matchesDate =
+      portfolioDateFilter === 'all'
+      || (portfolioDateFilter === 'today' && daysOld <= 1)
+      || (portfolioDateFilter === '7d' && daysOld <= 7)
+      || (portfolioDateFilter === '30d' && daysOld <= 30)
+      || (portfolioDateFilter === 'year' && postedAt?.getFullYear() === now.getFullYear());
+
+    return matchesSearch && matchesStyle && matchesMedium && matchesDate;
+  });
+  const hasPortfolioPlacementFilters =
+    portfolioArtworkSearch.trim()
+    || portfolioStyleFilter !== 'all'
+    || portfolioMediumFilter !== 'all'
+    || portfolioDateFilter !== 'all';
 
   // ── Actions ───────────────────────────────────────────────────────
   const handleChangeRole = async () => {
@@ -339,6 +437,119 @@ export default function AdminPanel({ user }: { user: any }) {
     setEditArtworkModal(null);
   };
 
+  const openPortfolioManager = async (board: AdminBoard) => {
+    setPortfolioModal(board);
+    setPortfolioForm({
+      name: board.name || '',
+      description: board.description || '',
+      is_private: !!board.is_private,
+    });
+    setPortfolioArtworkSearch('');
+    setPortfolioStyleFilter('all');
+    setPortfolioMediumFilter('all');
+    setPortfolioDateFilter('all');
+    setPortfolioLoading(true);
+
+    const { data, error } = await supabase
+      .from('board_items')
+      .select('artwork_id')
+      .eq('board_id', board.id);
+
+    if (error) {
+      toast.error(error.message);
+      setPortfolioArtworkIds([]);
+    } else {
+      setPortfolioArtworkIds((data || []).map((item: any) => item.artwork_id));
+    }
+    setPortfolioLoading(false);
+  };
+
+  const handleSavePortfolio = async () => {
+    if (!portfolioModal) return;
+    if (!portfolioForm.name.trim()) {
+      toast.error('Portfolio name is required.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('boards')
+      .update({
+        name: portfolioForm.name.trim(),
+        description: portfolioForm.description.trim() || null,
+        is_private: portfolioForm.is_private,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', portfolioModal.id);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    setAllBoards(prev => prev.map(board => board.id === portfolioModal.id
+      ? { ...board, name: portfolioForm.name.trim(), description: portfolioForm.description.trim() || null, is_private: portfolioForm.is_private }
+      : board
+    ));
+    setPortfolioModal(prev => prev ? { ...prev, name: portfolioForm.name.trim(), description: portfolioForm.description.trim() || null, is_private: portfolioForm.is_private } : prev);
+    logAudit('Portfolio Edited', `Admin edited portfolio: ${portfolioForm.name.trim()}.`);
+    toast.success('Portfolio details updated.');
+  };
+
+  const openPortfolioPreview = async (board: AdminBoard) => {
+    setPortfolioPreviewModal(board);
+    setPortfolioPreviewArtworks([]);
+    setPortfolioPreviewLoading(true);
+
+    const { data, error } = await supabase
+      .from('board_items')
+      .select('artwork_id, artworks(*, profiles(name, username, role))')
+      .eq('board_id', board.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast.error(error.message);
+      setPortfolioPreviewArtworks([]);
+    } else {
+      setPortfolioPreviewArtworks((data || []).map((item: any) => item.artworks).filter(Boolean));
+    }
+
+    setPortfolioPreviewLoading(false);
+  };
+
+  const addArtworkToPortfolio = async (artworkId: string) => {
+    if (!portfolioModal) return;
+    const { error } = await supabase
+      .from('board_items')
+      .insert({ board_id: portfolioModal.id, artwork_id: artworkId });
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    setPortfolioArtworkIds(prev => [...prev, artworkId]);
+    setAllBoards(prev => prev.map(board => board.id === portfolioModal.id ? { ...board, item_count: (board.item_count || 0) + 1 } : board));
+    toast.success('Artwork added to portfolio.');
+  };
+
+  const removeArtworkFromPortfolio = async (artworkId: string) => {
+    if (!portfolioModal) return;
+    const { error } = await supabase
+      .from('board_items')
+      .delete()
+      .eq('board_id', portfolioModal.id)
+      .eq('artwork_id', artworkId);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    setPortfolioArtworkIds(prev => prev.filter(id => id !== artworkId));
+    setAllBoards(prev => prev.map(board => board.id === portfolioModal.id ? { ...board, item_count: Math.max((board.item_count || 1) - 1, 0) } : board));
+    toast.success('Artwork removed from portfolio.');
+  };
+
   const handleDismissReport = async (id: string) => {
     await supabase.from('reports').update({ status: 'dismissed', reviewed_by: profile.id }).eq('id', id);
     setReports(prev => prev.map(r => r.id === id ? { ...r, status: 'dismissed' } : r));
@@ -423,8 +634,10 @@ export default function AdminPanel({ user }: { user: any }) {
         {tab === 'dashboard' && (
           <div className="ap-content">
             <div className="ap-page-header">
-              <h1 className="ap-page-title">Platform Overview</h1>
-              <p className="ap-page-sub">Real-time statistics and activity for Art Vault</p>
+              <div>
+                <h1 className="ap-page-title">Platform Overview</h1>
+                <p className="ap-page-sub">Real-time statistics and activity for Art Vault</p>
+              </div>
             </div>
 
             <div className="ap-stat-grid">
@@ -563,7 +776,7 @@ export default function AdminPanel({ user }: { user: any }) {
         {/* ── REGISTRY ── */}
         {tab === 'registry' && (
           <div className="ap-content">
-            <div className="ap-page-header">
+            <div className="ap-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h1 className="ap-page-title">
                   {selectedArtist ? `${selectedArtist.name || selectedArtist.username}'s Folder` : 'Art Registry'}
@@ -572,10 +785,47 @@ export default function AdminPanel({ user }: { user: any }) {
                   {selectedArtist ? `Viewing and editing artwork folder for @${selectedArtist.username}` : 'All registered artworks — edit metadata or remove entries'}
                 </p>
               </div>
-              {selectedArtist && (
-                <button className="ap-btn ap-btn-ghost" onClick={() => setSelectedArtist(null)}>← All Artworks</button>
-              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {selectedArtist && (
+                  <button className="ap-btn ap-btn-ghost" onClick={() => setSelectedArtist(null)}>← All Artworks</button>
+                )}
+                <button className="ap-btn ap-btn-primary" onClick={() => setCreatePanelOpen(true)}>Post on behalf of user</button>
+              </div>
             </div>
+            {selectedArtist && (
+              <div className="ap-card ap-portfolio-panel">
+                <div className="ap-portfolio-panel-header">
+                  <div>
+                    <h3 className="ap-card-title ap-card-title-compact">Portfolios for @{selectedArtist.username}</h3>
+                    <p className="ap-panel-note">
+                      Create portfolios with "Post on behalf of user", then use Manage to place registered artworks inside.
+                    </p>
+                  </div>
+                  <button className="ap-btn ap-btn-ghost ap-btn-sm" onClick={fetchBoards}>Refresh portfolios</button>
+                </div>
+                {selectedArtistBoards.length === 0 ? (
+                  <p className="ap-empty">No portfolios yet. Use Post on behalf of user → Create Portfolio.</p>
+                ) : (
+                  <div className="ap-portfolio-grid">
+                    {selectedArtistBoards.map(board => (
+                      <div key={board.id} className="ap-portfolio-card">
+                        <div className="ap-portfolio-card-main">
+                          <div className="ap-portfolio-title">{board.name}</div>
+                          <div className="ap-portfolio-sub">
+                            {board.item_count || 0} artwork{board.item_count === 1 ? '' : 's'} · {board.is_private ? 'Private' : 'Public'}
+                          </div>
+                          {board.description && <div className="ap-portfolio-desc">{board.description}</div>}
+                        </div>
+                        <div className="ap-portfolio-actions">
+                          <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => openPortfolioManager(board)}>Manage</button>
+                          <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => openPortfolioPreview(board)}>View</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="ap-card">
               <div className="ap-toolbar">
                 <input className="ap-search" placeholder={selectedArtist ? 'Search in this folder…' : 'Search artwork or artist…'} value={artworkSearch} onChange={e => { setArtworkSearch(e.target.value); setArtworkPage(1); }} />
@@ -603,6 +853,14 @@ export default function AdminPanel({ user }: { user: any }) {
                       {a.description && <div className="ap-artwork-desc">{a.description}</div>}
                     </div>
                     <div className="ap-artwork-actions">
+                      {selectedArtistBoards.length > 0 && (
+                        <button
+                          className="ap-btn ap-btn-sm ap-btn-ghost"
+                          onClick={() => openPortfolioManager(selectedArtistBoards[0])}
+                        >
+                          Portfolios
+                        </button>
+                      )}
                       <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => {
                         setEditArtworkModal(a);
                         setEditArtworkForm({
@@ -885,6 +1143,245 @@ export default function AdminPanel({ user }: { user: any }) {
             </div>
           </div>
         </ConfirmModal>
+      )}
+
+      {/* Manage Portfolio */}
+      {portfolioModal && (
+        <div className="ap-modal-overlay" onClick={() => setPortfolioModal(null)}>
+          <div className="ap-modal ap-modal-wide" onClick={e => e.stopPropagation()}>
+            <div className="ap-modal-header">
+              <div>
+                <h3 style={{ margin: 0, color: '#1c1917' }}>Manage Portfolio</h3>
+                <p className="ap-modal-subtitle">{portfolioModal.name}</p>
+              </div>
+              <button className="ap-modal-close" onClick={() => setPortfolioModal(null)}>✕</button>
+            </div>
+            <div className="ap-modal-body">
+              <div className="ap-record-form-grid">
+                <div>
+                  <label className="ap-form-label">Portfolio Name</label>
+                  <input className="ap-input" value={portfolioForm.name} onChange={e => setPortfolioForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="ap-form-label">Visibility</label>
+                  <select
+                    className="ap-select"
+                    value={portfolioForm.is_private ? 'private' : 'public'}
+                    onChange={e => setPortfolioForm(f => ({ ...f, is_private: e.target.value === 'private' }))}
+                  >
+                    <option value="public">Public portfolio</option>
+                    <option value="private">Private portfolio</option>
+                  </select>
+                </div>
+                <div className="ap-record-form-wide">
+                  <label className="ap-form-label">Description</label>
+                  <textarea
+                    className="ap-input"
+                    rows={3}
+                    value={portfolioForm.description}
+                    onChange={e => setPortfolioForm(f => ({ ...f, description: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="ap-modal-actions ap-modal-actions-top">
+                <button className="ap-btn ap-btn-primary" onClick={handleSavePortfolio}>Save Portfolio Details</button>
+                <button className="ap-btn ap-btn-ghost" onClick={() => openPortfolioPreview(portfolioModal)}>View Portfolio</button>
+              </div>
+
+              <div className="ap-portfolio-membership">
+                <div className="ap-portfolio-membership-header">
+                  <div>
+                    <h4>Artwork Placement</h4>
+                    <p>Add or remove works registered under @{selectedArtist?.username || 'this artist'}.</p>
+                  </div>
+                  <span className="ap-count">{portfolioArtworkIds.length} selected</span>
+                </div>
+
+                {portfolioLoading ? (
+                  <p className="ap-empty">Loading portfolio artworks...</p>
+                ) : selectedArtistArtworks.length === 0 ? (
+                  <p className="ap-empty">No artworks are registered under this artist yet.</p>
+                ) : (
+                  <>
+                    <div className="ap-placement-tools">
+                      <input
+                        className="ap-placement-search"
+                        type="search"
+                        value={portfolioArtworkSearch}
+                        onChange={e => setPortfolioArtworkSearch(e.target.value)}
+                        placeholder="Search art name, original creator, style..."
+                      />
+                      <select
+                        className="ap-placement-select"
+                        value={portfolioStyleFilter}
+                        onChange={e => setPortfolioStyleFilter(e.target.value)}
+                        aria-label="Filter by art style"
+                      >
+                        <option value="all">All styles</option>
+                        {portfolioStyleOptions.map(style => (
+                          <option key={style} value={style}>{style}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="ap-placement-select"
+                        value={portfolioMediumFilter}
+                        onChange={e => setPortfolioMediumFilter(e.target.value)}
+                        aria-label="Filter by medium"
+                      >
+                        <option value="all">All mediums</option>
+                        {portfolioMediumOptions.map(medium => (
+                          <option key={medium} value={medium}>{medium}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="ap-placement-select"
+                        value={portfolioDateFilter}
+                        onChange={e => setPortfolioDateFilter(e.target.value)}
+                        aria-label="Filter by posting date"
+                      >
+                        <option value="all">Any date</option>
+                        <option value="today">Today</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d">Last 30 days</option>
+                        <option value="year">This year</option>
+                      </select>
+                      {hasPortfolioPlacementFilters ? (
+                        <button
+                          className="ap-placement-reset"
+                          onClick={() => {
+                            setPortfolioArtworkSearch('');
+                            setPortfolioStyleFilter('all');
+                            setPortfolioMediumFilter('all');
+                            setPortfolioDateFilter('all');
+                          }}
+                        >
+                          Reset
+                        </button>
+                      ) : (
+                        <span className="ap-placement-result-count">{filteredPortfolioArtworks.length} visible</span>
+                      )}
+                    </div>
+
+                    {hasPortfolioPlacementFilters && (
+                      <div className="ap-placement-result-count ap-placement-result-count-wide">
+                        {filteredPortfolioArtworks.length} of {selectedArtistArtworks.length} works visible
+                      </div>
+                    )}
+
+                    {filteredPortfolioArtworks.length === 0 ? (
+                      <p className="ap-empty">No artworks match these placement filters.</p>
+                    ) : (
+                      <div className="ap-portfolio-artwork-list">
+                        {filteredPortfolioArtworks.map(artwork => {
+                      const inPortfolio = portfolioArtworkIds.includes(artwork.id);
+                      return (
+                        <div key={artwork.id} className="ap-portfolio-artwork-row">
+                          <img src={artwork.image_url} alt={artwork.title} />
+                          <div className="ap-portfolio-artwork-info">
+                            <div className="ap-portfolio-artwork-title">{artwork.title}</div>
+                            <div className="ap-portfolio-artwork-sub">
+                              {artwork.artist_name || 'Unknown original creator'}
+                              {artwork.creation_year ? ` · ${artwork.creation_year}` : ''}
+                            </div>
+                          </div>
+                          <button
+                            className={`ap-btn ap-btn-sm ${inPortfolio ? 'ap-btn-danger' : 'ap-btn-ghost'}`}
+                            onClick={() => inPortfolio ? removeArtworkFromPortfolio(artwork.id) : addArtworkToPortfolio(artwork.id)}
+                          >
+                            {inPortfolio ? 'Remove' : 'Add'}
+                          </button>
+                        </div>
+                      );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Portfolio Preview */}
+      {portfolioPreviewModal && (
+        <div className="ap-modal-overlay ap-preview-overlay" onClick={() => setPortfolioPreviewModal(null)}>
+          <div className="ap-modal ap-modal-wide ap-portfolio-preview-modal" onClick={e => e.stopPropagation()}>
+            <div className="ap-modal-header">
+              <div>
+                <div className="ap-preview-kicker">Portfolio Preview</div>
+                <h3 style={{ margin: 0, color: '#1c1917' }}>{portfolioPreviewModal.name}</h3>
+                <p className="ap-modal-subtitle">
+                  {portfolioPreviewArtworks.length} artwork{portfolioPreviewArtworks.length === 1 ? '' : 's'} · {portfolioPreviewModal.is_private ? 'Private' : 'Public'}
+                </p>
+              </div>
+              <button className="ap-modal-close" onClick={() => setPortfolioPreviewModal(null)}>âœ•</button>
+            </div>
+            <div className="ap-modal-body">
+              {portfolioPreviewModal.description && (
+                <p className="ap-preview-description">{portfolioPreviewModal.description}</p>
+              )}
+
+              <div className="ap-preview-actions">
+                <button className="ap-btn ap-btn-ghost" onClick={() => openPortfolioPreview(portfolioPreviewModal)}>Refresh Contents</button>
+                <button
+                  className="ap-btn ap-btn-primary"
+                  onClick={() => {
+                    setPortfolioPreviewModal(null);
+                    openPortfolioManager(portfolioPreviewModal);
+                  }}
+                >
+                  Manage Placement
+                </button>
+              </div>
+
+              {portfolioPreviewLoading ? (
+                <p className="ap-empty">Loading portfolio contents...</p>
+              ) : portfolioPreviewArtworks.length === 0 ? (
+                <div className="ap-preview-empty">
+                  <h4>This portfolio is empty</h4>
+                  <p>Use Manage Placement to add artworks registered under this artist.</p>
+                </div>
+              ) : (
+                <div className="ap-preview-grid">
+                  {portfolioPreviewArtworks.map(artwork => (
+                    <div key={artwork.id} className="ap-preview-artwork-card">
+                      <div className="ap-preview-image-wrap">
+                        <img src={artwork.image_url} alt={artwork.title} />
+                      </div>
+                      <div className="ap-preview-artwork-body">
+                        <div className="ap-preview-artwork-title">{artwork.title}</div>
+                        <div className="ap-preview-artwork-meta">
+                          {artwork.artist_name || 'Unknown original creator'}
+                          {artwork.creation_year ? ` · ${artwork.creation_year}` : ''}
+                        </div>
+                        <div className="ap-preview-artwork-sub">
+                          Registered by @{artwork.profiles?.username || 'unknown'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proxy Create Modal */}
+      {createPanelOpen && (
+        <CreatePanel
+          isOpen={createPanelOpen}
+          onClose={() => setCreatePanelOpen(false)}
+          user={user}
+          categories={categories}
+          adminMode={true}
+          allUsers={allUsers}
+          defaultTargetUserId={selectedArtist?.id || null}
+          onArtworkCreated={fetchArtworks}
+          onBoardCreated={fetchBoards}
+        />
       )}
 
     </div>

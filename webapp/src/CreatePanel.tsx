@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, ImagePlus, FolderPlus, Upload } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { checkImageIsSafe } from './nsfwHelper';
@@ -11,6 +11,9 @@ interface CreatePanelProps {
   categories: { id: string; name: string; slug: string }[];
   onArtworkCreated?: () => void;
   onBoardCreated?: () => void;
+  adminMode?: boolean;
+  allUsers?: any[];
+  defaultTargetUserId?: string | null;
 }
 
 const compressImage = (file: File): Promise<File> => {
@@ -47,8 +50,50 @@ const compressImage = (file: File): Promise<File> => {
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 const formatFileSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-export default function CreatePanel({ isOpen, onClose, user, categories, onArtworkCreated, onBoardCreated }: CreatePanelProps) {
+export default function CreatePanel({ isOpen, onClose, user, categories, onArtworkCreated, onBoardCreated, adminMode, allUsers = [], defaultTargetUserId }: CreatePanelProps) {
   const [activeTab, setActiveTab] = useState<'menu' | 'artwork' | 'board'>('menu');
+  
+  // Admin user selection
+  const [targetUserId, setTargetUserId] = useState<string>('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (adminMode && defaultTargetUserId && allUsers.length > 0) {
+      setTargetUserId(defaultTargetUserId);
+      const targetUser = allUsers.find(u => u.id === defaultTargetUserId);
+      if (targetUser) {
+        setUserSearchQuery(targetUser.name || targetUser.username || targetUser.email || 'Unnamed');
+      }
+    }
+  }, [adminMode, defaultTargetUserId, allUsers]);
+
+  const filteredUsers = allUsers.filter(u => 
+    u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
+    u.username?.toLowerCase().includes(userSearchQuery.toLowerCase())
+  ).slice(0, 10);
+
+  const effectiveUserId = adminMode && targetUserId ? targetUserId : user.id;
+
+  // Board Selection
+  const [userBoards, setUserBoards] = useState<any[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string>('');
+
+  useEffect(() => {
+    let active = true;
+    async function fetchBoards() {
+      if (!effectiveUserId) {
+        setUserBoards([]);
+        return;
+      }
+      const { data } = await supabase.from('boards').select('id, name').eq('user_id', effectiveUserId).order('name');
+      if (active && data) setUserBoards(data);
+    }
+    if (isOpen) {
+      fetchBoards();
+    }
+    return () => { active = false; };
+  }, [effectiveUserId, isOpen]);
   
   // Artwork form
   const [title, setTitle] = useState('');
@@ -78,6 +123,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
     setHashtags([]); setCurrentHashtag(''); setMaterialUsed(''); setArtStyle('');
     setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
+    setTargetUserId(''); setUserSearchQuery(''); setIsDropdownOpen(false);
+    setSelectedBoardId('');
     onClose();
   };
 
@@ -124,6 +171,10 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !title) return;
+    if (adminMode && !targetUserId) {
+      toast.error('Please select an artist to post on behalf of.');
+      return;
+    }
     if (file.size > MAX_UPLOAD_SIZE) {
       toast.error(`Image must be 10MB or smaller. Selected file is ${formatFileSize(file.size)}.`);
       return;
@@ -148,7 +199,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       }
 
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
+      const filePath = `${effectiveUserId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage.from('artworks').upload(filePath, fileToUpload);
       if (uploadError) throw uploadError;
@@ -158,7 +209,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       const extractedColor = file.type.startsWith('image/') ? await extractColor(fileToUpload) : '#2a2a35';
 
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
-        title, description, image_url: urlData.publicUrl, user_id: user.id,
+        title, description, image_url: urlData.publicUrl, user_id: effectiveUserId,
         artist_name: artistName.trim() || null,
         tags: hashtags, material_used: materialUsed, art_style: artStyle,
         collector_or_pricing: collector, price: price ? Number(price) : null, creation_year: creationYear,
@@ -174,6 +225,14 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
         );
       }
 
+      // Add to portfolio
+      if (selectedBoardId && artwork) {
+        await supabase.from('board_items').insert({
+          board_id: selectedBoardId,
+          artwork_id: artwork.id
+        });
+      }
+
       toast.success('Artwork registered in the catalog.');
       resetAndClose();
       onArtworkCreated?.();
@@ -187,9 +246,13 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const handleCreateBoard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!boardName.trim()) return;
+    if (adminMode && !targetUserId) {
+      toast.error('Please select an artist to create the portfolio for.');
+      return;
+    }
     setCreatingBoard(true);
     const { error } = await supabase.from('boards').insert({
-      user_id: user.id, name: boardName.trim(), description: boardDesc.trim(), is_private: isPrivate
+      user_id: effectiveUserId, name: boardName.trim(), description: boardDesc.trim(), is_private: isPrivate
     });
     if (error) toast.error('Failed to create portfolio');
     else { toast.success('Portfolio created.'); resetAndClose(); onBoardCreated?.(); }
@@ -279,6 +342,46 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
                 Back to menu
               </button>
+
+              {adminMode && (
+                <div style={{ position: 'relative' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Post on behalf of (Artist)</label>
+                  <input 
+                    type="text" 
+                    value={userSearchQuery}
+                    onChange={e => {
+                      setUserSearchQuery(e.target.value);
+                      setIsDropdownOpen(true);
+                      if (targetUserId) setTargetUserId(''); // clear selection if they type again
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                    placeholder="Search name or username..."
+                    className="search-input"
+                    style={{ width: '100%' }}
+                  />
+                  {isDropdownOpen && userSearchQuery && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e0d8', borderRadius: '8px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: '4px' }}>
+                      {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                        <div 
+                          key={u.id}
+                          onClick={() => {
+                            setTargetUserId(u.id);
+                            setUserSearchQuery(u.name || u.username || u.email || 'Unnamed');
+                            setIsDropdownOpen(false);
+                          }}
+                          style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a' }}>{u.name || 'Unnamed'}</div>
+                          <div style={{ fontSize: '12px', color: '#888' }}>@{u.username || 'unknown'}</div>
+                        </div>
+                      )) : (
+                        <div style={{ padding: '10px 12px', color: '#888', fontSize: '13px' }}>No users found.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* File upload area */}
               <div style={{ border: '2px dashed rgba(74, 52, 36, 0.3)', borderRadius: '16px', padding: '30px', textAlign: 'center', cursor: 'pointer', position: 'relative', background: file ? 'rgba(74, 52, 36, 0.05)' : 'transparent', transition: 'all 0.2s' }}>
@@ -407,6 +510,22 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 </div>
               </div>
 
+              {/* Add to Portfolio / Board */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Add to Portfolio (Optional)</label>
+                <select 
+                   value={selectedBoardId} 
+                   onChange={e => setSelectedBoardId(e.target.value)}
+                   className="search-input" 
+                   style={{ width: '100%', appearance: 'none' }}
+                >
+                  <option value="">No portfolio</option>
+                  {userBoards.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <button type="submit" className="btn btn-primary" disabled={uploading} style={{ width: '100%', marginTop: '8px' }}>
                 {uploading ? 'Registering...' : 'Register Artwork'}
               </button>
@@ -419,6 +538,46 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
                 Back to menu
               </button>
+              
+              {adminMode && (
+                <div style={{ position: 'relative' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Create for (Artist)</label>
+                  <input 
+                    type="text" 
+                    value={userSearchQuery}
+                    onChange={e => {
+                      setUserSearchQuery(e.target.value);
+                      setIsDropdownOpen(true);
+                      if (targetUserId) setTargetUserId(''); // clear selection if they type again
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                    placeholder="Search name or username..."
+                    className="search-input"
+                    style={{ width: '100%' }}
+                  />
+                  {isDropdownOpen && userSearchQuery && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e0d8', borderRadius: '8px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: '4px' }}>
+                      {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                        <div 
+                          key={u.id}
+                          onClick={() => {
+                            setTargetUserId(u.id);
+                            setUserSearchQuery(u.name || u.username || u.email || 'Unnamed');
+                            setIsDropdownOpen(false);
+                          }}
+                          style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a' }}>{u.name || 'Unnamed'}</div>
+                          <div style={{ fontSize: '12px', color: '#888' }}>@{u.username || 'unknown'}</div>
+                        </div>
+                      )) : (
+                        <div style={{ padding: '10px 12px', color: '#888', fontSize: '13px' }}>No users found.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Portfolio Name</label>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { Trash2, X, Upload } from 'lucide-react';
@@ -43,7 +43,16 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [collages, setCollages] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'artworks' | 'collages'>('artworks');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'collages' ? 'collages' : 'artworks';
+  
+  const setActiveTab = (tab: 'artworks' | 'collages') => {
+    setSearchParams(prev => {
+      if (tab === 'artworks') prev.delete('tab');
+      else prev.set('tab', tab);
+      return prev;
+    }, { replace: true });
+  };
   
   // Lightbox State
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
@@ -438,7 +447,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
                   <div key={collage.id} className="board-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'all 0.3s ease', cursor: 'pointer' }} onClick={() => navigate('/collage/' + collage.id)}>
                     <div style={{ height: '180px', background: 'var(--bg-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '2px', padding: '2px' }}>
                       {[0, 1, 2, 3].map(i => (
-                        <div key={i} style={{ background: 'rgba(0,0,0,0.05)', width: '100%', height: '100%' }}>
+                        <div key={i} style={{ background: 'rgba(0,0,0,0.05)', width: '100%', height: '100%', overflow: 'hidden' }}>
                           {collage.preview_images?.[i] && (
                             <img src={collage.preview_images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           )}

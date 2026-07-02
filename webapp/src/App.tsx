@@ -9,6 +9,7 @@ const Layout = lazy(() => import('./Layout'));
 const Dashboard = lazy(() => import('./Dashboard'));
 const Artists = lazy(() => import('./Artists'));
 const UserProfile = lazy(() => import('./UserProfile'));
+const CollageView = lazy(() => import('./CollageView'));
 const Settings = lazy(() => import('./Settings'));
 const AdminPanel = lazy(() => import('./AdminPanel'));
 const ModerationPanel = lazy(() => import('./ModerationPanel'));
@@ -264,6 +265,7 @@ function App() {
           
           <Route path="/artists" element={<Artists />} />
           <Route path="/profile/:id" element={<UserProfile currentUser={session?.user || null} />} />
+          <Route path="/collage/:id" element={<CollageView user={session?.user || null} />} />
           {/* Protected Routes */}
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
           <Route
