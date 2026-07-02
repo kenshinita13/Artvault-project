@@ -1186,7 +1186,16 @@ export default function AdminPanel({ user }: { user: any }) {
 
               <div className="ap-modal-actions ap-modal-actions-top">
                 <button className="ap-btn ap-btn-primary" onClick={handleSavePortfolio}>Save Portfolio Details</button>
-                <button className="ap-btn ap-btn-ghost" onClick={() => openPortfolioPreview(portfolioModal)}>View Portfolio</button>
+                <button
+                  className="ap-btn ap-btn-ghost"
+                  onClick={() => {
+                    const boardToPreview = portfolioModal;
+                    setPortfolioModal(null);
+                    openPortfolioPreview(boardToPreview);
+                  }}
+                >
+                  View Portfolio
+                </button>
               </div>
 
               <div className="ap-portfolio-membership">
