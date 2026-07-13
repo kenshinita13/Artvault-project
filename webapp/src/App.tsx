@@ -40,12 +40,16 @@ function RoleGate({
 
       const { data } = await supabase
         .from('profiles')
-        .select('role, status')
+        .select('role, status, suspension_end')
         .eq('id', user.id)
         .single();
 
       if (!active) return;
-      setState(data && data.status !== 'banned' && allow(data.role) ? 'allowed' : 'denied');
+      const restrictionExpired = data?.status === 'suspended'
+        && data.suspension_end
+        && new Date(data.suspension_end) <= new Date();
+      const hasActiveAccess = data?.status === 'active' || restrictionExpired;
+      setState(data && hasActiveAccess && allow(data.role) ? 'allowed' : 'denied');
     }
 
     setState('checking');

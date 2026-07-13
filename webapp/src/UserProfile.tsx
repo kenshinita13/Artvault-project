@@ -144,11 +144,11 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
       }
 
       const enrichedBoards = boardsData.map(b => {
-        const boardItems = (itemsByBoard.get(b.id) || []).slice(0, 4);
+        const boardItems = itemsByBoard.get(b.id) || [];
         return {
           ...b,
           item_count: boardItems.length,
-          preview_images: boardItems.map((i: any) => i.artworks?.image_url).filter(Boolean)
+          preview_images: boardItems.slice(0, 4).map((i: any) => i.artworks?.image_url).filter(Boolean)
         };
       });
       setCollages(enrichedBoards);
@@ -238,10 +238,12 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
     try {
       const pathParts = deleteModalArtwork.image_url.split('/artworks/');
       if (pathParts.length > 1) {
-        await supabase.storage.from('artworks').remove([pathParts[1]]);
+        const { error: storageError } = await supabase.storage.from('artworks').remove([pathParts[1]]);
+        if (storageError) throw storageError;
       }
 
-      await supabase.from('artworks').delete().eq('id', deleteModalArtwork.id);
+      const { error: deleteError } = await supabase.from('artworks').delete().eq('id', deleteModalArtwork.id);
+      if (deleteError) throw deleteError;
       setArtworks(artworks.filter(a => a.id !== deleteModalArtwork.id));
       if (activeArtwork?.id === deleteModalArtwork.id) {
         setActiveArtwork(null);

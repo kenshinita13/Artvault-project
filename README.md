@@ -47,7 +47,9 @@ This project has been fully modernized and is built natively on **React**, **Vit
 
 ---
 
-## 🛡️ Default Admin Account
-- **Email**: `admin@artvault.com`
-- **Password**: `admin`
-- **http://localhost:5173/admin**
+## 🛡️ Administrator Access
+Administrator credentials are intentionally not stored in this repository. An
+existing administrator can assign the `admin` role through the protected admin
+workflow. Never commit account passwords or service-role keys to GitHub.
+
+The administrator sign-in page is available at `http://localhost:5173/admin`.

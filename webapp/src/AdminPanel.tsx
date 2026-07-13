@@ -4,6 +4,20 @@ import toast from 'react-hot-toast';
 import { logAudit } from './auditHelper';
 import { ROLES, type ArtVaultRole, canAccessAdmin } from './roles';
 import CreatePanel from './CreatePanel';
+import {
+  Activity,
+  ArrowRight,
+  CircleAlert,
+  Database,
+  Flag,
+  Images,
+  LayoutDashboard,
+  ScrollText,
+  ShieldCheck,
+  UserCog,
+  UserRoundCheck,
+  Users,
+} from 'lucide-react';
 import './AdminPanel.css';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -359,11 +373,13 @@ export default function AdminPanel({ user }: { user: any }) {
   const handleDeleteUser = async () => {
     if (!deleteUserModal) return;
     if (isProtectedAccount(deleteUserModal)) { toast.error('Administrator accounts are protected from deletion.'); return; }
-    const { error } = await supabase.from('profiles').delete().eq('id', deleteUserModal.id);
+    const { error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { userId: deleteUserModal.id },
+    });
     if (error) { toast.error(error.message); return; }
     setAllUsers(prev => prev.filter(u => u.id !== deleteUserModal.id));
-    logAudit('User Deleted', `Deleted @${deleteUserModal.username}.`);
-    toast.success('User account deleted.');
+    await logAudit('User Deleted', `Deleted @${deleteUserModal.username} from Auth, storage, and the registry.`);
+    toast.success('User account and associated records deleted.');
     setDeleteUserModal(null);
   };
 
@@ -551,7 +567,11 @@ export default function AdminPanel({ user }: { user: any }) {
   };
 
   const handleDismissReport = async (id: string) => {
-    await supabase.from('reports').update({ status: 'dismissed', reviewed_by: profile.id }).eq('id', id);
+    const { error } = await supabase
+      .from('reports')
+      .update({ status: 'dismissed', reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { toast.error(error.message); return; }
     setReports(prev => prev.map(r => r.id === id ? { ...r, status: 'dismissed' } : r));
     logAudit('Report Dismissed', `Dismissed report ${id}.`);
     toast.success('Report dismissed.');
@@ -561,10 +581,15 @@ export default function AdminPanel({ user }: { user: any }) {
     if (report.artwork_id) {
       const url = report.artworks?.image_url;
       if (url) { const p = url.split('/artworks/')?.[1]; if (p) await supabase.storage.from('artworks').remove([p]); }
-      await supabase.from('artworks').delete().eq('id', report.artwork_id);
+      const { error: deleteError } = await supabase.from('artworks').delete().eq('id', report.artwork_id);
+      if (deleteError) { toast.error(deleteError.message); return; }
       setAllArtworks(prev => prev.filter(a => a.id !== report.artwork_id));
     }
-    await supabase.from('reports').update({ status: 'resolved', reviewed_by: profile.id }).eq('id', report.id);
+    const { error: reportError } = await supabase
+      .from('reports')
+      .update({ status: 'resolved', reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+      .eq('id', report.id);
+    if (reportError) { toast.error(reportError.message); return; }
     setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'resolved' } : r));
     logAudit('Artwork Takedown', `Enforced takedown for reported artwork.`);
     toast.success('Artwork removed and report resolved.');
@@ -606,25 +631,36 @@ export default function AdminPanel({ user }: { user: any }) {
       {/* Sidebar */}
       <aside className="ap-sidebar">
         <div className="ap-sidebar-brand">
-          <span className="ap-sidebar-label">ADMIN GATEWAY</span>
+          <div className="ap-sidebar-mark"><ShieldCheck size={18} strokeWidth={1.8} /></div>
+          <div className="ap-sidebar-brand-copy">
+            <span className="ap-sidebar-label">ADMINISTRATION</span>
+            <span className="ap-sidebar-caption">Control center</span>
+          </div>
         </div>
         {([
-          { id: 'dashboard', icon: '◈', label: 'Dashboard',     badge: undefined as number | undefined },
-          { id: 'users',     icon: '◉', label: 'Users & Roles',  badge: undefined as number | undefined },
-          { id: 'registry',  icon: '⊞', label: 'Art Registry',   badge: undefined as number | undefined },
-          { id: 'reports',   icon: '⚑', label: 'Reports',        badge: stats.pendingReports as number | undefined },
-          { id: 'logs',      icon: '≡', label: 'Audit Logs',     badge: undefined as number | undefined },
+          { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard',      badge: undefined as number | undefined },
+          { id: 'users',     icon: Users,           label: 'Users & Roles',  badge: undefined as number | undefined },
+          { id: 'registry',  icon: Images,          label: 'Art Registry',   badge: undefined as number | undefined },
+          { id: 'reports',   icon: Flag,            label: 'Reports',        badge: stats.pendingReports as number | undefined },
+          { id: 'logs',      icon: ScrollText,      label: 'Audit Logs',     badge: undefined as number | undefined },
         ] as const).map(item => (
           <button
             key={item.id}
             className={`ap-nav-item ${tab === item.id ? 'active' : ''}`}
             onClick={() => { setTab(item.id); if (item.id === 'logs') fetchLogs(); }}
           >
-            <span className="ap-nav-icon">{item.icon}</span>
+            <span className="ap-nav-icon"><item.icon size={16} strokeWidth={1.8} /></span>
             <span className="ap-nav-label">{item.label}</span>
             {item.badge ? <span className="ap-nav-badge">{item.badge}</span> : null}
           </button>
         ))}
+        <div className="ap-sidebar-footer">
+          <div className="ap-admin-avatar">{(profile.name || profile.username || 'A').charAt(0).toUpperCase()}</div>
+          <div className="ap-admin-identity">
+            <strong>{profile.name || profile.username}</strong>
+            <span>Administrator</span>
+          </div>
+        </div>
       </aside>
 
       {/* Main */}
@@ -632,34 +668,68 @@ export default function AdminPanel({ user }: { user: any }) {
 
         {/* ── DASHBOARD ── */}
         {tab === 'dashboard' && (
-          <div className="ap-content">
+          <div className="ap-content ap-dashboard-content">
             <div className="ap-page-header">
               <div>
+                <div className="ap-page-kicker"><ShieldCheck size={14} /> Administration console</div>
                 <h1 className="ap-page-title">Platform Overview</h1>
-                <p className="ap-page-sub">Real-time statistics and activity for Art Vault</p>
+                <p className="ap-page-sub">Govern access, collection records, and institutional activity from one workspace.</p>
               </div>
+              <div className="ap-system-status">
+                <span className="ap-status-dot" />
+                <div>
+                  <strong>Systems operational</strong>
+                  <span>Live Supabase registry</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="ap-quick-actions" aria-label="Administrative shortcuts">
+              <button onClick={() => setTab('users')}>
+                <UserCog size={20} />
+                <span><strong>Account governance</strong><small>Roles, access, and restrictions</small></span>
+                <ArrowRight size={16} />
+              </button>
+              <button onClick={() => setTab('registry')}>
+                <Database size={20} />
+                <span><strong>Collection registry</strong><small>Edit records and portfolios</small></span>
+                <ArrowRight size={16} />
+              </button>
+              <button onClick={() => setTab('reports')}>
+                <CircleAlert size={20} />
+                <span><strong>Moderation queue</strong><small>{stats.pendingReports} report{stats.pendingReports === 1 ? '' : 's'} awaiting review</small></span>
+                <ArrowRight size={16} />
+              </button>
             </div>
 
             <div className="ap-stat-grid">
               {[
-                { label: 'Total Users',       value: stats.totalUsers,     icon: '◉', color: '#1c1917' },
-                { label: 'Registered Works',  value: stats.totalArtworks,  icon: '⊞', color: '#b8975a' },
-                { label: 'Active Artists',    value: stats.artists,        icon: '◈', color: '#0f766e' },
-                { label: 'Pending Reports',   value: stats.pendingReports, icon: '⚑', color: stats.pendingReports > 0 ? '#991b1b' : '#78716c' },
-                { label: 'Admin Staff',       value: stats.admins,         icon: '⊛', color: '#92400e' },
-                { label: 'Restricted Accts',  value: stats.restricted,     icon: '⊘', color: '#b91c1c' },
+                { label: 'Total Users',       value: stats.totalUsers,     icon: Users,          color: '#1c1917' },
+                { label: 'Registered Works',  value: stats.totalArtworks,  icon: Images,         color: '#a8782e' },
+                { label: 'Active Artists',    value: stats.artists,        icon: UserRoundCheck, color: '#0f766e' },
+                { label: 'Pending Reports',   value: stats.pendingReports, icon: Flag,           color: stats.pendingReports > 0 ? '#991b1b' : '#78716c' },
+                { label: 'Admin Staff',       value: stats.admins,         icon: ShieldCheck,    color: '#92400e' },
+                { label: 'Restricted Accts',  value: stats.restricted,     icon: CircleAlert,    color: '#b91c1c' },
               ].map((s, i) => (
                 <div key={i} className="ap-stat-card">
-                  <div className="ap-stat-icon" style={{ color: s.color }}>{s.icon}</div>
-                  <div className="ap-stat-value" style={{ color: s.color }}>{s.value}</div>
-                  <div className="ap-stat-label">{s.label}</div>
+                  <div className="ap-stat-icon" style={{ color: s.color }}><s.icon size={19} strokeWidth={1.8} /></div>
+                  <div>
+                    <div className="ap-stat-value" style={{ color: s.color }}>{s.value}</div>
+                    <div className="ap-stat-label">{s.label}</div>
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="ap-two-col">
-              <div className="ap-card">
-                <h3 className="ap-card-title">Recent Activity</h3>
+            <div className="ap-dashboard-grid">
+              <section className="ap-card ap-activity-card">
+                <div className="ap-card-heading">
+                  <div>
+                    <span className="ap-card-eyebrow">Audit trail</span>
+                    <h3 className="ap-card-title">Recent Activity</h3>
+                  </div>
+                  <Activity size={18} />
+                </div>
                 {auditLogs.length === 0 ? (
                   <p className="ap-empty">No audit logs yet.</p>
                 ) : auditLogs.slice(0, 8).map(log => (
@@ -674,25 +744,56 @@ export default function AdminPanel({ user }: { user: any }) {
                     </div>
                   </div>
                 ))}
-              </div>
+                <button className="ap-panel-link" onClick={() => { setTab('logs'); fetchLogs(); }}>View complete audit log <ArrowRight size={14} /></button>
+              </section>
 
-              <div className="ap-card">
-                <h3 className="ap-card-title">Role Distribution</h3>
-                {(['admin','moderator','curator','artist','user'] as ArtVaultRole[]).map(r => {
-                  const count = allUsers.filter(u => u.role === r).length;
-                  const pct = stats.totalUsers ? Math.round((count / stats.totalUsers) * 100) : 0;
-                  return (
-                    <div key={r} className="ap-role-row">
-                      <div className="ap-role-row-left">
-                        <RoleBadge role={r} />
-                        <span className="ap-role-count">{count}</span>
-                      </div>
-                      <div className="ap-role-bar-wrap">
-                        <div className="ap-role-bar" style={{ width: `${pct}%`, background: ROLES[r].color }} />
-                      </div>
+              <div className="ap-dashboard-side">
+                <section className="ap-card ap-attention-card">
+                  <div className="ap-card-heading">
+                    <div>
+                      <span className="ap-card-eyebrow">Operations</span>
+                      <h3 className="ap-card-title">Attention Queue</h3>
                     </div>
-                  );
-                })}
+                    <CircleAlert size={18} />
+                  </div>
+                  <button className="ap-attention-row" onClick={() => setTab('reports')}>
+                    <span><strong>{stats.pendingReports}</strong><small>Pending reports</small></span>
+                    <ArrowRight size={15} />
+                  </button>
+                  <button className="ap-attention-row" onClick={() => setTab('users')}>
+                    <span><strong>{stats.restricted}</strong><small>Restricted accounts</small></span>
+                    <ArrowRight size={15} />
+                  </button>
+                  <button className="ap-attention-row" onClick={() => setTab('registry')}>
+                    <span><strong>{allBoards.length}</strong><small>Managed portfolios</small></span>
+                    <ArrowRight size={15} />
+                  </button>
+                </section>
+
+                <section className="ap-card ap-role-card">
+                  <div className="ap-card-heading">
+                    <div>
+                      <span className="ap-card-eyebrow">Access control</span>
+                      <h3 className="ap-card-title">Role Distribution</h3>
+                    </div>
+                    <Users size={18} />
+                  </div>
+                  {(['admin','moderator','curator','artist','user'] as ArtVaultRole[]).map(r => {
+                    const count = allUsers.filter(u => u.role === r).length;
+                    const pct = stats.totalUsers ? Math.round((count / stats.totalUsers) * 100) : 0;
+                    return (
+                      <div key={r} className="ap-role-row">
+                        <div className="ap-role-row-left">
+                          <RoleBadge role={r} />
+                          <span className="ap-role-count">{count}</span>
+                        </div>
+                        <div className="ap-role-bar-wrap">
+                          <div className="ap-role-bar" style={{ width: `${pct}%`, background: ROLES[r].color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
               </div>
             </div>
           </div>

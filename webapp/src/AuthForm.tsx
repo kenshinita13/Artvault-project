@@ -373,6 +373,14 @@ export default function AuthForm({
       return;
     }
 
+    const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const requiresMfa = await checkMfaRequirements(mfaData);
+    if (requiresMfa) {
+      setLoading(false);
+      setIsValidatingLogin(false);
+      return;
+    }
+
     onLoginComplete(data, profile);
     setLoading(false);
   }, [onLoginComplete, setBanMessage, setIsValidatingLogin]);
@@ -757,7 +765,7 @@ export default function AuthForm({
                   className="form-control" 
                   placeholder="Create a secure password" 
                   required 
-                  minLength={4}
+                  minLength={8}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                 />

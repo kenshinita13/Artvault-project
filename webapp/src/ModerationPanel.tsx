@@ -21,7 +21,7 @@ export default function ModerationPanel({ user }: { user: any }) {
 
   const [deleteArtworkModal, setDeleteArtworkModal] = useState<any>(null);
   const [editArtworkModal, setEditArtworkModal]     = useState<any>(null);
-  const [editForm, setEditForm] = useState({ title: '', description: '', category: '' });
+  const [editForm, setEditForm] = useState({ title: '', description: '', art_style: '' });
 
   const PER_PAGE = 12;
   const [artworkPage, setArtworkPage] = useState(1);
@@ -95,7 +95,7 @@ export default function ModerationPanel({ user }: { user: any }) {
     const { error } = await supabase.from('artworks').update({
       title: editForm.title,
       description: editForm.description,
-      category: editForm.category,
+      art_style: editForm.art_style || null,
     }).eq('id', editArtworkModal.id);
     if (error) { toast.error(error.message); return; }
     setAllArtworks(prev => prev.map(a => a.id === editArtworkModal.id ? { ...a, ...editForm } : a));
@@ -105,7 +105,11 @@ export default function ModerationPanel({ user }: { user: any }) {
   };
 
   const handleDismiss = async (id: string) => {
-    await supabase.from('reports').update({ status: 'dismissed', reviewed_by: profile.id }).eq('id', id);
+    const { error } = await supabase
+      .from('reports')
+      .update({ status: 'dismissed', reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { toast.error(error.message); return; }
     setReports(prev => prev.map(r => r.id === id ? { ...r, status: 'dismissed' } : r));
     logAudit('Report Dismissed', `Moderator dismissed report ${id}.`);
     toast.success('Report dismissed.');
@@ -115,10 +119,15 @@ export default function ModerationPanel({ user }: { user: any }) {
     if (report.artwork_id) {
       const url = report.artworks?.image_url;
       if (url) { const p = url.split('/artworks/')?.[1]; if (p) await supabase.storage.from('artworks').remove([p]); }
-      await supabase.from('artworks').delete().eq('id', report.artwork_id);
+      const { error: deleteError } = await supabase.from('artworks').delete().eq('id', report.artwork_id);
+      if (deleteError) { toast.error(deleteError.message); return; }
       setAllArtworks(prev => prev.filter(a => a.id !== report.artwork_id));
     }
-    await supabase.from('reports').update({ status: 'resolved', reviewed_by: profile.id }).eq('id', report.id);
+    const { error: reportError } = await supabase
+      .from('reports')
+      .update({ status: 'resolved', reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+      .eq('id', report.id);
+    if (reportError) { toast.error(reportError.message); return; }
     setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'resolved' } : r));
     logAudit('Artwork Takedown', 'Moderator enforced takedown for reported artwork.');
     toast.success('Artwork removed and report resolved.');
@@ -268,15 +277,15 @@ export default function ModerationPanel({ user }: { user: any }) {
                       <div className="ap-artwork-title">{a.title}</div>
                       <div className="ap-artwork-artist">by @{a.profiles?.username || '—'}</div>
                       <div className="ap-artwork-meta">
-                        {a.category && <span>{a.category}</span>}
-                        {a.year && <span>{a.year}</span>}
+                        {a.art_style && <span>{a.art_style}</span>}
+                        {a.creation_year && <span>{a.creation_year}</span>}
                       </div>
                       {a.description && <div className="ap-artwork-desc">{a.description}</div>}
                     </div>
                     <div className="ap-artwork-actions">
                       <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => {
                         setEditArtworkModal(a);
-                        setEditForm({ title: a.title || '', description: a.description || '', category: a.category || '' });
+                        setEditForm({ title: a.title || '', description: a.description || '', art_style: a.art_style || '' });
                       }}>Edit</button>
                       <button className="ap-btn ap-btn-sm ap-btn-danger" onClick={() => setDeleteArtworkModal(a)}>Remove</button>
                     </div>
@@ -323,8 +332,8 @@ export default function ModerationPanel({ user }: { user: any }) {
                   <input className="ap-input" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="ap-form-label">Category</label>
-                  <input className="ap-input" value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))} />
+                  <label className="ap-form-label">Art Style</label>
+                  <input className="ap-input" value={editForm.art_style} onChange={e => setEditForm(f => ({ ...f, art_style: e.target.value }))} />
                 </div>
                 <div>
                   <label className="ap-form-label">Description</label>

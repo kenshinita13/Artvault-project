@@ -197,9 +197,14 @@
   border-bottom: 1px solid #d6cfc3;
   padding: 100px 80px;
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 80px;
   align-items: center;
+}
+
+.about-features-left,
+.about-features-right {
+  min-width: 0;
 }
 
 .about-features-title {
@@ -229,6 +234,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-bottom: 28px;
 }
 
@@ -252,7 +259,7 @@
 
 .about-collection-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 28px;
 }
@@ -654,6 +661,14 @@
 
   .about-roadmap-right {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .about-collection-card {
+    padding: 24px;
+  }
+
+  .about-collection-stats {
+    grid-template-columns: 1fr;
   }
 
   .about-pillars {

@@ -49,7 +49,7 @@ export default function CollageView({ user }: { user: any }) {
 
     if (boardError || !boardData) {
       toast.error('Collage not found or access denied');
-      navigate('/boards');
+      navigate('/home', { replace: true });
       return;
     }
     setBoard(boardData);
@@ -72,7 +72,11 @@ export default function CollageView({ user }: { user: any }) {
     e.stopPropagation();
     if (!window.confirm('Remove this artwork from the collage?')) return;
     
-    await supabase.from('board_items').delete().eq('board_id', id).eq('artwork_id', artworkId);
+    const { error } = await supabase.from('board_items').delete().eq('board_id', id).eq('artwork_id', artworkId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setArtworks(prev => prev.filter(a => a.id !== artworkId));
     toast.success('Removed from collage');
   };

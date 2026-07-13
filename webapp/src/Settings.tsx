@@ -12,6 +12,10 @@ export default function Settings({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [profileName, setProfileName] = useState('');
+  const [profileUsername, setProfileUsername] = useState('');
+  const [profileEmail, setProfileEmail] = useState(user.email || '');
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Security specific
   const [currentPassword, setCurrentPassword] = useState('');
@@ -70,6 +74,9 @@ export default function Settings({ user }: { user: any }) {
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (data) {
       setProfile(data);
+      setProfileName(data.name || '');
+      setProfileUsername(data.username || '');
+      setProfileEmail(user.email || '');
     }
     
     // Check MFA Status
@@ -86,6 +93,58 @@ export default function Settings({ user }: { user: any }) {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = profileName.trim();
+    const username = profileUsername.trim().toLowerCase();
+    const email = profileEmail.trim().toLowerCase();
+
+    if (!name) { toast.error('Full name is required.'); return; }
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+      toast.error('Username must be 3-30 characters using letters, numbers, or underscores.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      toast.error('Enter a valid email address.');
+      return;
+    }
+
+    setProfileSaving(true);
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ name, username })
+      .eq('id', user.id);
+
+    if (profileError) {
+      toast.error(profileError.code === '23505' ? 'That username is already in use.' : profileError.message);
+      setProfileSaving(false);
+      return;
+    }
+
+    const authUpdates: { email?: string; data: { name: string; username: string } } = {
+      data: { name, username },
+    };
+    if (email !== user.email?.toLowerCase()) authUpdates.email = email;
+
+    const { error: authError } = await supabase.auth.updateUser(authUpdates);
+    if (authError) {
+      await supabase
+        .from('profiles')
+        .update({ name: profile.name, username: profile.username })
+        .eq('id', user.id);
+      toast.error(authError.message);
+      setProfileSaving(false);
+      return;
+    }
+
+    setProfile((current: any) => ({ ...current, name, username }));
+    await logAudit('Profile Updated', 'User updated their profile details.');
+    toast.success(authUpdates.email
+      ? 'Profile saved. Confirm the email change from your inbox.'
+      : 'Profile details updated.');
+    setProfileSaving(false);
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,22 +297,31 @@ export default function Settings({ user }: { user: any }) {
                 <Avatar userId={user.id} name={profile?.name || 'User'} size={80} updateToken={avatarToken} />
               </div>
               <div>
-                <input type="file" accept="image/png, image/jpeg, image/gif, image/svg+xml" style={{ display: 'none' }} ref={fileInputRef} onChange={handleAvatarUpload} />
+                <input type="file" accept="image/png, image/jpeg, image/gif, image/webp" style={{ display: 'none' }} ref={fileInputRef} onChange={handleAvatarUpload} />
                 <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={avatarLoading}>
                   {avatarLoading ? 'Uploading...' : 'Change Profile Picture'}
                 </button>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>JPG, PNG or GIF. Max size 2MB.</p>
               </div>
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Full Name</label>
-              <input type="text" className="search-input" defaultValue={profile?.name} readOnly style={{ opacity: 0.7 }} />
-            </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Username</label>
-              <input type="text" className="search-input" defaultValue={profile?.username} readOnly style={{ opacity: 0.7 }} />
-            </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px' }}>To change your details, please contact an administrator.</p>
+            <form onSubmit={handleProfileSave}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Full Name</label>
+                <input type="text" className="search-input" value={profileName} onChange={e => setProfileName(e.target.value)} required />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Username</label>
+                <input type="text" className="search-input" value={profileUsername} onChange={e => setProfileUsername(e.target.value)} minLength={3} maxLength={30} required />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Email Address</label>
+                <input type="email" className="search-input" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} required />
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>Changing email requires confirmation from the new inbox.</p>
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={profileSaving}>
+                {profileSaving ? 'Saving...' : 'Save Profile Details'}
+              </button>
+            </form>
 
             <h3 style={{ marginTop: '30px', marginBottom: '15px' }}>My Studio</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>Access your personalized dashboard to view and upload your artworks.</p>
@@ -287,7 +355,7 @@ export default function Settings({ user }: { user: any }) {
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   placeholder="Enter new password..." 
-                  minLength={6}
+                  minLength={8}
                   required 
                 />
               </div>
@@ -299,7 +367,7 @@ export default function Settings({ user }: { user: any }) {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter new password..." 
-                  minLength={6}
+                  minLength={8}
                   required 
                 />
               </div>

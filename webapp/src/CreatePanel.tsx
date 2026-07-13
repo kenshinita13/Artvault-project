@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Cloud, X, ImagePlus, FolderPlus, Upload } from 'lucide-react';
+import { Cloud, X, ImagePlus, FolderPlus, Link2, Upload } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { checkImageIsSafe } from './nsfwHelper';
 import toast from 'react-hot-toast';
@@ -50,6 +50,53 @@ const compressImage = (file: File): Promise<File> => {
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 const formatFileSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
+const validateHttpsImageUrl = (value: string): string => {
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    throw new Error('Enter a valid HTTPS image URL.');
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Image URLs must use HTTPS.');
+  }
+  if (parsed.hostname === 'drive.google.com' || parsed.hostname === 'docs.google.com') {
+    throw new Error('Google Drive sharing links are coming soon. Use a direct public HTTPS image URL for now.');
+  }
+  return parsed.toString();
+};
+
+const confirmRemoteImageLoads = (url: string): Promise<void> => new Promise((resolve, reject) => {
+  const image = new Image();
+  const timeout = window.setTimeout(() => reject(new Error('The image URL took too long to respond.')), 12000);
+  image.onload = () => {
+    window.clearTimeout(timeout);
+    resolve();
+  };
+  image.onerror = () => {
+    window.clearTimeout(timeout);
+    reject(new Error('The HTTPS address could not be displayed as an image.'));
+  };
+  image.src = url;
+});
+
+const fetchRemoteImageForReview = async (url: string): Promise<File | null> => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.startsWith('image/')) return null;
+    const blob = await response.blob();
+    return new File([blob], 'remote-artwork', { type: blob.type || contentType });
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
+
 export default function CreatePanel({ isOpen, onClose, user, categories, onArtworkCreated, onBoardCreated, adminMode, allUsers = [], defaultTargetUserId }: CreatePanelProps) {
   const [activeTab, setActiveTab] = useState<'menu' | 'artwork' | 'board'>('menu');
   
@@ -98,7 +145,9 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   // Artwork form
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [imageSource, setImageSource] = useState<'file' | 'url'>('file');
   const [file, setFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [artistName, setArtistName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [hashtags, setHashtags] = useState<string[]>([]);
@@ -119,7 +168,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
   const resetAndClose = () => {
     setActiveTab('menu');
-    setTitle(''); setDescription(''); setFile(null); setArtistName(''); setSelectedCategories([]);
+    setTitle(''); setDescription(''); setImageSource('file'); setFile(null); setImageUrl(''); setArtistName(''); setSelectedCategories([]);
     setHashtags([]); setCurrentHashtag(''); setMaterialUsed(''); setArtStyle('');
     setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
@@ -170,46 +219,64 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !title) return;
+    if (!title || (imageSource === 'file' ? !file : !imageUrl.trim())) return;
     if (adminMode && !targetUserId) {
       toast.error('Please select an artist to post on behalf of.');
       return;
     }
-    if (file.size > MAX_UPLOAD_SIZE) {
+    if (imageSource === 'file' && file && file.size > MAX_UPLOAD_SIZE) {
       toast.error(`Image must be 10MB or smaller. Selected file is ${formatFileSize(file.size)}.`);
       return;
     }
     setUploading(true);
 
     try {
-      const isSafe = await checkImageIsSafe(file);
-      if (!isSafe) { toast.error('Upload blocked: Inappropriate content detected.'); setUploading(false); return; }
+      let finalImageUrl = '';
+      let extractedColor = '#2a2a35';
 
-      let fileToUpload = file;
-      let fileExt = file.name.split('.').pop()?.toLowerCase() || '';
-      if (file.type.startsWith('image/') && fileExt !== 'gif') {
-        fileToUpload = await compressImage(file);
-        fileExt = 'webp';
+      if (imageSource === 'file' && file) {
+        const isSafe = await checkImageIsSafe(file);
+        if (!isSafe) {
+          toast.error('Upload blocked: Inappropriate content detected.');
+          return;
+        }
+
+        let fileToUpload = file;
+        let fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+        if (file.type.startsWith('image/') && fileExt !== 'gif') {
+          fileToUpload = await compressImage(file);
+          fileExt = 'webp';
+        }
+
+        if (fileToUpload.size > MAX_UPLOAD_SIZE) {
+          toast.error(`Compressed image is still above 10MB (${formatFileSize(fileToUpload.size)}). Please choose a smaller image.`);
+          return;
+        }
+
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        const filePath = `${effectiveUserId}/${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('artworks').upload(filePath, fileToUpload);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('artworks').getPublicUrl(filePath);
+        finalImageUrl = urlData.publicUrl;
+        extractedColor = await extractColor(fileToUpload);
+      } else {
+        finalImageUrl = validateHttpsImageUrl(imageUrl);
+        await confirmRemoteImageLoads(finalImageUrl);
+
+        const reviewFile = await fetchRemoteImageForReview(finalImageUrl);
+        if (reviewFile) {
+          const isSafe = await checkImageIsSafe(reviewFile);
+          if (!isSafe) {
+            toast.error('Registration blocked: Inappropriate content detected.');
+            return;
+          }
+          extractedColor = await extractColor(reviewFile);
+        }
       }
-
-      if (fileToUpload.size > MAX_UPLOAD_SIZE) {
-        toast.error(`Compressed image is still above 10MB (${formatFileSize(fileToUpload.size)}). Please choose a smaller image.`);
-        setUploading(false);
-        return;
-      }
-
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `${effectiveUserId}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('artworks').upload(filePath, fileToUpload);
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('artworks').getPublicUrl(filePath);
-      
-      const extractedColor = file.type.startsWith('image/') ? await extractColor(fileToUpload) : '#2a2a35';
 
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
-        title, description, image_url: urlData.publicUrl, user_id: effectiveUserId,
+        title, description, image_url: finalImageUrl, user_id: effectiveUserId,
         artist_name: artistName.trim() || null,
         tags: hashtags, material_used: materialUsed, art_style: artStyle,
         collector_or_pricing: collector, price: price ? Number(price) : null, creation_year: creationYear,
@@ -220,17 +287,19 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
       // Tag with categories
       if (selectedCategories.length > 0 && artwork) {
-        await supabase.from('artwork_categories').insert(
+        const { error: categoryError } = await supabase.from('artwork_categories').insert(
           selectedCategories.map(catId => ({ artwork_id: artwork.id, category_id: catId }))
         );
+        if (categoryError) throw categoryError;
       }
 
       // Add to portfolio
       if (selectedBoardId && artwork) {
-        await supabase.from('board_items').insert({
+        const { error: boardItemError } = await supabase.from('board_items').insert({
           board_id: selectedBoardId,
           artwork_id: artwork.id
         });
+        if (boardItemError) throw boardItemError;
       }
 
       toast.success('Artwork registered in the catalog.');
@@ -414,28 +483,80 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 </div>
               )}
 
-              {/* File upload area */}
-              <div style={{ border: '2px dashed rgba(74, 52, 36, 0.3)', borderRadius: '16px', padding: '30px', textAlign: 'center', cursor: 'pointer', position: 'relative', background: file ? 'rgba(74, 52, 36, 0.05)' : 'transparent', transition: 'all 0.2s' }}>
-                <Upload size={28} style={{ color: '#4a3424', marginBottom: '8px' }} />
-                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{file ? `${file.name} (${formatFileSize(file.size)})` : 'Click or drop image here'}</p>
-                <p style={{ color: '#8c6e3d', fontSize: '11px', margin: '6px 0 0', letterSpacing: '0.5px', textTransform: 'uppercase' }}>10MB maximum, optimized to WebP</p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => {
-                    const selected = e.target.files?.[0] || null;
-                    if (selected && selected.size > MAX_UPLOAD_SIZE) {
-                      toast.error(`Image must be 10MB or smaller. Selected file is ${formatFileSize(selected.size)}.`);
-                      e.currentTarget.value = '';
-                      setFile(null);
-                      return;
-                    }
-                    setFile(selected);
-                  }}
-                  required
-                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                />
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Image Source</label>
+                <div role="group" aria-label="Image source" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #d7d0c5', borderRadius: '4px', overflow: 'hidden', background: '#f3efe8' }}>
+                  <button
+                    type="button"
+                    aria-pressed={imageSource === 'file'}
+                    onClick={() => setImageSource('file')}
+                    style={{ minHeight: '42px', border: 0, borderRight: '1px solid #d7d0c5', background: imageSource === 'file' ? '#1c1917' : 'transparent', color: imageSource === 'file' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                  >
+                    <Upload size={15} /> Upload File
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={imageSource === 'url'}
+                    onClick={() => setImageSource('url')}
+                    style={{ minHeight: '42px', border: 0, background: imageSource === 'url' ? '#1c1917' : 'transparent', color: imageSource === 'url' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                  >
+                    <Link2 size={15} /> HTTPS URL
+                  </button>
+                </div>
               </div>
+
+              {imageSource === 'file' ? (
+                <div style={{ border: '2px dashed rgba(74, 52, 36, 0.3)', borderRadius: '8px', padding: '30px', textAlign: 'center', cursor: 'pointer', position: 'relative', background: file ? 'rgba(74, 52, 36, 0.05)' : 'transparent', transition: 'all 0.2s' }}>
+                  <Upload size={28} style={{ color: '#4a3424', marginBottom: '8px' }} />
+                  <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{file ? `${file.name} (${formatFileSize(file.size)})` : 'Click or drop image here'}</p>
+                  <p style={{ color: '#8c6e3d', fontSize: '11px', margin: '6px 0 0', letterSpacing: '0.5px', textTransform: 'uppercase' }}>10MB maximum, optimized to WebP</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => {
+                      const selected = e.target.files?.[0] || null;
+                      if (selected && selected.size > MAX_UPLOAD_SIZE) {
+                        toast.error(`Image must be 10MB or smaller. Selected file is ${formatFileSize(selected.size)}.`);
+                        e.currentTarget.value = '';
+                        setFile(null);
+                        return;
+                      }
+                      setFile(selected);
+                    }}
+                    required={imageSource === 'file'}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Link2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8a8178', pointerEvents: 'none' }} />
+                    <input
+                      type="url"
+                      inputMode="url"
+                      value={imageUrl}
+                      onChange={e => setImageUrl(e.target.value)}
+                      placeholder="https://images.example.com/artwork.jpg"
+                      aria-label="Direct HTTPS image URL"
+                      required={imageSource === 'url'}
+                      className="search-input"
+                      style={{ width: '100%', paddingLeft: '38px' }}
+                    />
+                  </div>
+                  {imageUrl.trim().startsWith('https://') && (
+                    <div style={{ border: '1px solid #d7d0c5', background: '#eee8dd', minHeight: '180px', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+                      <img
+                        src={imageUrl.trim()}
+                        alt="Remote artwork preview"
+                        style={{ display: 'block', width: '100%', height: '220px', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+                  <p style={{ margin: 0, color: '#7a6f63', fontSize: '11px', lineHeight: 1.5 }}>
+                    Original HTTPS file referenced directly. No compression, conversion, or re-upload.
+                  </p>
+                </div>
+              )}
 
               <div style={{ border: '1px solid rgba(184, 145, 85, 0.28)', background: 'rgba(184, 145, 85, 0.08)', borderRadius: '14px', padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: '#4a3424', fontWeight: 800, fontSize: '13px' }}>
@@ -443,7 +564,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   Google Drive image storage is coming soon
                 </div>
                 <p style={{ margin: 0, color: '#6f6358', fontSize: '12px', lineHeight: 1.5 }}>
-                  ArtVault currently stores uploaded artwork through Supabase. A future release will support storing and displaying artwork images from Google Drive.
+                  Direct HTTPS image URLs are available now. Google Drive sharing and managed display integration will arrive in a future release.
                 </p>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                   {['GoogleDriveStorage', 'ImageDisplay', 'ComingSoon'].map(tag => (
