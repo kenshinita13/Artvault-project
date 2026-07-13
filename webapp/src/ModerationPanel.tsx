@@ -124,7 +124,7 @@ export default function ModerationPanel({ user }: { user: any }) {
     toast.success('Artwork removed and report resolved.');
   };
 
-  function Pagination({ page, setPage, total }: { page: number; setPage: (p: number) => void; total: number }) {
+  function renderPagination(page: number, setPage: (p: number) => void, total: number) {
     const pages = Math.ceil(total / PER_PAGE);
     if (pages <= 1) return null;
     return (
@@ -234,7 +234,7 @@ export default function ModerationPanel({ user }: { user: any }) {
                 </table>
                 {filteredReports.length === 0 && <p className="ap-empty" style={{ padding: '32px' }}>No reports found.</p>}
               </div>
-              <Pagination page={reportPage} setPage={setReportPage} total={filteredReports.length} />
+              {renderPagination(reportPage, setReportPage, filteredReports.length)}
             </div>
           </div>
         )}
@@ -284,7 +284,7 @@ export default function ModerationPanel({ user }: { user: any }) {
                 ))}
                 {filteredArtworks.length === 0 && <p className="ap-empty">No artworks found.</p>}
               </div>
-              <Pagination page={artworkPage} setPage={setArtworkPage} total={filteredArtworks.length} />
+              {renderPagination(artworkPage, setArtworkPage, filteredArtworks.length)}
             </div>
           </div>
         )}

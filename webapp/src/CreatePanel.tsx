@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ImagePlus, FolderPlus, Upload } from 'lucide-react';
+import { Cloud, X, ImagePlus, FolderPlus, Upload } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { checkImageIsSafe } from './nsfwHelper';
 import toast from 'react-hot-toast';
@@ -333,6 +333,37 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Organize works by artist, collector, or collection</p>
                 </div>
               </button>
+
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 20px',
+                  background: 'linear-gradient(135deg, rgba(184, 145, 85, 0.10), rgba(255, 255, 255, 0.65))',
+                  border: '1px solid rgba(184, 145, 85, 0.35)',
+                  borderRadius: '16px', cursor: 'not-allowed', color: '#1a1a1a', textAlign: 'left',
+                  opacity: 0.95,
+                }}
+              >
+                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #b89155, #4a3424)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fdfbf7' }}>
+                  <Cloud size={22} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Google Drive Image Vault</p>
+                    <span style={{ border: '1px solid rgba(184, 145, 85, 0.45)', color: '#8c6e3d', borderRadius: '999px', padding: '2px 8px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Coming soon</span>
+                  </div>
+                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>
+                    Future image storage and display integration using Google Drive.
+                  </p>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {['GoogleDriveStorage', 'ImageVault', 'ComingSoon'].map(tag => (
+                      <span key={tag} style={{ background: 'rgba(74, 52, 36, 0.08)', color: '#4a3424', borderRadius: '999px', padding: '3px 8px', fontSize: '11px', fontWeight: 700 }}>#{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              </button>
             </div>
           )}
 
@@ -404,6 +435,21 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   required
                   style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
                 />
+              </div>
+
+              <div style={{ border: '1px solid rgba(184, 145, 85, 0.28)', background: 'rgba(184, 145, 85, 0.08)', borderRadius: '14px', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: '#4a3424', fontWeight: 800, fontSize: '13px' }}>
+                  <Cloud size={16} />
+                  Google Drive image storage is coming soon
+                </div>
+                <p style={{ margin: 0, color: '#6f6358', fontSize: '12px', lineHeight: 1.5 }}>
+                  ArtVault currently stores uploaded artwork through Supabase. A future release will support storing and displaying artwork images from Google Drive.
+                </p>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                  {['GoogleDriveStorage', 'ImageDisplay', 'ComingSoon'].map(tag => (
+                    <span key={tag} style={{ background: '#fdfbf7', color: '#4a3424', border: '1px solid rgba(74, 52, 36, 0.12)', borderRadius: '999px', padding: '3px 8px', fontSize: '11px', fontWeight: 700 }}>#{tag}</span>
+                  ))}
+                </div>
               </div>
 
               <div>

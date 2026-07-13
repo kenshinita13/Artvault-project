@@ -571,7 +571,7 @@ export default function AdminPanel({ user }: { user: any }) {
   };
 
   // ── Pagination helper ──────────────────────────────────────────────
-  function Pagination({ page, setPage, total }: { page: number; setPage: (p: number) => void; total: number }) {
+  function renderPagination(page: number, setPage: (p: number) => void, total: number) {
     const pages = Math.ceil(total / PER_PAGE);
     if (pages <= 1) return null;
     return (
@@ -768,7 +768,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   </tbody>
                 </table>
               </div>
-              <Pagination page={userPage} setPage={setUserPage} total={filteredUsers.length} />
+              {renderPagination(userPage, setUserPage, filteredUsers.length)}
             </div>
           </div>
         )}
@@ -884,7 +884,7 @@ export default function AdminPanel({ user }: { user: any }) {
                 ))}
                 {filteredArtworks.length === 0 && <p className="ap-empty">No artworks found.</p>}
               </div>
-              <Pagination page={artworkPage} setPage={setArtworkPage} total={filteredArtworks.length} />
+              {renderPagination(artworkPage, setArtworkPage, filteredArtworks.length)}
             </div>
           </div>
         )}
@@ -949,7 +949,7 @@ export default function AdminPanel({ user }: { user: any }) {
                 </table>
                 {filteredReports.length === 0 && <p className="ap-empty" style={{ padding: '32px' }}>No reports found.</p>}
               </div>
-              <Pagination page={reportPage} setPage={setReportPage} total={filteredReports.length} />
+              {renderPagination(reportPage, setReportPage, filteredReports.length)}
             </div>
           </div>
         )}
@@ -989,7 +989,7 @@ export default function AdminPanel({ user }: { user: any }) {
                 </table>
                 {auditLogs.length === 0 && <p className="ap-empty" style={{ padding: '32px' }}>No audit logs available. Ensure the audit_logs table exists in Supabase.</p>}
               </div>
-              <Pagination page={logPage} setPage={setLogPage} total={auditLogs.length} />
+              {renderPagination(logPage, setLogPage, auditLogs.length)}
             </div>
           </div>
         )}
