@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, RefreshCw, Shuffle } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
 import { useCachedQuery } from './useCachedQuery';
@@ -67,6 +68,7 @@ interface Artwork {
   creation_year?: string;
   dimensions?: string;
   dominant_color?: string;
+  discover_display_rank?: number | null;
 }
 
 interface Category {
@@ -81,7 +83,51 @@ interface RegistryStats {
   withProvenance: number;
 }
 
+type DiscoveryEra = 'all' | 'before-1800' | '1800s' | 'early-1900s' | 'post-1950';
+type DiscoveryPath = 'unexpected' | 'old-masters' | 'paper' | 'modern';
+
+const DISCOVERY_ERAS: { id: DiscoveryEra; label: string }[] = [
+  { id: 'all', label: 'All periods' },
+  { id: 'before-1800', label: 'Before 1800' },
+  { id: '1800s', label: '1800-1899' },
+  { id: 'early-1900s', label: '1900-1949' },
+  { id: 'post-1950', label: '1950-now' },
+];
+
+const DISCOVERY_PATHS: { id: DiscoveryPath; label: string; description: string }[] = [
+  { id: 'unexpected', label: 'Unexpected', description: 'Three distant records brought together by chance.' },
+  { id: 'old-masters', label: 'Old masters', description: 'Works made before 1800, read through the present archive.' },
+  { id: 'paper', label: 'On paper', description: 'Drawings, watercolors, pastels, and works shaped by paper.' },
+  { id: 'modern', label: 'Modern voices', description: 'Twentieth-century and contemporary positions in the collection.' },
+];
+
+function getNumericArtworkYear(value?: string | null): number | null {
+  if (!value) return null;
+  const match = String(value).match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
+  return match ? Number(match[1]) : null;
+}
+
+function artworkMatchesEra(artwork: Artwork, era: DiscoveryEra): boolean {
+  if (era === 'all') return true;
+  const year = getNumericArtworkYear(artwork.creation_year);
+  if (year === null) return false;
+  if (era === 'before-1800') return year < 1800;
+  if (era === '1800s') return year >= 1800 && year <= 1899;
+  if (era === 'early-1900s') return year >= 1900 && year <= 1949;
+  return year >= 1950;
+}
+
+function artworkMatchesDiscoveryPath(artwork: Artwork, path: DiscoveryPath): boolean {
+  if (path === 'unexpected') return true;
+  const year = getNumericArtworkYear(artwork.creation_year);
+  if (path === 'old-masters') return year !== null && year < 1800;
+  if (path === 'modern') return year !== null && year >= 1900;
+  const material = `${artwork.material_used || ''} ${artwork.medium || ''} ${artwork.art_style || ''}`.toLowerCase();
+  return ['paper', 'watercolor', 'pastel', 'charcoal', 'graphite', 'gouache', 'drawing'].some((term) => material.includes(term));
+}
+
 let cachedArtworks: Artwork[] | null = null;
+const DISCOVERY_SCROLL_STORAGE_KEY = 'artvault:discover-return-scroll';
 
 // ── Skeleton shimmer card ──────────────────────────────────────
 function SkeletonCard() {
@@ -361,6 +407,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   const [loading, setLoading] = useState(!cachedArtworks);
   const [activeArtwork, setActiveArtwork] = useState<Artwork | null>(null);
   const [stats, setStats] = useState<RegistryStats>({ total: 0, withArtist: 0, withProvenance: 0 });
+  const [loadError, setLoadError] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(mode === 'registry' ? 'list' : 'grid');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(264);
@@ -368,8 +415,15 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   const isResizing = useRef(false);
   
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeDiscoveryPath, setActiveDiscoveryPath] = useState<DiscoveryPath>('unexpected');
+  const [discoveryPathSeed, setDiscoveryPathSeed] = useState(0);
+  const [activeDiscoveryEra, setActiveDiscoveryEra] = useState<DiscoveryEra>('all');
+  const [spotlightIndex, setSpotlightIndex] = useState(0);
+  const [spotlightPaused, setSpotlightPaused] = useState(false);
+  const [dialogueIndex, setDialogueIndex] = useState(0);
   const itemsPerPage = 10;
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const promenadeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mobileFiltersOpen) return;
@@ -417,6 +471,8 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
 
   const [searchParams, setSearchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
+  const artistQuery = searchParams.get('artist') || '';
+  const discoveryReturnScrollRef = useRef<number | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeMedium, setActiveMedium] = useState('all');
@@ -471,6 +527,21 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   useEffect(() => { setCurrentPage(1); }, [searchQuery, activeCategory, activeMedium, activePriceRange, activeArtist]);
 
   useEffect(() => {
+    if (mode !== 'discover') return;
+    setActiveCategory('all');
+    setActiveMedium('all');
+    setActiveArtist(artistQuery || 'all');
+    setArtistSearch('');
+    setActiveArtistLetter('All');
+    setActivePriceRange('all');
+    setCustomMinPrice('');
+    setCustomMaxPrice('');
+    setMobileFiltersOpen(false);
+    setLocalSearch('');
+    if (searchQuery) setSearchParams(artistQuery ? { artist: artistQuery } : {});
+  }, [artistQuery, mode, searchQuery, setSearchParams]);
+
+  useEffect(() => {
     fetchData();
     const handleRefresh = () => { cachedArtworks = null; fetchData(); };
     window.addEventListener('artwork-created', handleRefresh);
@@ -478,9 +549,42 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   }, []);
 
   // Sync local search from URL
-  useEffect(() => { setLocalSearch(searchQuery); }, [searchQuery]);
+  useEffect(() => { setLocalSearch(mode === 'registry' ? searchQuery : ''); }, [mode, searchQuery]);
 
   useEffect(() => {
+    if (mode !== 'discover' || artistQuery) return;
+
+    const storedPosition = window.sessionStorage.getItem(DISCOVERY_SCROLL_STORAGE_KEY);
+    const returnPosition = discoveryReturnScrollRef.current ?? (storedPosition === null ? null : Number(storedPosition));
+    if (returnPosition === null || !Number.isFinite(returnPosition)) return;
+
+    const restorePosition = () => {
+      const root = document.documentElement;
+      const previousScrollBehavior = root.style.scrollBehavior;
+      root.style.scrollBehavior = 'auto';
+      window.scrollTo(0, returnPosition);
+      root.style.scrollBehavior = previousScrollBehavior;
+    };
+
+    let secondFrame = 0;
+    const frame = window.requestAnimationFrame(() => {
+      restorePosition();
+      secondFrame = window.requestAnimationFrame(restorePosition);
+    });
+    const finalRestore = window.setTimeout(() => {
+      restorePosition();
+      discoveryReturnScrollRef.current = null;
+      window.sessionStorage.removeItem(DISCOVERY_SCROLL_STORAGE_KEY);
+    }, 120);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(finalRestore);
+    };
+  }, [artistQuery, mode]);
+
+  useEffect(() => {
+    if (mode !== 'registry') return;
     const nextSearch = localSearch.trim();
     const currentSearch = searchQuery.trim();
     const timeout = window.setTimeout(() => {
@@ -489,10 +593,11 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     }, 180);
 
     return () => window.clearTimeout(timeout);
-  }, [localSearch, searchQuery, setSearchParams]);
+  }, [localSearch, mode, searchQuery, setSearchParams]);
 
   async function fetchData() {
     if (!cachedArtworks) setLoading(true);
+    setLoadError('');
 
     const { data, error } = await supabase
       .from('artworks')
@@ -508,7 +613,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
         withProvenance: data.filter((a: any) => a.material_used || a.art_style || a.creation_year || a.collector_or_pricing || a.dimensions).length,
       });
     } else if (error) {
-      const { data: safeData } = await supabase
+      const { data: safeData, error: safeError } = await supabase
         .from('artworks')
         .select('*, profiles (username, name)')
         .order('created_at', { ascending: false });
@@ -521,6 +626,8 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
           withArtist: new Set(d.map((a: any) => a.artist_name || a.profiles?.name || a.profiles?.username).filter(Boolean)).size,
           withProvenance: d.filter((a: any) => a.material_used || a.art_style || a.creation_year || a.collector_or_pricing || a.dimensions).length,
         });
+      } else {
+        setLoadError(safeError?.message || 'The collection could not be loaded.');
       }
     }
     setLoading(false);
@@ -580,6 +687,115 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     );
   });
 
+  const discoveryPathCounts = useMemo(() => {
+    return DISCOVERY_PATHS.reduce<Record<DiscoveryPath, number>>((counts, path) => {
+      counts[path.id] = artworks.filter((artwork) => artworkMatchesDiscoveryPath(artwork, path.id)).length;
+      return counts;
+    }, { unexpected: 0, 'old-masters': 0, paper: 0, modern: 0 });
+  }, [artworks]);
+
+  const discoveryPathPool = useMemo(
+    () => artworks.filter((artwork) => artworkMatchesDiscoveryPath(artwork, activeDiscoveryPath)),
+    [activeDiscoveryPath, artworks]
+  );
+
+  const discoveryPathWorks = useMemo(() => {
+    const pool = discoveryPathPool.length > 0 ? discoveryPathPool : artworks;
+    if (pool.length <= 3) return pool;
+    const offset = discoveryPathSeed % pool.length;
+    const rotated = [...pool.slice(offset), ...pool.slice(0, offset)];
+    const positions = [0, Math.floor(rotated.length / 3), Math.floor(rotated.length * 2 / 3)];
+    return positions.map((position) => rotated[position]);
+  }, [artworks, discoveryPathPool, discoveryPathSeed]);
+
+  const activeDiscoveryPathMeta = DISCOVERY_PATHS.find((path) => path.id === activeDiscoveryPath) || DISCOVERY_PATHS[0];
+
+  const curatedDiscoverWorks = useMemo(() => artworks
+    .filter((artwork) => artwork.discover_display_rank != null)
+    .sort((a, b) => Number(a.discover_display_rank) - Number(b.discover_display_rank)), [artworks]);
+
+  const promenadeWorks = useMemo(() => {
+    if (curatedDiscoverWorks.length > 0) return curatedDiscoverWorks.slice(0, 6);
+    if (artworks.length <= 6) return artworks;
+    const step = Math.max(1, Math.floor(artworks.length / 6));
+    return Array.from({ length: 6 }, (_, index) => artworks[index * step]).filter(Boolean);
+  }, [artworks, curatedDiscoverWorks]);
+
+  const discoveryEraCounts = useMemo(() => {
+    return DISCOVERY_ERAS.reduce<Record<DiscoveryEra, number>>((counts, era) => {
+      counts[era.id] = artworks.filter((artwork) => artworkMatchesEra(artwork, era.id)).length;
+      return counts;
+    }, { all: 0, 'before-1800': 0, '1800s': 0, 'early-1900s': 0, 'post-1950': 0 });
+  }, [artworks]);
+
+  const discoveryEraPool = useMemo(
+    () => artworks.filter((artwork) => artworkMatchesEra(artwork, activeDiscoveryEra)),
+    [activeDiscoveryEra, artworks]
+  );
+
+  const discoverySelection = useMemo(() => {
+    if (discoveryEraPool.length <= 3) return discoveryEraPool;
+    const step = Math.max(1, Math.floor(discoveryEraPool.length / 3));
+    return [discoveryEraPool[0], discoveryEraPool[step], discoveryEraPool[step * 2]];
+  }, [discoveryEraPool]);
+
+  const spotlightArtists = useMemo(() => {
+    const groups = new Map<string, Artwork[]>();
+    artworks.forEach((artwork) => {
+      const artist = getOriginalCreator(artwork);
+      const existing = groups.get(artist) || [];
+      existing.push(artwork);
+      groups.set(artist, existing);
+    });
+    return Array.from(groups, ([name, works]) => ({ name, works }))
+      .filter(({ name, works }) => works.length >= 2 && name !== 'ArtVault Contributor')
+      .sort((a, b) => b.works.length - a.works.length || a.name.localeCompare(b.name));
+  }, [artworks]);
+
+  const spotlightArtist = spotlightArtists.length > 0
+    ? spotlightArtists[spotlightIndex % spotlightArtists.length]
+    : null;
+
+  const spotlightSummary = useMemo(() => {
+    if (!spotlightArtist) return { medium: 'Mixed practice', styleCount: 0 };
+    const mediumCounts = new Map<string, number>();
+    spotlightArtist.works.forEach((artwork) => {
+      const medium = artwork.material_used || 'Unspecified medium';
+      mediumCounts.set(medium, (mediumCounts.get(medium) || 0) + 1);
+    });
+    const medium = Array.from(mediumCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Mixed practice';
+    const styleCount = new Set(spotlightArtist.works.map((artwork) => artwork.art_style).filter(Boolean)).size;
+    return { medium, styleCount };
+  }, [spotlightArtist]);
+
+  const dialoguePair = useMemo<[Artwork, Artwork] | null>(() => {
+    if (artworks.length < 2) return null;
+    const first = artworks[dialogueIndex % artworks.length];
+    const firstYear = getNumericArtworkYear(first.creation_year);
+    const candidates = artworks.filter((artwork) => {
+      if (artwork.id === first.id || getOriginalCreator(artwork) === getOriginalCreator(first)) return false;
+      const year = getNumericArtworkYear(artwork.creation_year);
+      return firstYear === null || year === null || Math.abs(firstYear - year) >= 40;
+    });
+    const pool = candidates.length > 0 ? candidates : artworks.filter((artwork) => artwork.id !== first.id);
+    const second = pool[(dialogueIndex * 7 + Math.floor(pool.length / 2)) % pool.length];
+    return [first, second];
+  }, [artworks, dialogueIndex]);
+
+  const dialogueNote = useMemo(() => {
+    if (!dialoguePair) return '';
+    const [first, second] = dialoguePair;
+    const firstYear = getNumericArtworkYear(first.creation_year);
+    const secondYear = getNumericArtworkYear(second.creation_year);
+    if (firstYear !== null && secondYear !== null) {
+      return `${Math.abs(firstYear - secondYear)} years apart`;
+    }
+    if (first.material_used && first.material_used === second.material_used) {
+      return `A shared ${first.material_used.toLowerCase()} practice`;
+    }
+    return `${first.material_used || 'One medium'} meets ${second.material_used || 'another'}`;
+  }, [dialoguePair]);
+
   const totalPages = Math.ceil(filteredArtworks.length / itemsPerPage);
   const paginatedArtworks = filteredArtworks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -597,23 +813,97 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     }
   }
 
-  // Featured artwork = rotates among top 5
+  function openSurpriseArtwork() {
+    if (discoveryEraPool.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * discoveryEraPool.length);
+    setActiveArtwork(discoveryEraPool[randomIndex]);
+  }
+
+  function moveArtistSpotlight(direction: number) {
+    if (spotlightArtists.length === 0) return;
+    setSpotlightIndex((current) => (current + direction + spotlightArtists.length) % spotlightArtists.length);
+  }
+
+  function openSpotlightCatalog() {
+    if (!spotlightArtist) return;
+    const returnPosition = window.scrollY;
+    discoveryReturnScrollRef.current = returnPosition;
+    window.sessionStorage.setItem(DISCOVERY_SCROLL_STORAGE_KEY, String(returnPosition));
+    setSearchParams({ artist: spotlightArtist.name });
+    setCurrentPage(1);
+    window.setTimeout(() => {
+      document.querySelector('.discovery-catalog-return, .collection-header')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
+  function returnToDiscovery() {
+    setActiveArtist('all');
+    setSearchParams({});
+    setCurrentPage(1);
+  }
+
+  function movePromenade(direction: number) {
+    const viewport = promenadeRef.current;
+    if (!viewport) return;
+    viewport.scrollBy({ left: direction * viewport.clientWidth * 0.72, behavior: 'smooth' });
+  }
+
+  // Administrators may curate the Discover rotation; otherwise use recent works.
   const [featuredIndex, setFeaturedIndex] = useState(0);
+  const featuredRotationWorks = curatedDiscoverWorks.length > 0
+    ? curatedDiscoverWorks
+    : artworks.slice(0, 5);
   
   useEffect(() => {
-    if (artworks.length === 0) return;
-    const maxIndex = Math.min(artworks.length, 5);
+    if (featuredRotationWorks.length === 0) return;
+    setFeaturedIndex(0);
     const timer = setInterval(() => {
-      setFeaturedIndex(prev => (prev + 1) % maxIndex);
+      setFeaturedIndex(prev => (prev + 1) % featuredRotationWorks.length);
     }, 8000);
     return () => clearInterval(timer);
-  }, [artworks.length]);
+  }, [featuredRotationWorks.length]);
 
-  const featuredArtwork = artworks[featuredIndex] || null;
-  const showFeatured = mode === 'discover' && !loading && featuredArtwork && !searchQuery && activeCategory === 'all' && activeMedium === 'all' && activeArtist === 'all' && activePriceRange === 'all';
+  useEffect(() => {
+    if (mode !== 'discover' || spotlightPaused || spotlightArtists.length < 2) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => {
+      setSpotlightIndex((current) => (current + 1) % spotlightArtists.length);
+    }, 12000);
+    return () => window.clearInterval(timer);
+  }, [mode, spotlightArtists.length, spotlightPaused]);
+
+  const featuredArtwork = featuredRotationWorks[featuredIndex % Math.max(featuredRotationWorks.length, 1)] || null;
+  const showDiscoveryExperience = mode === 'discover' && !loading && !loadError && artworks.length > 0 && !searchQuery && activeCategory === 'all' && activeMedium === 'all' && activeArtist === 'all' && activePriceRange === 'all';
+  const showFeatured = showDiscoveryExperience && featuredArtwork;
+  const showCatalogIndex = mode === 'registry' || !showDiscoveryExperience;
+
+  useEffect(() => {
+    if (!showDiscoveryExperience) return;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>(
+      '.discovery-portal, .featured-acquisition, .curatorial-lens, .museum-promenade, .artist-spotlight, .visual-dialogue'
+    ));
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      elements.forEach((element) => element.classList.add('discover-motion-visible'));
+      return;
+    }
+
+    elements.forEach((element) => element.classList.add('discover-motion-ready'));
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('discover-motion-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    elements.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [showDiscoveryExperience]);
 
   return (
     <div className="dashboard-layout">
+      {mode === 'registry' && (
+        <>
       {/* ─── Mobile Filter Toggle ─── */}
       <div className="mobile-filter-toggle md:hidden">
         <button className="mobile-filter-btn" onClick={() => setMobileFiltersOpen(true)} aria-label="Open artwork filters">
@@ -811,12 +1101,95 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
           </div>
         )}
       </aside>
+        </>
+      )}
 
       {/* ─── Main Registry Content ─── */}
-      <main className="registry-content">
+      <main className={`registry-content ${mode === 'discover' ? 'discover-content' : ''}`}>
+
+        {showDiscoveryExperience && (
+          <section className="discovery-portal" aria-labelledby="discovery-portal-title">
+            <div className="discovery-portal-copy">
+              <div className="discovery-portal-eyebrow">
+                <span>Discovery Room</span>
+                <span>{artworks.length} works in motion</span>
+              </div>
+              <h1 id="discovery-portal-title">Begin with what catches your eye.</h1>
+              <p className="discovery-portal-intro">
+                Move through the collection by instinct, material, period, and unexpected kinship.
+              </p>
+
+              <div className="discovery-path-nav" aria-label="Choose a discovery path">
+                {DISCOVERY_PATHS.map((path) => (
+                  <button
+                    key={path.id}
+                    type="button"
+                    className={activeDiscoveryPath === path.id ? 'active' : ''}
+                    aria-pressed={activeDiscoveryPath === path.id}
+                    disabled={discoveryPathCounts[path.id] === 0}
+                    onClick={() => {
+                      setActiveDiscoveryPath(path.id);
+                      setDiscoveryPathSeed(0);
+                    }}
+                  >
+                    <span>{path.label}</span>
+                    <small>{discoveryPathCounts[path.id]}</small>
+                  </button>
+                ))}
+              </div>
+
+              <div className="discovery-path-note" aria-live="polite">
+                <div>
+                  <span>Current path</span>
+                  <p>{activeDiscoveryPathMeta.description}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDiscoveryPathSeed((seed) => seed + 7)}
+                  disabled={discoveryPathWorks.length < 2}
+                >
+                  <Shuffle size={15} /> Reshuffle
+                </button>
+              </div>
+            </div>
+
+            <div className="discovery-portal-stage">
+              {discoveryPathWorks.map((artwork, index) => (
+                <button
+                  key={`${activeDiscoveryPath}-${artwork.id}`}
+                  type="button"
+                  className={`discovery-portal-work discovery-portal-work-${index + 1}`}
+                  onClick={() => setActiveArtwork(artwork)}
+                  aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
+                >
+                  <span
+                    className="discovery-portal-work-backdrop"
+                    style={{ backgroundImage: `url("${optimizedUrl(artwork.image_url, 1000, 82)}")` }}
+                    aria-hidden="true"
+                  />
+                  <img
+                    src={optimizedUrl(artwork.image_url, index === 0 ? 1200 : 800, 88)}
+                    alt=""
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                      event.currentTarget.parentElement?.classList.add('image-unavailable');
+                    }}
+                  />
+                  <span className="discovery-portal-work-shade" />
+                  <span className="discovery-portal-work-copy">
+                    <small>{String(index + 1).padStart(2, '0')} / {formatYear(artwork.creation_year) || 'Undated'}</small>
+                    <strong>{artwork.title}</strong>
+                    <span>{getOriginalCreator(artwork)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Registry Masthead ──────────────────────────────── */}
-        <div className="registry-masthead">
+        {mode === 'registry' && <div className="registry-masthead">
           <div className="registry-masthead-left">
             <span className="registry-masthead-title">{mode === 'registry' ? 'Accession Registry' : 'Collection Registry'}</span>
             {searchQuery && (
@@ -841,10 +1214,10 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
               <span className="masthead-stat-label">Provenance Records</span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* ── Enterprise Search Panel ────────────────────────── */}
-        <div className="search-panel">
+        {mode === 'registry' && <div className="search-panel">
           <form className="search-panel-form" onSubmit={handleSearchSubmit}>
             <div className="search-panel-inner">
               <svg className="search-panel-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -872,30 +1245,277 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
               ? `${filteredArtworks.length} live result${filteredArtworks.length !== 1 ? 's' : ''} for "${searchQuery}"`
               : `Showing all ${filteredArtworks.length} registered work${filteredArtworks.length !== 1 ? 's' : ''}`}
           </div>
-        </div>
-
-        {/* ── Provenance Strip ───────────────────────────────── */}
-        {mode === 'discover' && (
-          <div className="provenance-strip">
-            <span className="provenance-strip-icon">AV</span>
-            <p className="provenance-strip-text">
-              Every work in the ArtVault Registry maintains documented ownership, exhibition history, and legal provenance in accordance with institutional archival standards.
-            </p>
-          </div>
-        )}
+        </div>}
 
         {/* ── Featured Acquisition ──────────────────────────── */}
         {showFeatured && featuredArtwork && (
-          <FeaturedAcquisition artwork={featuredArtwork} onClick={() => setActiveArtwork(featuredArtwork)} />
+          <FeaturedAcquisition key={featuredArtwork.id} artwork={featuredArtwork} onClick={() => setActiveArtwork(featuredArtwork)} />
+        )}
+
+        {/* ── Curatorial Lens ───────────────────────────────── */}
+        {showDiscoveryExperience && artworks.length > 0 && (
+          <section className="curatorial-lens" aria-labelledby="curatorial-lens-title">
+            <div className="curatorial-lens-header">
+              <div className="curatorial-lens-heading">
+                <span className="curatorial-lens-kicker">Curatorial Lens</span>
+                <h2 id="curatorial-lens-title">A route through time</h2>
+                <p>Five centuries of practice, material, and provenance drawn from the live collection.</p>
+              </div>
+              <button
+                type="button"
+                className="curatorial-surprise-btn"
+                onClick={openSurpriseArtwork}
+                disabled={discoveryEraPool.length === 0}
+              >
+                <Shuffle size={16} /> Surprise Me
+              </button>
+            </div>
+
+            <div className="curatorial-era-nav" aria-label="Browse discovery works by period">
+              {DISCOVERY_ERAS.map((era) => (
+                <button
+                  key={era.id}
+                  type="button"
+                  className={activeDiscoveryEra === era.id ? 'active' : ''}
+                  aria-pressed={activeDiscoveryEra === era.id}
+                  disabled={discoveryEraCounts[era.id] === 0}
+                  onClick={() => setActiveDiscoveryEra(era.id)}
+                >
+                  <span>{era.label}</span>
+                  <small>{discoveryEraCounts[era.id]}</small>
+                </button>
+              ))}
+            </div>
+
+            {discoverySelection.length > 0 ? (
+              <div className="curatorial-mosaic">
+                {discoverySelection.map((artwork, index) => (
+                  <button
+                    key={artwork.id}
+                    type="button"
+                    className={`curatorial-work ${index === 0 ? 'curatorial-work-primary' : ''}`}
+                    onClick={() => setActiveArtwork(artwork)}
+                    aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
+                  >
+                    <img
+                      src={optimizedUrl(artwork.image_url, index === 0 ? 1200 : 700, 86)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                        event.currentTarget.parentElement?.classList.add('image-unavailable');
+                      }}
+                    />
+                    <span className="curatorial-work-shade" />
+                    <span className="curatorial-work-copy">
+                      <small>{getRegistryNumber(artwork.id)}{artwork.creation_year ? ` / ${formatYear(artwork.creation_year)}` : ''}</small>
+                      <strong>{artwork.title}</strong>
+                      <span>{getOriginalCreator(artwork)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="curatorial-empty">No dated works are available for this period.</div>
+            )}
+          </section>
+        )}
+
+        {/* ── Museum Promenade ──────────────────────────────── */}
+        {showDiscoveryExperience && promenadeWorks.length > 0 && (
+          <section className="museum-promenade" aria-labelledby="museum-promenade-title">
+            <div className="museum-promenade-header">
+              <div>
+                <span className="museum-promenade-kicker">Open Display / Gallery 01</span>
+                <h2 id="museum-promenade-title">The collection, installed</h2>
+                <p>A changing salon of works brought out of the archive and into conversation.</p>
+              </div>
+              <div className="museum-promenade-controls" aria-label="Move through the gallery display">
+                <button type="button" onClick={() => movePromenade(-1)} aria-label="Previous gallery works" title="Previous works">
+                  <ChevronLeft size={19} />
+                </button>
+                <button type="button" onClick={() => movePromenade(1)} aria-label="Next gallery works" title="Next works">
+                  <ChevronRight size={19} />
+                </button>
+              </div>
+            </div>
+
+            <div className="museum-promenade-viewport" ref={promenadeRef}>
+              <div className="museum-promenade-wall">
+                {promenadeWorks.map((artwork, index) => (
+                  <article key={artwork.id} className={`museum-promenade-piece museum-promenade-piece-${index % 3}`}>
+                    <button
+                      type="button"
+                      className="museum-promenade-frame"
+                      onClick={() => setActiveArtwork(artwork)}
+                      aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
+                    >
+                      <span className="museum-promenade-mat">
+                        <img
+                          src={optimizedUrl(artwork.image_url, 800, 88)}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none';
+                            event.currentTarget.closest('.museum-promenade-frame')?.classList.add('image-unavailable');
+                          }}
+                        />
+                      </span>
+                    </button>
+                    <div className="museum-promenade-label">
+                      <small>{getRegistryNumber(artwork.id)} / {formatYear(artwork.creation_year) || 'Undated'}</small>
+                      <strong>{artwork.title}</strong>
+                      <span>{getOriginalCreator(artwork)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+            <div className="museum-promenade-floorline" aria-hidden="true"><span>ArtVault / Permanent Collection</span></div>
+          </section>
+        )}
+
+        {/* ── Artist Spotlight ──────────────────────────────── */}
+        {showDiscoveryExperience && spotlightArtist && (
+          <section
+            className="artist-spotlight"
+            aria-labelledby="artist-spotlight-title"
+            onMouseEnter={() => setSpotlightPaused(true)}
+            onMouseLeave={() => setSpotlightPaused(false)}
+            onFocusCapture={() => setSpotlightPaused(true)}
+            onBlurCapture={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSpotlightPaused(false);
+            }}
+          >
+            <div className="artist-spotlight-gallery">
+              {spotlightArtist.works.slice(0, 3).map((artwork, index) => (
+                <button
+                  key={artwork.id}
+                  type="button"
+                  className={index === 0 ? 'artist-spotlight-work primary' : 'artist-spotlight-work'}
+                  onClick={() => setActiveArtwork(artwork)}
+                  aria-label={`Open ${artwork.title}`}
+                >
+                  <img
+                    src={optimizedUrl(artwork.image_url, index === 0 ? 1000 : 600, 86)}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                      event.currentTarget.parentElement?.classList.add('image-unavailable');
+                    }}
+                  />
+                  <span>{artwork.title}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="artist-spotlight-info">
+              <div className="artist-spotlight-topline">
+                <span className="artist-spotlight-kicker">Artist Spotlight</span>
+                <div className="artist-spotlight-controls">
+                  <button type="button" onClick={() => moveArtistSpotlight(-1)} aria-label="Previous featured artist" title="Previous artist">
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span>{spotlightIndex % spotlightArtists.length + 1} / {spotlightArtists.length}</span>
+                  <button type="button" onClick={() => moveArtistSpotlight(1)} aria-label="Next featured artist" title="Next artist">
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+              <h2 id="artist-spotlight-title">{spotlightArtist.name}</h2>
+              <p>
+                {spotlightArtist.works.length} registered works trace a distinct practice across the ArtVault collection.
+              </p>
+              <div className="artist-spotlight-metrics">
+                <div><small>Registered Works</small><strong>{spotlightArtist.works.length}</strong></div>
+                <div><small>Primary Medium</small><strong>{spotlightSummary.medium}</strong></div>
+                <div><small>Documented Styles</small><strong>{spotlightSummary.styleCount || 1}</strong></div>
+              </div>
+              <div className="artist-spotlight-actions">
+                <button type="button" className="artist-spotlight-primary-btn" onClick={openSpotlightCatalog}>View Artist Catalog</button>
+                <button type="button" className="artist-spotlight-secondary-btn" onClick={() => setActiveArtwork(spotlightArtist.works[0])}>Open Featured Work</button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Visual Dialogue ───────────────────────────────── */}
+        {showDiscoveryExperience && dialoguePair && (
+          <section className="visual-dialogue" aria-labelledby="visual-dialogue-title">
+            <div className="visual-dialogue-header">
+              <div>
+                <span className="visual-dialogue-kicker">Visual Dialogue</span>
+                <h2 id="visual-dialogue-title">Two records, one conversation</h2>
+              </div>
+              <button type="button" className="visual-dialogue-refresh" onClick={() => setDialogueIndex((current) => current + 1)}>
+                <RefreshCw size={15} /> New Dialogue
+              </button>
+            </div>
+
+            <div className="visual-dialogue-stage">
+              {dialoguePair.map((artwork, index) => (
+                <button
+                  key={artwork.id}
+                  type="button"
+                  className={`visual-dialogue-work visual-dialogue-work-${index + 1}`}
+                  onClick={() => setActiveArtwork(artwork)}
+                  aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
+                >
+                  <span className="visual-dialogue-image">
+                    <img
+                      src={optimizedUrl(artwork.image_url, 900, 86)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                        event.currentTarget.parentElement?.classList.add('image-unavailable');
+                      }}
+                    />
+                  </span>
+                  <span className="visual-dialogue-copy">
+                    <small>{artwork.creation_year ? formatYear(artwork.creation_year) : 'Undated'} / {artwork.material_used || 'Medium not recorded'}</small>
+                    <strong>{artwork.title}</strong>
+                    <span>{getOriginalCreator(artwork)}</span>
+                  </span>
+                </button>
+              ))}
+
+              <div className="visual-dialogue-bridge" aria-hidden="true">
+                <span><ArrowLeftRight size={19} /></span>
+                <strong>{dialogueNote}</strong>
+                <small>Different hands. Shared archive.</small>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* ── Collection Registry Header ────────────────────── */}
+        {showCatalogIndex && (
+          <>
+        {mode === 'discover' && activeArtist !== 'all' && (
+          <div className="discovery-catalog-return">
+            <button type="button" onClick={returnToDiscovery}>
+              <ChevronLeft size={18} /> Back to Discover
+            </button>
+            <div>
+              <span>Artist Catalog</span>
+              <strong>{activeArtist}</strong>
+            </div>
+          </div>
+        )}
         <div className="collection-header">
           <div className="collection-header-left">
             <div className="museum-rule-inline">
               <span className="museum-rule-text">
                 {searchQuery
                   ? `Search Results - ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
+                  : mode === 'discover' && activeArtist !== 'all'
+                  ? `${activeArtist} - ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
                   : activeFiltersCount > 0
                   ? `Filtered Registry - ${filteredArtworks.length} Work${filteredArtworks.length !== 1 ? 's' : ''}`
                   : mode === 'registry'
@@ -937,13 +1557,24 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
         ) : filteredArtworks.length === 0 ? (
           <div className="registry-empty">
             <div className="registry-empty-icon">AV</div>
-            <h3 className="registry-empty-title">No Works Found</h3>
+            <h3 className="registry-empty-title">
+              {loadError ? 'Collection Temporarily Unavailable' : artworks.length === 0 ? 'No Registered Works Yet' : 'No Works Found'}
+            </h3>
             <p className="registry-empty-desc">
-              {searchQuery
+              {loadError
+                ? 'ArtVault could not retrieve the collection. Your filters and account remain unchanged.'
+                : artworks.length === 0
+                ? 'The collection is currently empty. Retry to check for newly registered works.'
+                : searchQuery
                 ? `No catalog entries match "${searchQuery}". Try a different artist, medium, or title.`
                 : 'No works match the current archive filters. Clear filters to view the full collection.'}
             </p>
-            <button className="registry-empty-btn" onClick={clearAllFilters}>Clear Filters & View All</button>
+            <button
+              className="registry-empty-btn"
+              onClick={loadError || artworks.length === 0 ? () => { cachedArtworks = null; void fetchData(); } : clearAllFilters}
+            >
+              {loadError || artworks.length === 0 ? 'Retry Collection' : 'Clear Filters & View All'}
+            </button>
           </div>
         ) : (
           <>
@@ -1003,6 +1634,8 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
                 </button>
               </div>
             )}
+          </>
+        )}
           </>
         )}
       </main>

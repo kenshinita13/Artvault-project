@@ -89,6 +89,20 @@ grant execute on function private.is_admin() to authenticated;
 grant execute on function private.is_staff() to authenticated;
 grant execute on function private.can_upload() to authenticated;
 
+alter table public.profiles
+  add column if not exists profile_title text,
+  add column if not exists is_verified boolean not null default false;
+
+alter table public.profiles
+  drop constraint if exists profiles_profile_title_length_check;
+
+alter table public.profiles
+  add constraint profiles_profile_title_length_check
+  check (
+    profile_title is null
+    or char_length(btrim(profile_title)) between 2 and 60
+  );
+
 -- Public signup may request only the two roles displayed by the registration UI.
 create or replace function public.handle_new_user()
 returns trigger
@@ -165,6 +179,11 @@ begin
 
   if new.role is distinct from old.role then
     raise exception 'Only administrators can change account roles.' using errcode = '42501';
+  end if;
+
+  if new.profile_title is distinct from old.profile_title
+     or new.is_verified is distinct from old.is_verified then
+    raise exception 'Only administrators can change public profile identity fields.' using errcode = '42501';
   end if;
 
   if new.status is distinct from old.status

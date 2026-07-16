@@ -263,7 +263,7 @@ function App() {
           {/* Public Route */}
           <Route path="/home" element={<Dashboard user={session?.user || null} mode="discover" />} />
           <Route path="/registry" element={<Dashboard user={session?.user || null} mode="registry" />} />
-          <Route path="/about" element={<About />} />
+          <Route path="/about" element={<About user={session?.user || null} />} />
           <Route path="/privacy" element={<LegalPage type="privacy" />} />
           <Route path="/terms" element={<LegalPage type="terms" />} />
           

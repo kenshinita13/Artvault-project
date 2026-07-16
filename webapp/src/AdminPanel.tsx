@@ -7,6 +7,9 @@ import CreatePanel from './CreatePanel';
 import {
   Activity,
   ArrowRight,
+  BadgeCheck,
+  ChevronDown,
+  ChevronUp,
   CircleAlert,
   Database,
   Flag,
@@ -17,6 +20,7 @@ import {
   UserCog,
   UserRoundCheck,
   Users,
+  X,
 } from 'lucide-react';
 import './AdminPanel.css';
 
@@ -86,9 +90,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ─── Confirm Modal ────────────────────────────────────────────────
-function ConfirmModal({ title, message, danger = false, onConfirm, onCancel, children }: {
+function ConfirmModal({ title, message, danger = false, onConfirm, onCancel, children, confirmLabel, confirmDisabled = false }: {
   title: string; message?: string; danger?: boolean;
   onConfirm: () => void; onCancel: () => void; children?: React.ReactNode;
+  confirmLabel?: string; confirmDisabled?: boolean;
 }) {
   return (
     <div className="ap-modal-overlay" onClick={onCancel}>
@@ -102,8 +107,8 @@ function ConfirmModal({ title, message, danger = false, onConfirm, onCancel, chi
           {children}
           <div className="ap-modal-actions">
             <button className="ap-btn ap-btn-ghost" onClick={onCancel}>Cancel</button>
-            <button className={`ap-btn ${danger ? 'ap-btn-danger' : 'ap-btn-primary'}`} onClick={onConfirm}>
-              {danger ? 'Confirm Action' : 'Save Changes'}
+            <button className={`ap-btn ${danger ? 'ap-btn-danger' : 'ap-btn-primary'}`} onClick={onConfirm} disabled={confirmDisabled}>
+              {confirmLabel || (danger ? 'Confirm Action' : 'Save Changes')}
             </button>
           </div>
         </div>
@@ -135,6 +140,10 @@ export default function AdminPanel({ user }: { user: any }) {
 
   // Modals
   const [roleModal, setRoleModal]           = useState<any>(null);
+  const [identityModal, setIdentityModal]   = useState<any>(null);
+  const [identityTitle, setIdentityTitle]   = useState('');
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [identitySaving, setIdentitySaving] = useState(false);
   const [suspendModal, setSuspendModal]     = useState<any>(null);
   const [banModal, setBanModal]             = useState<any>(null);
   const [unbanModal, setUnbanModal]         = useState<any>(null);
@@ -153,6 +162,10 @@ export default function AdminPanel({ user }: { user: any }) {
   const [portfolioPreviewModal, setPortfolioPreviewModal] = useState<AdminBoard | null>(null);
   const [portfolioPreviewArtworks, setPortfolioPreviewArtworks] = useState<any[]>([]);
   const [portfolioPreviewLoading, setPortfolioPreviewLoading] = useState(false);
+  const [discoverDisplayModalOpen, setDiscoverDisplayModalOpen] = useState(false);
+  const [discoverDisplayDraftIds, setDiscoverDisplayDraftIds] = useState<string[]>([]);
+  const [discoverDisplaySearch, setDiscoverDisplaySearch] = useState('');
+  const [discoverDisplaySaving, setDiscoverDisplaySaving] = useState(false);
   const [suspendDays, setSuspendDays]       = useState('7');
   const [pendingRole, setPendingRole]       = useState('');
 
@@ -165,6 +178,25 @@ export default function AdminPanel({ user }: { user: any }) {
 
   // ── Fetch ────────────────────────────────────────────────────────
   useEffect(() => { init(); }, []);
+
+  useEffect(() => {
+    if (!discoverDisplayModalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !discoverDisplaySaving) {
+        setDiscoverDisplayModalOpen(false);
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [discoverDisplayModalOpen, discoverDisplaySaving]);
 
   async function init() {
     setLoading(true);
@@ -270,6 +302,19 @@ export default function AdminPanel({ user }: { user: any }) {
     return matchesArtist && matchesQuery;
   });
 
+  const discoverDisplayArtworks = allArtworks
+    .filter(artwork => artwork.discover_display_rank != null)
+    .sort((a, b) => Number(a.discover_display_rank) - Number(b.discover_display_rank));
+  const normalizedDiscoverDisplaySearch = discoverDisplaySearch.trim().toLowerCase();
+  const discoverDisplayCandidates = allArtworks.filter(artwork => !normalizedDiscoverDisplaySearch || [
+    artwork.title,
+    artwork.artist_name,
+    artwork.creation_year,
+    artwork.material_used,
+    artwork.art_style,
+    artwork.profiles?.username,
+  ].some(value => String(value || '').toLowerCase().includes(normalizedDiscoverDisplaySearch)));
+
   const filteredReports = reports.filter(r => {
     const q = reportSearch.toLowerCase();
     return !q || r.artworks?.title?.toLowerCase().includes(q) || r.reason?.toLowerCase().includes(q) || r.reporter?.username?.toLowerCase().includes(q);
@@ -324,6 +369,50 @@ export default function AdminPanel({ user }: { user: any }) {
     || portfolioDateFilter !== 'all';
 
   // ── Actions ───────────────────────────────────────────────────────
+  const openIdentityManager = (account: any) => {
+    setIdentityModal(account);
+    setIdentityTitle(account.profile_title || '');
+    setIdentityVerified(Boolean(account.is_verified));
+  };
+
+  const handleProfileIdentitySave = async () => {
+    if (!identityModal || identitySaving) return;
+    const profileTitle = identityTitle.trim();
+
+    if (profileTitle && (profileTitle.length < 2 || profileTitle.length > 60)) {
+      toast.error('Profile title must be between 2 and 60 characters.');
+      return;
+    }
+
+    setIdentitySaving(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        profile_title: profileTitle || null,
+        is_verified: identityVerified,
+      })
+      .eq('id', identityModal.id)
+      .select('profile_title, is_verified')
+      .single();
+
+    if (error) {
+      toast.error(`Could not update profile identity: ${error.message}`);
+      setIdentitySaving(false);
+      return;
+    }
+
+    setAllUsers(current => current.map(account => account.id === identityModal.id
+      ? { ...account, profile_title: data.profile_title, is_verified: data.is_verified }
+      : account));
+    await logAudit(
+      'Profile Identity Updated',
+      `Updated @${identityModal.username}: ${data.profile_title || 'role-based title'}, ${data.is_verified ? 'verified' : 'not verified'}.`
+    );
+    toast.success(`@${identityModal.username}'s public identity was updated.`);
+    setIdentitySaving(false);
+    setIdentityModal(null);
+  };
+
   const handleChangeRole = async () => {
     if (!roleModal || !pendingRole) return;
     if (roleModal.id === user.id) { toast.error("Cannot change your own role."); return; }
@@ -451,6 +540,60 @@ export default function AdminPanel({ user }: { user: any }) {
     logAudit('Artwork Edited', `Admin edited full artwork record: ${updates.title}.`);
     toast.success('Artwork record updated.');
     setEditArtworkModal(null);
+  };
+
+  const openDiscoverDisplayManager = () => {
+    setDiscoverDisplayDraftIds(discoverDisplayArtworks.map(artwork => artwork.id));
+    setDiscoverDisplaySearch('');
+    setDiscoverDisplayModalOpen(true);
+  };
+
+  const toggleDiscoverDisplayArtwork = (artworkId: string) => {
+    setDiscoverDisplayDraftIds(current => {
+      if (current.includes(artworkId)) return current.filter(id => id !== artworkId);
+      if (current.length >= 6) {
+        toast.error('The Discover display supports up to six artworks.');
+        return current;
+      }
+      return [...current, artworkId];
+    });
+  };
+
+  const moveDiscoverDisplayArtwork = (artworkId: string, direction: -1 | 1) => {
+    setDiscoverDisplayDraftIds(current => {
+      const index = current.indexOf(artworkId);
+      const targetIndex = index + direction;
+      if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+      return reordered;
+    });
+  };
+
+  const saveDiscoverDisplay = async () => {
+    setDiscoverDisplaySaving(true);
+
+    try {
+      const { error } = await supabase.rpc('set_discover_display', {
+        artwork_ids: discoverDisplayDraftIds,
+      });
+      if (error) throw error;
+
+      setAllArtworks(current => current.map(artwork => ({
+        ...artwork,
+        discover_display_rank: discoverDisplayDraftIds.includes(artwork.id)
+          ? discoverDisplayDraftIds.indexOf(artwork.id) + 1
+          : null,
+      })));
+      setDiscoverDisplayModalOpen(false);
+      window.dispatchEvent(new Event('discover-display-updated'));
+      await logAudit('Discover Display Updated', `Curated ${discoverDisplayDraftIds.length} artwork${discoverDisplayDraftIds.length === 1 ? '' : 's'} for the public Discover display.`);
+      toast.success(discoverDisplayDraftIds.length ? 'Discover display published.' : 'Discover display returned to automatic selection.');
+    } catch (error: any) {
+      toast.error(`Could not update the Discover display: ${error.message}`);
+    } finally {
+      setDiscoverDisplaySaving(false);
+    }
   };
 
   const openPortfolioManager = async (board: AdminBoard) => {
@@ -830,8 +973,12 @@ export default function AdminPanel({ user }: { user: any }) {
                         <td>
                           <div className="ap-user-cell">
                             <div>
-                              <div className="ap-user-name">{u.name || '—'}</div>
+                              <div className="ap-user-name-row">
+                                <div className="ap-user-name">{u.name || '—'}</div>
+                                {u.is_verified && <BadgeCheck className="ap-user-verified-mark" size={15} aria-label="Verified profile" />}
+                              </div>
                               <div className="ap-user-sub">@{u.username}</div>
+                              {u.profile_title && <div className="ap-user-profile-title">{u.profile_title}</div>}
                               <div className="ap-user-email">{u.email}</div>
                             </div>
                           </div>
@@ -841,6 +988,10 @@ export default function AdminPanel({ user }: { user: any }) {
                         <td className="ap-date">{new Date(u.created_at).toLocaleDateString()}</td>
                         <td>
                           <div className="ap-action-group">
+                            <button className="ap-btn ap-btn-sm ap-btn-ghost" onClick={() => openIdentityManager(u)}>
+                              <BadgeCheck size={14} aria-hidden="true" /> Identity
+                            </button>
+
                             {/* Change Role */}
                             <button className="ap-btn ap-btn-sm ap-btn-ghost"
                               disabled={protectedAccount}
@@ -893,6 +1044,43 @@ export default function AdminPanel({ user }: { user: any }) {
                 <button className="ap-btn ap-btn-primary" onClick={() => setCreatePanelOpen(true)}>Post on behalf of user</button>
               </div>
             </div>
+            {!selectedArtist && (
+              <section className="ap-card ap-discover-display-panel" aria-labelledby="admin-discover-display-title">
+                <div className="ap-discover-display-header">
+                  <div>
+                    <div className="ap-discover-display-kicker">Public Discover Curation</div>
+                    <h2 id="admin-discover-display-title">Open Display</h2>
+                    <p>
+                      Choose and order up to six artworks for the rotating featured acquisition and gallery salon.
+                      {discoverDisplayArtworks.length === 0 && ' The current display is using automatic collection selections.'}
+                    </p>
+                  </div>
+                  <button className="ap-btn ap-btn-primary" onClick={openDiscoverDisplayManager}>
+                    <Images size={16} aria-hidden="true" /> Manage Display
+                  </button>
+                </div>
+
+                {discoverDisplayArtworks.length > 0 ? (
+                  <div className="ap-discover-display-preview">
+                    {discoverDisplayArtworks.map((artwork, index) => (
+                      <div key={artwork.id} className="ap-discover-display-preview-item">
+                        <span>{index + 1}</span>
+                        <div className="ap-discover-display-preview-image">
+                          <img src={artwork.image_url} alt="" loading="lazy" />
+                        </div>
+                        <strong>{artwork.title}</strong>
+                        <small>{artwork.artist_name || 'Unknown creator'}</small>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ap-discover-display-auto">
+                    <Images size={22} aria-hidden="true" />
+                    <span>Automatic rotation is active. Select works to establish an administrator-curated display.</span>
+                  </div>
+                )}
+              </section>
+            )}
             {selectedArtist && (
               <div className="ap-card ap-portfolio-panel">
                 <div className="ap-portfolio-panel-header">
@@ -1098,6 +1286,137 @@ export default function AdminPanel({ user }: { user: any }) {
       </main>
 
       {/* ── MODALS ── */}
+
+      {identityModal && (
+        <ConfirmModal
+          title="Manage Profile Identity"
+          onConfirm={handleProfileIdentitySave}
+          onCancel={() => { if (!identitySaving) setIdentityModal(null); }}
+          confirmLabel={identitySaving ? 'Saving Identity...' : 'Save Identity'}
+          confirmDisabled={identitySaving}
+        >
+          <p className="ap-modal-subtitle ap-identity-modal-intro">
+            Control the public title and verification badge shown on @{identityModal.username}'s profile.
+          </p>
+
+          <div className="ap-identity-preview" aria-label="Public profile identity preview">
+            <div className="ap-identity-preview-name">
+              <strong>{identityModal.name || identityModal.username}</strong>
+              {identityVerified && <BadgeCheck size={18} aria-label="Verified profile preview" />}
+            </div>
+            <span>{identityTitle.trim() || ROLES[identityModal.role as ArtVaultRole]?.label || 'Collection Contributor'} · @{identityModal.username} · {identityModal.status === 'active' || !identityModal.status ? 'Active' : 'Restricted'}</span>
+          </div>
+
+          <div className="ap-identity-field">
+            <label className="ap-form-label" htmlFor="admin-profile-title">Public profile title</label>
+            <input
+              id="admin-profile-title"
+              className="ap-input"
+              value={identityTitle}
+              onChange={event => setIdentityTitle(event.target.value)}
+              maxLength={60}
+              placeholder={ROLES[identityModal.role as ArtVaultRole]?.label || 'Collection Contributor'}
+              disabled={identitySaving}
+            />
+            <small>{identityTitle.length} / 60 · Leave blank to use the account role title.</small>
+          </div>
+
+          <label className={`ap-identity-toggle ${identityVerified ? 'selected' : ''}`}>
+            <input
+              type="checkbox"
+              checked={identityVerified}
+              onChange={event => setIdentityVerified(event.target.checked)}
+              disabled={identitySaving}
+            />
+            <BadgeCheck size={22} aria-hidden="true" />
+            <span><strong>Verified ArtVault profile</strong><small>Show the official check mark beside this profile's name.</small></span>
+          </label>
+        </ConfirmModal>
+      )}
+
+      {discoverDisplayModalOpen && (
+        <div className="ap-modal-overlay" onClick={() => { if (!discoverDisplaySaving) setDiscoverDisplayModalOpen(false); }}>
+          <div className="ap-modal ap-modal-wide ap-discover-display-modal" role="dialog" aria-modal="true" aria-labelledby="discover-display-modal-title" onClick={event => event.stopPropagation()}>
+            <div className="ap-modal-header">
+              <div>
+                <div className="ap-discover-display-kicker">Public Discover Curation</div>
+                <h3 id="discover-display-modal-title">Manage Open Display</h3>
+                <p className="ap-modal-subtitle">Select up to six works and arrange their public display order.</p>
+              </div>
+              <button className="ap-modal-close" aria-label="Close Discover display manager" onClick={() => setDiscoverDisplayModalOpen(false)} disabled={discoverDisplaySaving}>
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="ap-modal-body">
+              <div className="ap-discover-manager-toolbar">
+                <input
+                  className="ap-search"
+                  type="search"
+                  value={discoverDisplaySearch}
+                  onChange={event => setDiscoverDisplaySearch(event.target.value)}
+                  placeholder="Search title, creator, year, medium, or registrant"
+                />
+                <strong>{discoverDisplayDraftIds.length} of 6 selected</strong>
+              </div>
+
+              {discoverDisplayDraftIds.length > 0 && (
+                <div className="ap-discover-display-order" aria-label="Open Display order">
+                  {discoverDisplayDraftIds.map((artworkId, index) => {
+                    const artwork = allArtworks.find(item => item.id === artworkId);
+                    if (!artwork) return null;
+                    return (
+                      <div key={artwork.id} className="ap-discover-display-order-item">
+                        <span className="ap-discover-display-rank">{index + 1}</span>
+                        <img src={artwork.image_url} alt="" />
+                        <div>
+                          <strong>{artwork.title}</strong>
+                          <small>{artwork.artist_name || 'Unknown creator'}{artwork.creation_year ? ` / ${artwork.creation_year}` : ''}</small>
+                        </div>
+                        <div className="ap-discover-display-order-actions">
+                          <button aria-label={`Move ${artwork.title} earlier`} disabled={index === 0} onClick={() => moveDiscoverDisplayArtwork(artwork.id, -1)}><ChevronUp size={16} /></button>
+                          <button aria-label={`Move ${artwork.title} later`} disabled={index === discoverDisplayDraftIds.length - 1} onClick={() => moveDiscoverDisplayArtwork(artwork.id, 1)}><ChevronDown size={16} /></button>
+                          <button onClick={() => toggleDiscoverDisplayArtwork(artwork.id)}>Remove</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="ap-discover-display-picker">
+                {discoverDisplayCandidates.map(artwork => {
+                  const selectedIndex = discoverDisplayDraftIds.indexOf(artwork.id);
+                  return (
+                    <article key={artwork.id} className={`ap-discover-display-candidate ${selectedIndex >= 0 ? 'selected' : ''}`}>
+                      <div className="ap-discover-display-candidate-image"><img src={artwork.image_url} alt="" loading="lazy" /></div>
+                      <div>
+                        <strong>{artwork.title}</strong>
+                        <span>{artwork.artist_name || 'Unknown creator'}{artwork.creation_year ? ` / ${artwork.creation_year}` : ''}</span>
+                        <small>Registered by @{artwork.profiles?.username || 'unknown'}</small>
+                      </div>
+                      <button
+                        className={`ap-btn ap-btn-sm ${selectedIndex >= 0 ? 'ap-btn-primary' : 'ap-btn-ghost'}`}
+                        onClick={() => toggleDiscoverDisplayArtwork(artwork.id)}
+                        disabled={selectedIndex < 0 && discoverDisplayDraftIds.length >= 6}
+                      >
+                        {selectedIndex >= 0 ? `Display ${selectedIndex + 1}` : 'Add'}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="ap-modal-actions ap-discover-display-modal-actions">
+                <button className="ap-btn ap-btn-ghost" onClick={() => setDiscoverDisplayModalOpen(false)} disabled={discoverDisplaySaving}>Cancel</button>
+                <button className="ap-btn ap-btn-primary" onClick={saveDiscoverDisplay} disabled={discoverDisplaySaving}>
+                  {discoverDisplaySaving ? 'Publishing Display...' : discoverDisplayDraftIds.length ? 'Publish Display' : 'Use Automatic Selection'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Change Role */}
       {roleModal && (
@@ -1484,6 +1803,7 @@ export default function AdminPanel({ user }: { user: any }) {
         <CreatePanel
           isOpen={createPanelOpen}
           onClose={() => setCreatePanelOpen(false)}
+          onRestore={() => setCreatePanelOpen(true)}
           user={user}
           categories={categories}
           adminMode={true}

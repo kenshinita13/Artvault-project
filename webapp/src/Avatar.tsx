@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react';
 
-export default function Avatar({ userId, name, size = 40, updateToken = '' }: { userId: string, name: string, size?: number, updateToken?: string }) {
+export default function Avatar({
+  userId,
+  name,
+  size = 40,
+  updateToken = '',
+  shape = 'circle',
+}: {
+  userId: string;
+  name: string;
+  size?: number;
+  updateToken?: string;
+  shape?: 'circle' | 'square';
+}) {
   const [error, setError] = useState(false);
   const [localToken, setLocalToken] = useState(updateToken);
   
@@ -30,11 +42,11 @@ export default function Avatar({ userId, name, size = 40, updateToken = '' }: { 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center', 
-        background: 'linear-gradient(135deg, #c084fc 0%, #6366f1 100%)', 
-        color: 'white', 
+        background: '#241d18',
+        color: '#f7f2e9',
         fontSize: `${size * 0.4}px`, 
         fontWeight: 'bold',
-        borderRadius: '50%',
+        borderRadius: shape === 'square' ? '2px' : '50%',
         flexShrink: 0
       }}>
         {name ? name.charAt(0).toUpperCase() : 'U'}
@@ -46,7 +58,7 @@ export default function Avatar({ userId, name, size = 40, updateToken = '' }: { 
     <img 
       src={avatarUrl} 
       alt={name} 
-      style={{ width: size, height: size, objectFit: 'cover', borderRadius: '50%', display: 'block', flexShrink: 0 }}
+      style={{ width: size, height: size, objectFit: 'cover', borderRadius: shape === 'square' ? '2px' : '50%', display: 'block', flexShrink: 0 }}
       onError={() => setError(true)}
     />
   );

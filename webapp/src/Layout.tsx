@@ -77,6 +77,12 @@ export default function Layout({ user }: { user: any }) {
   }, [location.pathname]);
 
   useEffect(() => {
+    const openPublisher = () => setCreatePanelOpen(true);
+    window.addEventListener('open-artvault-publisher', openPublisher);
+    return () => window.removeEventListener('open-artvault-publisher', openPublisher);
+  }, []);
+
+  useEffect(() => {
     if (!avatarMenuOpen) return;
 
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -102,9 +108,7 @@ export default function Layout({ user }: { user: any }) {
   };
 
   const navLinkStyle = (path: string) =>
-    `text-[12px] font-bold tracking-[2px] uppercase transition-colors ${
-      location.pathname === path ? 'text-[#1c1917]' : 'text-[#78716c] hover:text-[#1c1917]'
-    }`;
+    `app-primary-nav-link ${location.pathname === path ? 'active' : ''}`;
 
   const mobileNavItems = [
     { path: '/home', label: 'Discover', icon: Home },
@@ -125,15 +129,22 @@ export default function Layout({ user }: { user: any }) {
           <Link to="/home" className="nav-logo flex items-center overflow-visible md:hidden">
             <img src="/Artlogo.png" alt="ArtVault" className="h-[30px] scale-[1.8] origin-left ml-4 filter brightness-0 block" />
           </Link>
+          <Link to="/home" className="app-brand hidden md:flex" aria-label="ArtVault Enterprise Edition">
+            <img src="/Artlogo.png" alt="" className="app-brand-mark" aria-hidden="true" />
+            <span className="app-brand-copy">
+              <strong>ARTVAULT</strong>
+              <small>Enterprise Edition</small>
+            </span>
+          </Link>
         </div>
 
         <div className="flex-1 flex justify-center px-2 md:px-5">
-          <div className="hidden md:flex items-center gap-10">
+          <nav className="app-primary-nav hidden md:flex" aria-label="Primary navigation">
             <Link to="/home" className={navLinkStyle('/home')}>Discover</Link>
             <Link to="/registry" className={navLinkStyle('/registry')}>Registry</Link>
             <Link to="/artists" className={navLinkStyle('/artists')}>Artists</Link>
             <Link to="/about" className={navLinkStyle('/about')}>About</Link>
-          </div>
+          </nav>
         </div>
 
         <div className="nav-actions shrink-0 hidden md:flex items-center">
@@ -226,6 +237,7 @@ export default function Layout({ user }: { user: any }) {
         <CreatePanel
           isOpen={createPanelOpen}
           onClose={() => setCreatePanelOpen(false)}
+          onRestore={() => setCreatePanelOpen(true)}
           user={user}
           categories={categories}
           onArtworkCreated={() => window.dispatchEvent(new Event('artwork-created'))}

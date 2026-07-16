@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import './About.css';
 
-export default function About() {
+export default function About({ user }: { user: any }) {
   const navigate = useNavigate();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterMessage, setNewsletterMessage] = useState('Occasional Art Vault updates, straight to your inbox.');
@@ -209,14 +209,22 @@ export default function About() {
       {/* ── CTA SECTION ──────────────────────────────────────────── */}
       <section className="about-cta">
         <div className="about-cta-left">
-          <p className="about-section-label">JOIN OUR COMMUNITY</p>
+          <p className="about-section-label">{user ? 'YOUR ART VAULT' : 'JOIN OUR COMMUNITY'}</p>
           <h2 className="about-cta-title">Your Art. Your Archive.<br />Your Legacy.</h2>
           <p className="about-cta-desc">
-            Thousands of collectors already trust Art Vault to preserve and grow their collections. Create your free account and start building your archive today.
+            {user
+              ? 'Continue building your archive, reviewing your registered works, and preserving the history behind your collection.'
+              : 'Thousands of collectors already trust Art Vault to preserve and grow their collections. Create your free account and start building your archive today.'}
           </p>
           <div className="about-cta-actions">
-            <Link to="/login" className="about-btn-dark">Create Your Account →</Link>
-            <Link to="/home" className="about-btn-ghost">Explore Artworks →</Link>
+            {user ? (
+              <Link to={`/profile/${user.id}`} className="about-btn-dark">View Your Profile →</Link>
+            ) : (
+              <Link to="/login" className="about-btn-dark">Create Your Account →</Link>
+            )}
+            <Link to={user ? '/registry' : '/home'} className="about-btn-ghost">
+              {user ? 'Browse Registry →' : 'Explore Artworks →'}
+            </Link>
           </div>
         </div>
         <div className="about-cta-right">
@@ -239,7 +247,9 @@ export default function About() {
             <p className="about-footer-col-title">COMPANY</p>
             <Link to="/about" className="about-footer-link active">About Us</Link>
             <button onClick={() => scrollToSection('roadmap')} className="about-footer-link" style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>Features & Roadmap</button>
-            <Link to="/login" className="about-footer-link">Membership</Link>
+            <Link to={user ? '/settings' : '/login'} className="about-footer-link">
+              {user ? 'Account Settings' : 'Membership'}
+            </Link>
           </div>
 
           <div className="about-footer-col">

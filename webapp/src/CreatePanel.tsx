@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Cloud, X, ImagePlus, FolderPlus, Link2, Upload } from 'lucide-react';
+import { Check, Cloud, FolderPlus, ImagePlus, Link2, Minus, Search, Upload, X } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { checkImageIsSafe } from './nsfwHelper';
 import toast from 'react-hot-toast';
+import './CreatePanel.css';
 
 interface CreatePanelProps {
   isOpen: boolean;
@@ -11,9 +12,19 @@ interface CreatePanelProps {
   categories: { id: string; name: string; slug: string }[];
   onArtworkCreated?: () => void;
   onBoardCreated?: () => void;
+  onRestore?: () => void;
   adminMode?: boolean;
   allUsers?: any[];
   defaultTargetUserId?: string | null;
+}
+
+interface CollageArtwork {
+  id: string;
+  title: string;
+  image_url: string;
+  artist_name?: string | null;
+  art_style?: string | null;
+  creation_year?: string | null;
 }
 
 const compressImage = (file: File): Promise<File> => {
@@ -49,6 +60,47 @@ const compressImage = (file: File): Promise<File> => {
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 const formatFileSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const ARTWORK_DRAFT_DB = 'artvault-publisher-drafts';
+const ARTWORK_DRAFT_FILE_STORE = 'artwork-files';
+
+const openArtworkDraftDatabase = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+  const request = window.indexedDB.open(ARTWORK_DRAFT_DB, 1);
+  request.onupgradeneeded = () => {
+    if (!request.result.objectStoreNames.contains(ARTWORK_DRAFT_FILE_STORE)) {
+      request.result.createObjectStore(ARTWORK_DRAFT_FILE_STORE);
+    }
+  };
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
+});
+
+const saveArtworkDraftFile = async (key: string, file: File | null) => {
+  if (!window.indexedDB) return;
+  const database = await openArtworkDraftDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(ARTWORK_DRAFT_FILE_STORE, 'readwrite');
+    const store = transaction.objectStore(ARTWORK_DRAFT_FILE_STORE);
+    if (file) store.put(file, key);
+    else store.delete(key);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+};
+
+const loadArtworkDraftFile = async (key: string): Promise<File | null> => {
+  if (!window.indexedDB) return null;
+  const database = await openArtworkDraftDatabase();
+  const file = await new Promise<File | null>((resolve, reject) => {
+    const request = database.transaction(ARTWORK_DRAFT_FILE_STORE, 'readonly')
+      .objectStore(ARTWORK_DRAFT_FILE_STORE)
+      .get(key);
+    request.onsuccess = () => resolve(request.result instanceof File ? request.result : null);
+    request.onerror = () => reject(request.error);
+  });
+  database.close();
+  return file;
+};
 
 const validateHttpsImageUrl = (value: string): string => {
   let parsed: URL;
@@ -97,8 +149,9 @@ const fetchRemoteImageForReview = async (url: string): Promise<File | null> => {
   }
 };
 
-export default function CreatePanel({ isOpen, onClose, user, categories, onArtworkCreated, onBoardCreated, adminMode, allUsers = [], defaultTargetUserId }: CreatePanelProps) {
+export default function CreatePanel({ isOpen, onClose, user, categories, onArtworkCreated, onBoardCreated, onRestore, adminMode, allUsers = [], defaultTargetUserId }: CreatePanelProps) {
   const [activeTab, setActiveTab] = useState<'menu' | 'artwork' | 'board'>('menu');
+  const [isMinimized, setIsMinimized] = useState(false);
   
   // Admin user selection
   const [targetUserId, setTargetUserId] = useState<string>('');
@@ -159,12 +212,288 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const [creationYear, setCreationYear] = useState('');
   const [dimensions, setDimensions] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [artworkDraftReady, setArtworkDraftReady] = useState(false);
 
   // Board form
   const [boardName, setBoardName] = useState('');
   const [boardDesc, setBoardDesc] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [creatingBoard, setCreatingBoard] = useState(false);
+  const [collageArtworks, setCollageArtworks] = useState<CollageArtwork[]>([]);
+  const [selectedCollageArtworkIds, setSelectedCollageArtworkIds] = useState<string[]>([]);
+  const [collageSearch, setCollageSearch] = useState('');
+  const [loadingCollageArtworks, setLoadingCollageArtworks] = useState(false);
+  const [collageDraftReady, setCollageDraftReady] = useState(false);
+
+  const collageDraftOwner = adminMode ? (targetUserId || 'pending-admin-selection') : user.id;
+  const collageDraftKey = `artvault:collage-draft:${collageDraftOwner}`;
+  const artworkDraftKey = `artvault:artwork-draft:${user.id}`;
+  const publisherDockKey = `artvault:publisher-dock:${user.id}`;
+  const hasCollageDraft = Boolean(boardName.trim() || boardDesc.trim() || selectedCollageArtworkIds.length > 0 || isPrivate);
+  const hasArtworkDraft = Boolean(
+    title.trim() || description.trim() || file || imageUrl.trim() || artistName.trim() ||
+    selectedCategories.length > 0 || hashtags.length > 0 || currentHashtag.trim() ||
+    materialUsed || artStyle.trim() || collector.trim() || price || creationYear.trim() ||
+    dimensions.trim() || selectedBoardId || (adminMode && targetUserId)
+  );
+
+  useEffect(() => {
+    if (isOpen) setIsMinimized(false);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen || isMinimized || (adminMode && !targetUserId)) return;
+
+    try {
+      const activeDraftType = window.localStorage.getItem(publisherDockKey);
+      if (activeDraftType && activeDraftType !== 'board') return;
+      const saved = window.localStorage.getItem(collageDraftKey);
+      if (!saved) return;
+
+      const draft = JSON.parse(saved);
+      const artworkIds = Array.isArray(draft.artworkIds)
+        ? draft.artworkIds.filter((id: unknown) => typeof id === 'string')
+        : [];
+      const name = typeof draft.name === 'string' ? draft.name : '';
+      const description = typeof draft.description === 'string' ? draft.description : '';
+      const draftHasContent = Boolean(name.trim() || description.trim() || artworkIds.length > 0 || draft.isPrivate);
+
+      if (!draftHasContent) return;
+
+      setBoardName(name);
+      setBoardDesc(description);
+      setIsPrivate(Boolean(draft.isPrivate));
+      setSelectedCollageArtworkIds(artworkIds);
+      setActiveTab('board');
+      setIsMinimized(true);
+    } catch {
+      window.localStorage.removeItem(collageDraftKey);
+    }
+  }, [adminMode, collageDraftKey, isMinimized, isOpen, publisherDockKey, targetUserId]);
+
+  useEffect(() => {
+    if (isOpen || isMinimized) return;
+
+    try {
+      if (window.localStorage.getItem(publisherDockKey) !== 'artwork') return;
+      const saved = window.localStorage.getItem(artworkDraftKey);
+      if (!saved) return;
+
+      const draft = JSON.parse(saved);
+      const draftHasContent = Boolean(
+        draft.title?.trim() || draft.description?.trim() || draft.hasFile || draft.imageUrl?.trim() ||
+        draft.artistName?.trim() || draft.selectedCategories?.length || draft.hashtags?.length ||
+        draft.currentHashtag?.trim() || draft.materialUsed || draft.artStyle?.trim() ||
+        draft.collector?.trim() || draft.price || draft.creationYear?.trim() || draft.dimensions?.trim() ||
+        draft.selectedBoardId || (adminMode && draft.targetUserId)
+      );
+      if (!draftHasContent) return;
+
+      setTitle(typeof draft.title === 'string' ? draft.title : '');
+      setDescription(typeof draft.description === 'string' ? draft.description : '');
+      setImageSource(draft.imageSource === 'url' ? 'url' : 'file');
+      setImageUrl(typeof draft.imageUrl === 'string' ? draft.imageUrl : '');
+      setArtistName(typeof draft.artistName === 'string' ? draft.artistName : '');
+      setSelectedCategories(Array.isArray(draft.selectedCategories) ? draft.selectedCategories.filter((id: unknown) => typeof id === 'string') : []);
+      setHashtags(Array.isArray(draft.hashtags) ? draft.hashtags.filter((tag: unknown) => typeof tag === 'string') : []);
+      setCurrentHashtag(typeof draft.currentHashtag === 'string' ? draft.currentHashtag : '');
+      setMaterialUsed(typeof draft.materialUsed === 'string' ? draft.materialUsed : '');
+      setArtStyle(typeof draft.artStyle === 'string' ? draft.artStyle : '');
+      setCollector(typeof draft.collector === 'string' ? draft.collector : '');
+      setPrice(typeof draft.price === 'string' ? draft.price : '');
+      setCreationYear(typeof draft.creationYear === 'string' ? draft.creationYear : '');
+      setDimensions(typeof draft.dimensions === 'string' ? draft.dimensions : '');
+      setSelectedBoardId(typeof draft.selectedBoardId === 'string' ? draft.selectedBoardId : '');
+      if (adminMode) {
+        setTargetUserId(typeof draft.targetUserId === 'string' ? draft.targetUserId : '');
+        setUserSearchQuery(typeof draft.userSearchQuery === 'string' ? draft.userSearchQuery : '');
+      }
+      setActiveTab('artwork');
+      setIsMinimized(true);
+    } catch {
+      window.localStorage.removeItem(artworkDraftKey);
+    }
+  }, [adminMode, artworkDraftKey, isMinimized, isOpen, publisherDockKey]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (activeTab !== 'artwork') {
+      setArtworkDraftReady(false);
+      return;
+    }
+
+    let active = true;
+    setArtworkDraftReady(false);
+
+    const restoreArtworkDraft = async () => {
+      try {
+        const saved = window.localStorage.getItem(artworkDraftKey);
+        if (saved) {
+          const draft = JSON.parse(saved);
+          setTitle(typeof draft.title === 'string' ? draft.title : '');
+          setDescription(typeof draft.description === 'string' ? draft.description : '');
+          setImageSource(draft.imageSource === 'url' ? 'url' : 'file');
+          setImageUrl(typeof draft.imageUrl === 'string' ? draft.imageUrl : '');
+          setArtistName(typeof draft.artistName === 'string' ? draft.artistName : '');
+          setSelectedCategories(Array.isArray(draft.selectedCategories) ? draft.selectedCategories.filter((id: unknown) => typeof id === 'string') : []);
+          setHashtags(Array.isArray(draft.hashtags) ? draft.hashtags.filter((tag: unknown) => typeof tag === 'string') : []);
+          setCurrentHashtag(typeof draft.currentHashtag === 'string' ? draft.currentHashtag : '');
+          setMaterialUsed(typeof draft.materialUsed === 'string' ? draft.materialUsed : '');
+          setArtStyle(typeof draft.artStyle === 'string' ? draft.artStyle : '');
+          setCollector(typeof draft.collector === 'string' ? draft.collector : '');
+          setPrice(typeof draft.price === 'string' ? draft.price : '');
+          setCreationYear(typeof draft.creationYear === 'string' ? draft.creationYear : '');
+          setDimensions(typeof draft.dimensions === 'string' ? draft.dimensions : '');
+          setSelectedBoardId(typeof draft.selectedBoardId === 'string' ? draft.selectedBoardId : '');
+          if (adminMode) {
+            setTargetUserId(typeof draft.targetUserId === 'string' ? draft.targetUserId : '');
+            setUserSearchQuery(typeof draft.userSearchQuery === 'string' ? draft.userSearchQuery : '');
+          }
+        } else {
+          setTitle(''); setDescription(''); setImageSource('file'); setImageUrl(''); setArtistName('');
+          setSelectedCategories([]); setHashtags([]); setCurrentHashtag(''); setMaterialUsed('');
+          setArtStyle(''); setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
+          setSelectedBoardId('');
+        }
+
+        const savedFile = await loadArtworkDraftFile(artworkDraftKey).catch(() => null);
+        if (active) setFile(savedFile);
+      } catch {
+        window.localStorage.removeItem(artworkDraftKey);
+        if (active) setFile(null);
+      } finally {
+        if (active) setArtworkDraftReady(true);
+      }
+    };
+
+    void restoreArtworkDraft();
+    return () => { active = false; };
+  }, [activeTab, adminMode, artworkDraftKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'artwork' || !artworkDraftReady) return;
+
+    if (!hasArtworkDraft) {
+      window.localStorage.removeItem(artworkDraftKey);
+      if (window.localStorage.getItem(publisherDockKey) === 'artwork') {
+        window.localStorage.removeItem(publisherDockKey);
+      }
+      return;
+    }
+
+    window.localStorage.setItem(artworkDraftKey, JSON.stringify({
+      title,
+      description,
+      imageSource,
+      imageUrl,
+      artistName,
+      selectedCategories,
+      hashtags,
+      currentHashtag,
+      materialUsed,
+      artStyle,
+      collector,
+      price,
+      creationYear,
+      dimensions,
+      selectedBoardId,
+      targetUserId: adminMode ? targetUserId : '',
+      userSearchQuery: adminMode ? userSearchQuery : '',
+      hasFile: Boolean(file),
+      fileName: file?.name || '',
+      updatedAt: new Date().toISOString(),
+    }));
+    window.localStorage.setItem(publisherDockKey, 'artwork');
+  }, [activeTab, adminMode, artStyle, artistName, artworkDraftKey, artworkDraftReady, collector, creationYear, currentHashtag, description, dimensions, file, hasArtworkDraft, hashtags, imageSource, imageUrl, materialUsed, price, publisherDockKey, selectedBoardId, selectedCategories, targetUserId, title, userSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab !== 'artwork' || !artworkDraftReady) return;
+    void saveArtworkDraftFile(artworkDraftKey, file).catch(() => {
+      if (file) toast.error('The selected image could not be saved with this draft.');
+    });
+  }, [activeTab, artworkDraftKey, artworkDraftReady, file]);
+
+  useEffect(() => {
+    if (activeTab !== 'board') {
+      setCollageDraftReady(false);
+      return;
+    }
+
+    setCollageDraftReady(false);
+    try {
+      const saved = window.localStorage.getItem(collageDraftKey);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        setBoardName(typeof draft.name === 'string' ? draft.name : '');
+        setBoardDesc(typeof draft.description === 'string' ? draft.description : '');
+        setIsPrivate(Boolean(draft.isPrivate));
+        setSelectedCollageArtworkIds(Array.isArray(draft.artworkIds) ? draft.artworkIds.filter((id: unknown) => typeof id === 'string') : []);
+      } else {
+        setBoardName('');
+        setBoardDesc('');
+        setIsPrivate(false);
+        setSelectedCollageArtworkIds([]);
+      }
+    } catch {
+      window.localStorage.removeItem(collageDraftKey);
+    }
+    setCollageDraftReady(true);
+  }, [activeTab, collageDraftKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'board' || !collageDraftReady) return;
+    if (!hasCollageDraft) {
+      window.localStorage.removeItem(collageDraftKey);
+      if (window.localStorage.getItem(publisherDockKey) === 'board') {
+        window.localStorage.removeItem(publisherDockKey);
+      }
+      return;
+    }
+    window.localStorage.setItem(collageDraftKey, JSON.stringify({
+      name: boardName,
+      description: boardDesc,
+      isPrivate,
+      artworkIds: selectedCollageArtworkIds,
+      updatedAt: new Date().toISOString(),
+    }));
+    window.localStorage.setItem(publisherDockKey, 'board');
+  }, [activeTab, boardDesc, boardName, collageDraftKey, collageDraftReady, hasCollageDraft, isPrivate, publisherDockKey, selectedCollageArtworkIds]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'board') return;
+    if (adminMode && !targetUserId) {
+      setCollageArtworks([]);
+      setLoadingCollageArtworks(false);
+      return;
+    }
+
+    let active = true;
+    setLoadingCollageArtworks(true);
+    supabase
+      .from('artworks')
+      .select('id, title, image_url, artist_name, art_style, creation_year')
+      .eq('user_id', effectiveUserId)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) toast.error('Unable to load artworks for this collage.');
+        const artworks = (data as CollageArtwork[]) || [];
+        const availableIds = new Set(artworks.map((artwork) => artwork.id));
+        setCollageArtworks(artworks);
+        setSelectedCollageArtworkIds((current) => current.filter((id) => availableIds.has(id)));
+        setLoadingCollageArtworks(false);
+      });
+
+    return () => { active = false; };
+  }, [activeTab, adminMode, effectiveUserId, isOpen, targetUserId]);
 
   const resetAndClose = () => {
     setActiveTab('menu');
@@ -172,10 +501,83 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
     setHashtags([]); setCurrentHashtag(''); setMaterialUsed(''); setArtStyle('');
     setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
+    setSelectedCollageArtworkIds([]); setCollageSearch(''); setCollageArtworks([]);
     setTargetUserId(''); setUserSearchQuery(''); setIsDropdownOpen(false);
     setSelectedBoardId('');
+    setIsMinimized(false);
+    setArtworkDraftReady(false);
     onClose();
   };
+
+  const clearCollageDraft = () => {
+    window.localStorage.removeItem(collageDraftKey);
+    if (window.localStorage.getItem(publisherDockKey) === 'board') {
+      window.localStorage.removeItem(publisherDockKey);
+    }
+  };
+
+  const clearArtworkDraft = () => {
+    window.localStorage.removeItem(artworkDraftKey);
+    if (window.localStorage.getItem(publisherDockKey) === 'artwork') {
+      window.localStorage.removeItem(publisherDockKey);
+    }
+    void saveArtworkDraftFile(artworkDraftKey, null).catch(() => undefined);
+  };
+
+  const discardCollageDraft = () => {
+    clearCollageDraft();
+    resetAndClose();
+  };
+
+  const discardArtworkDraft = () => {
+    clearArtworkDraft();
+    resetAndClose();
+  };
+
+  const minimizeCollage = () => {
+    window.localStorage.setItem(publisherDockKey, 'board');
+    setIsMinimized(true);
+    onClose();
+  };
+
+  const minimizeArtwork = () => {
+    window.localStorage.setItem(publisherDockKey, 'artwork');
+    setIsMinimized(true);
+    onClose();
+  };
+
+  const restoreDraft = () => {
+    setIsMinimized(false);
+    onRestore?.();
+  };
+
+  const dismissPanel = () => {
+    if (activeTab === 'board' && hasCollageDraft) {
+      minimizeCollage();
+      return;
+    }
+    if (activeTab === 'artwork' && hasArtworkDraft) {
+      minimizeArtwork();
+      return;
+    }
+    resetAndClose();
+  };
+
+  const toggleCollageArtwork = (artworkId: string) => {
+    setSelectedCollageArtworkIds((current) =>
+      current.includes(artworkId)
+        ? current.filter((id) => id !== artworkId)
+        : [...current, artworkId]
+    );
+  };
+
+  const filteredCollageArtworks = collageArtworks.filter((artwork) => {
+    const query = collageSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [artwork.title, artwork.artist_name, artwork.art_style, artwork.creation_year]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query));
+  });
 
   const extractColor = async (file: File): Promise<string> => {
     return new Promise((resolve) => {
@@ -303,6 +705,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       }
 
       toast.success('Artwork registered in the catalog.');
+      clearArtworkDraft();
       resetAndClose();
       onArtworkCreated?.();
     } catch (err: any) {
@@ -319,22 +722,66 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       toast.error('Please select an artist to create the portfolio for.');
       return;
     }
+    if (selectedCollageArtworkIds.length === 0) {
+      toast.error('Choose at least one registered artwork for the collage.');
+      return;
+    }
     setCreatingBoard(true);
-    const { error } = await supabase.from('boards').insert({
-      user_id: effectiveUserId, name: boardName.trim(), description: boardDesc.trim(), is_private: isPrivate
-    });
-    if (error) toast.error('Failed to create portfolio');
-    else { toast.success('Portfolio created.'); resetAndClose(); onBoardCreated?.(); }
-    setCreatingBoard(false);
+    try {
+      const { data: board, error } = await supabase.from('boards').insert({
+        user_id: effectiveUserId, name: boardName.trim(), description: boardDesc.trim(), is_private: isPrivate
+      }).select('id').single();
+      if (error || !board) throw error || new Error('Collage could not be created.');
+
+      const { error: itemError } = await supabase.from('board_items').insert(
+        selectedCollageArtworkIds.map((artworkId) => ({ board_id: board.id, artwork_id: artworkId }))
+      );
+      if (itemError) {
+        await supabase.from('boards').delete().eq('id', board.id);
+        throw itemError;
+      }
+
+      clearCollageDraft();
+      toast.success('Collage published to your portfolio.');
+      resetAndClose();
+      onBoardCreated?.();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to publish collage.');
+    } finally {
+      setCreatingBoard(false);
+    }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isMinimized) return null;
+
+  if (!isOpen && isMinimized) {
+    const minimizedArtwork = activeTab === 'artwork';
+    return (
+      <div className="collage-draft-dock" role="status" aria-label={`Minimized ${minimizedArtwork ? 'artwork' : 'collage'} draft`}>
+        <button type="button" className="collage-draft-restore" onClick={restoreDraft}>
+          <span className="collage-draft-icon">{minimizedArtwork ? <ImagePlus size={18} /> : <FolderPlus size={18} />}</span>
+          <span className="collage-draft-copy">
+            <strong>{minimizedArtwork ? (title.trim() || file?.name || 'Untitled artwork') : (boardName.trim() || 'Untitled collage')}</strong>
+            <small>
+              {minimizedArtwork
+                ? `${file ? file.name : imageSource === 'url' && imageUrl.trim() ? 'Image URL added' : 'Metadata in progress'} | Draft saved`
+                : `${selectedCollageArtworkIds.length} selected | Draft saved`}
+            </small>
+          </span>
+        </button>
+        <button type="button" className="collage-draft-discard" onClick={minimizedArtwork ? discardArtworkDraft : discardCollageDraft} aria-label={`Discard ${minimizedArtwork ? 'artwork' : 'collage'} draft`} title="Discard draft">
+          <X size={17} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
       {/* Dimmed overlay */}
       <div
-        onClick={resetAndClose}
+        className="create-panel-backdrop"
+        onClick={dismissPanel}
         style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
           zIndex: 99998, backdropFilter: 'blur(4px)',
@@ -342,7 +789,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       />
 
       {/* Panel */}
-      <div style={{
+      <div className={`create-panel-shell ${activeTab === 'menu' ? 'create-panel-choice' : activeTab === 'board' ? 'create-panel-collage' : 'create-panel-artwork'}`} role="dialog" aria-modal="true" aria-labelledby="create-panel-title" style={{
         position: 'fixed', top: 0, left: 0, width: '380px', maxWidth: '90vw',
         height: '100vh', background: '#fdfbf7', borderRight: '1px solid #e5e0d8',
         zIndex: 99999, display: 'flex', flexDirection: 'column',
@@ -350,22 +797,31 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
         animation: 'slideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
       }}>
         {/* Header */}
-        <div style={{ padding: '24px', borderBottom: '1px solid #e5e0d8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#1a1a1a' }}>
-            {activeTab === 'menu' ? 'Create Record' : activeTab === 'artwork' ? 'Register Artwork' : 'New Portfolio'}
+        <div className="create-panel-header" style={{ padding: '24px', borderBottom: '1px solid #e5e0d8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 id="create-panel-title" style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#1a1a1a' }}>
+            {activeTab === 'menu' ? 'Publish to ArtVault' : activeTab === 'artwork' ? 'Upload Artwork' : 'Create Collage'}
           </h2>
-          <button onClick={resetAndClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: '6px', borderRadius: '50%', display: 'flex', transition: 'all 0.2s' }}>
-            <X size={22} />
-          </button>
+          <div className="create-panel-header-actions">
+            {activeTab !== 'menu' && (
+              <button type="button" onClick={activeTab === 'board' ? minimizeCollage : minimizeArtwork} className="create-panel-icon-btn" aria-label={`Minimize ${activeTab === 'board' ? 'collage' : 'artwork'} draft`} title="Minimize draft">
+                <Minus size={20} />
+              </button>
+            )}
+            <button type="button" onClick={dismissPanel} className="create-panel-icon-btn" aria-label={(activeTab === 'board' && hasCollageDraft) || (activeTab === 'artwork' && hasArtworkDraft) ? `Minimize ${activeTab === 'board' ? 'collage' : 'artwork'} draft` : 'Close publishing panel'}>
+              <X size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        <div className="create-panel-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
           {/* ─── Menu View ─── */}
           {activeTab === 'menu' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="publish-choice-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p className="publish-choice-intro">Choose how you want to publish your work.</p>
               <button
+                className="publish-choice-card"
                 onClick={() => setActiveTab('artwork')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 20px',
@@ -379,12 +835,13 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   <ImagePlus size={22} />
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Register Artwork</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Upload Artwork</p>
                   <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Create a catalog entry with image, metadata, and provenance notes</p>
                 </div>
               </button>
 
               <button
+                className="publish-choice-card"
                 onClick={() => setActiveTab('board')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 20px',
@@ -398,8 +855,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                   <FolderPlus size={22} />
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Create Portfolio</p>
-                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Organize works by artist, collector, or collection</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Create Collage</p>
+                  <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>Select registered works, save a draft, and publish them as one portfolio</p>
                 </div>
               </button>
 
@@ -438,10 +895,13 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
           {/* ─── Post Artwork Form ─── */}
           {activeTab === 'artwork' && (
-            <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
-                Back to menu
-              </button>
+            <form className="artwork-upload-form" onSubmit={handleUpload}>
+              <div className="artwork-upload-toolbar">
+                <button type="button" onClick={() => setActiveTab('menu')} className="collage-back-btn">
+                  Back to publish options
+                </button>
+                <span className="collage-autosave-status">Draft saved automatically</span>
+              </div>
 
               {adminMode && (
                 <div style={{ position: 'relative' }}>
@@ -693,18 +1153,25 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 </select>
               </div>
 
-              <button type="submit" className="btn btn-primary" disabled={uploading} style={{ width: '100%', marginTop: '8px' }}>
-                {uploading ? 'Registering...' : 'Register Artwork'}
-              </button>
+              <div className="artwork-upload-actions">
+                <button type="button" className="btn" onClick={discardArtworkDraft}>Discard Draft</button>
+                <button type="button" className="btn" onClick={minimizeArtwork}><Minus size={15} /> Minimize</button>
+                <button type="submit" className="btn btn-primary" disabled={uploading}>
+                  {uploading ? 'Registering...' : 'Register Artwork'}
+                </button>
+              </div>
             </form>
           )}
 
           {/* ─── Create Board Form ─── */}
           {activeTab === 'board' && (
-            <form onSubmit={handleCreateBoard} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <button type="button" onClick={() => setActiveTab('menu')} style={{ background: 'none', border: 'none', color: '#4a3424', cursor: 'pointer', fontSize: '13px', padding: 0, textAlign: 'left', fontWeight: 600 }}>
-                Back to menu
-              </button>
+            <form className="collage-composer" onSubmit={handleCreateBoard}>
+              <div className="collage-composer-toolbar">
+                <button type="button" onClick={() => setActiveTab('menu')} className="collage-back-btn">
+                  Back to publish options
+                </button>
+                <span className="collage-autosave-status">Draft saved automatically</span>
+              </div>
               
               {adminMode && (
                 <div style={{ position: 'relative' }}>
@@ -746,24 +1213,107 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 </div>
               )}
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Portfolio Name</label>
-                <input type="text" value={boardName} onChange={e => setBoardName(e.target.value)} placeholder='e.g. "Renaissance Masterpieces"' required className="search-input" />
+              <div className="collage-composer-layout">
+                <section className="collage-details-panel" aria-labelledby="collage-details-heading">
+                  <div>
+                    <span className="collage-section-kicker">Collage details</span>
+                    <h3 id="collage-details-heading">Build the portfolio record</h3>
+                  </div>
+
+                  <label className="collage-field">
+                    <span>Collage name</span>
+                    <input type="text" value={boardName} onChange={e => setBoardName(e.target.value)} placeholder="Renaissance Masterpieces" required className="search-input" />
+                  </label>
+
+                  <label className="collage-field">
+                    <span>Description</span>
+                    <textarea value={boardDesc} onChange={e => setBoardDesc(e.target.value)} placeholder="Describe the theme, period, or purpose of this collage..." className="search-input" />
+                  </label>
+
+                  <label className="collage-privacy-toggle" htmlFor="create-private">
+                    <input type="checkbox" id="create-private" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} />
+                    <span>
+                      <strong>Private collage</strong>
+                      <small>Only the owner can view this portfolio.</small>
+                    </span>
+                  </label>
+
+                  <div className="collage-selection-summary">
+                    <strong>{selectedCollageArtworkIds.length}</strong>
+                    <span>artwork{selectedCollageArtworkIds.length === 1 ? '' : 's'} selected</span>
+                  </div>
+                </section>
+
+                <section className="collage-artwork-panel" aria-labelledby="collage-artworks-heading">
+                  <div className="collage-artwork-heading">
+                    <div>
+                      <span className="collage-section-kicker">Artwork placement</span>
+                      <h3 id="collage-artworks-heading">Choose registered works</h3>
+                    </div>
+                    <span>{filteredCollageArtworks.length} available</span>
+                  </div>
+
+                  <label className="collage-search-field">
+                    <Search size={16} aria-hidden="true" />
+                    <input
+                      type="search"
+                      value={collageSearch}
+                      onChange={(event) => setCollageSearch(event.target.value)}
+                      placeholder="Search title, creator, style, or year"
+                      aria-label="Search artworks for collage"
+                    />
+                  </label>
+
+                  <div className="collage-artwork-grid">
+                    {loadingCollageArtworks ? (
+                      <div className="collage-artwork-empty">Loading registered works...</div>
+                    ) : filteredCollageArtworks.length === 0 ? (
+                      <div className="collage-artwork-empty">
+                        {adminMode && !targetUserId ? 'Select an artist first.' : 'No registered artworks match this search.'}
+                      </div>
+                    ) : (
+                      filteredCollageArtworks.map((artwork) => {
+                        const selected = selectedCollageArtworkIds.includes(artwork.id);
+                        return (
+                          <button
+                            key={artwork.id}
+                            type="button"
+                            className={`collage-artwork-option ${selected ? 'selected' : ''}`}
+                            onClick={() => toggleCollageArtwork(artwork.id)}
+                            aria-pressed={selected}
+                          >
+                            <span className="collage-artwork-image">
+                              <img
+                                src={artwork.image_url}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                onError={(event) => {
+                                  event.currentTarget.style.display = 'none';
+                                  event.currentTarget.parentElement?.classList.add('image-unavailable');
+                                }}
+                              />
+                              {selected && <span className="collage-artwork-check"><Check size={14} /></span>}
+                            </span>
+                            <span className="collage-artwork-copy">
+                              <strong>{artwork.title}</strong>
+                              <small>{[artwork.artist_name, artwork.creation_year].filter(Boolean).join(' · ') || artwork.art_style || 'Registered work'}</small>
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </section>
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Description (optional)</label>
-                <textarea value={boardDesc} onChange={e => setBoardDesc(e.target.value)} placeholder="Describe this collection..." className="search-input" style={{ height: '80px', resize: 'vertical' }} />
+              <div className="collage-composer-actions">
+                <button type="button" className="btn btn-secondary" onClick={discardCollageDraft}>Discard Draft</button>
+                <button type="button" className="btn btn-secondary" onClick={minimizeCollage}><Minus size={15} /> Minimize</button>
+                <button type="submit" className="btn btn-primary" disabled={creatingBoard || !boardName.trim() || selectedCollageArtworkIds.length === 0}>
+                  {creatingBoard ? 'Publishing...' : `Publish Collage (${selectedCollageArtworkIds.length})`}
+                </button>
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input type="checkbox" id="create-private" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#a855f7' }} />
-                <label htmlFor="create-private" style={{ color: '#999', fontSize: '14px', cursor: 'pointer' }}>Make this portfolio private</label>
-              </div>
-
-              <button type="submit" className="btn btn-primary" disabled={creatingBoard} style={{ width: '100%', marginTop: '8px' }}>
-                {creatingBoard ? 'Creating...' : 'Create Portfolio'}
-              </button>
             </form>
           )}
         </div>
