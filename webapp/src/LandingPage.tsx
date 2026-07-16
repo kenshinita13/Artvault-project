@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from './supabaseClient';
+import './LandingPage.css';
 
 const fallbackImages = [
   "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800&auto=format&fit=crop",
@@ -86,12 +87,12 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div style={{ background: '#f5f0e8', color: '#1c1917', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <div className="landing-page" style={{ background: '#f5f0e8', color: '#1c1917', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
 
       {/* ═══════════════════════════════════
           TOP NAVIGATION
           ═══════════════════════════════════ */}
-      <header style={{
+      <header className="landing-header" style={{
         position: 'fixed', top: 0, left: 0, width: '100%', height: '72px',
         background: 'rgba(245, 240, 232, 0.95)', backdropFilter: 'blur(16px)',
         borderBottom: '1px solid #d6cfc3', zIndex: 1000,
@@ -99,9 +100,9 @@ export default function LandingPage() {
         padding: '0 48px'
       }}>
         {/* Logo */}
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 14, textDecoration: 'none' }}>
+        <Link className="landing-brand" to="/" style={{ display: 'flex', alignItems: 'center', gap: 14, textDecoration: 'none' }}>
           <img src="/Artlogo.png" alt="ArtVault" style={{ height: 36, objectFit: 'contain', filter: 'brightness(0)' }} />
-          <div>
+          <div className="landing-brand-copy">
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, fontWeight: 700, letterSpacing: '3px', color: '#1c1917', lineHeight: 1 }}>
               ARTVAULT
             </div>
@@ -112,7 +113,7 @@ export default function LandingPage() {
         </Link>
 
         {/* Center Nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
+        <nav className="landing-primary-nav" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
           {[
             { label: 'Collections', action: () => document.getElementById('collections-section')?.scrollIntoView({ behavior: 'smooth' }) },
             { label: 'Provenance', action: () => document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' }) },
@@ -130,14 +131,16 @@ export default function LandingPage() {
         </nav>
 
         {/* Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div className="landing-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button
+            className="landing-sign-in"
             onClick={() => navigate('/login?mode=login')}
             style={{ background: 'none', border: 'none', fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#44403c', cursor: 'pointer', fontWeight: 500 }}
           >
             Sign In
           </button>
           <button
+            className="landing-request-access"
             onClick={() => navigate('/login?mode=register')}
             style={{
               background: '#1c1917', color: '#f5f0e8',
@@ -157,11 +160,11 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════
           HERO — Full-bleed Museum Masthead
           ═══════════════════════════════════ */}
-      <section style={{ paddingTop: 72, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 'calc(100vh - 72px)' }}>
+      <section className="landing-hero" style={{ paddingTop: 72, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="landing-hero-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 'calc(100vh - 72px)' }}>
 
           {/* Left: Text */}
-          <div style={{
+          <div className="landing-hero-copy" style={{
             display: 'flex', flexDirection: 'column', justifyContent: 'center',
             padding: '80px 64px 80px 64px',
             borderRight: '1px solid #d6cfc3'
@@ -175,18 +178,18 @@ export default function LandingPage() {
                 ArtVault Enterprise Edition
               </div>
 
-              <h1 style={{ fontFamily: "'Cormorant Garamond', 'Playfair Display', serif", fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: 400, lineHeight: 1.1, color: '#1c1917', margin: '0 0 32px 0' }}>
+              <h1 className="landing-hero-title" style={{ fontFamily: "'Cormorant Garamond', 'Playfair Display', serif", fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: 400, lineHeight: 1.1, color: '#1c1917', margin: '0 0 32px 0' }}>
                 Preserving<br />
                 <em style={{ fontStyle: 'italic', color: '#8c6e3d' }}>Heritage.</em><br />
                 Protecting<br />
                 Ownership.
               </h1>
 
-              <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 16, lineHeight: 1.8, color: '#44403c', maxWidth: 420, marginBottom: 44 }}>
+              <p className="landing-hero-description" style={{ fontFamily: "'Inter', sans-serif", fontSize: 16, lineHeight: 1.8, color: '#44403c', maxWidth: 420, marginBottom: 44 }}>
                 ArtVault is the institution-grade archival platform trusted by museums, galleries, foundations, estates, and private collectors to maintain the permanent record of fine art and rare collections.
               </p>
 
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 56 }}>
+              <div className="landing-hero-actions" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 56 }}>
                 <button
                   onClick={() => navigate('/home')}
                   style={{
@@ -237,12 +240,13 @@ export default function LandingPage() {
           </div>
 
           {/* Right: Rotating Artwork Masthead */}
-          <div style={{ position: 'relative', overflow: 'hidden', background: '#0d0c0a' }}>
+          <div className="landing-hero-art" style={{ position: 'relative', overflow: 'hidden', background: '#0d0c0a' }}>
             {heroImages.map((src, i) => (
               <motion.img
                 key={src + i}
                 src={src}
-                alt="Collection"
+                alt="Featured collection artwork"
+                className="landing-hero-image"
                 style={{
                   position: 'absolute', inset: 0,
                   width: '100%', height: '100%',
@@ -269,7 +273,7 @@ export default function LandingPage() {
             {/* Dot indicators */}
             <div style={{ position: 'absolute', top: 24, right: 24, display: 'flex', gap: 6 }}>
               {heroImages.map((_, i) => (
-                <button key={i} onClick={() => setActiveImage(i)} style={{
+                <button key={i} onClick={() => setActiveImage(i)} aria-label={`Show featured artwork ${i + 1}`} aria-pressed={i === activeImage} style={{
                   width: i === activeImage ? 20 : 8, height: 8,
                   background: i === activeImage ? '#b8975a' : 'rgba(245,240,232,0.3)',
                   border: 'none', borderRadius: 4, cursor: 'pointer', transition: 'all 0.3s', padding: 0
@@ -283,7 +287,7 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════
           INSTITUTION STATEMENT
           ═══════════════════════════════════ */}
-      <section style={{ background: '#1c1917', padding: '80px 64px', textAlign: 'center' }}>
+      <section className="landing-responsive-section" style={{ background: '#1c1917', padding: '80px 64px', textAlign: 'center' }}>
         <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
           <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#b8975a', marginBottom: 20 }}>
             Our Mission
@@ -304,7 +308,7 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════
           ENTERPRISE FEATURES
           ═══════════════════════════════════ */}
-      <section id="features-section" style={{ padding: '100px 64px', background: '#f5f0e8' }}>
+      <section id="features-section" className="landing-responsive-section" style={{ padding: '100px 64px', background: '#f5f0e8' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
             <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#b8975a', marginBottom: 16, textAlign: 'center' }}>
@@ -315,7 +319,7 @@ export default function LandingPage() {
             </h2>
           </motion.div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2, border: '1px solid #d6cfc3' }}>
+          <div className="landing-feature-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2, border: '1px solid #d6cfc3' }}>
             {features.map((f, i) => (
               <motion.div
                 key={i}
@@ -323,6 +327,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="landing-feature-item"
                 style={{
                   background: '#fdfaf5', padding: '40px 36px',
                   borderRight: '1px solid #d6cfc3', borderBottom: '1px solid #d6cfc3',
@@ -349,7 +354,7 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════
           ROLES — Enterprise Structure / Collections
           ═══════════════════════════════════ */}
-      <section id="collections-section" style={{ padding: '100px 64px', background: '#ede7d9', borderTop: '1px solid #d6cfc3' }}>
+      <section id="collections-section" className="landing-responsive-section" style={{ padding: '100px 64px', background: '#ede7d9', borderTop: '1px solid #d6cfc3' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', textAlign: 'center' }}>
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
             <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#b8975a', marginBottom: 16 }}>
@@ -398,7 +403,7 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════
           CTA — Institutional Access / Governance
           ═══════════════════════════════════ */}
-      <section id="governance-section" style={{ padding: '100px 64px', background: '#1c1917', textAlign: 'center' }}>
+      <section id="governance-section" className="landing-responsive-section" style={{ padding: '100px 64px', background: '#1c1917', textAlign: 'center' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
           <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', color: '#b8975a', marginBottom: 20 }}>
             Begin Archival
@@ -443,8 +448,8 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════
           FOOTER
           ═══════════════════════════════════ */}
-      <footer style={{ background: '#0d0c0a', padding: '48px 64px', borderTop: '1px solid #2c2825' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
+      <footer className="landing-footer" style={{ background: '#0d0c0a', padding: '48px 64px', borderTop: '1px solid #2c2825' }}>
+        <div className="landing-footer-inner" style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
           <div>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, fontWeight: 700, letterSpacing: '3px', color: '#f5f0e8', marginBottom: 4 }}>
               ARTVAULT
@@ -453,7 +458,7 @@ export default function LandingPage() {
               Preserving Heritage. Protecting Ownership.
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 32 }}>
+          <div className="landing-footer-links" style={{ display: 'flex', gap: 32 }}>
             {([
               { label: 'Collections', action: () => document.getElementById('collections-section')?.scrollIntoView({ behavior: 'smooth' }) },
               { label: 'Provenance',  action: () => document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' }) },

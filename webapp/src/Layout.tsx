@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { Archive, Home, Info, LogOut, Settings, Shield, User, Users } from 'lucide-react';
+import { Archive, Home, ImagePlus, Info, LogOut, Settings, Shield, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
@@ -13,6 +13,7 @@ export default function Layout({ user }: { user: any }) {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
   const { data: cachedCategories } = useCachedQuery<any[]>(
@@ -71,8 +72,33 @@ export default function Layout({ user }: { user: any }) {
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    setAvatarMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAvatarMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [avatarMenuOpen]);
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) toast.error('Unable to sign out. Please try again.');
   };
 
   const navLinkStyle = (path: string) =>
@@ -85,10 +111,12 @@ export default function Layout({ user }: { user: any }) {
     { path: '/registry', label: 'Registry', icon: Archive },
     { path: '/artists', label: 'Artists', icon: Users },
     { path: '/about', label: 'About', icon: Info },
+    ...(user ? [{ path: `/profile/${user.id}`, label: 'Profile', icon: User }] : []),
   ];
 
   return (
     <>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <header
         className="top-navbar-desktop fixed top-0 left-0 w-full h-16 md:h-20 flex items-center justify-between px-3 md:px-10 z-[999] gap-2"
         style={{ background: 'rgba(245,240,232,0.95)', backdropFilter: 'blur(16px)', borderBottom: '1px solid #d6cfc3' }}
@@ -110,21 +138,30 @@ export default function Layout({ user }: { user: any }) {
 
         <div className="nav-actions shrink-0 hidden md:flex items-center">
           {user ? (
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div ref={accountMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px' }}>
               {canUpload(profile?.role) && (
                 <button
                   onClick={() => setCreatePanelOpen(true)}
-                  className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
+                  className="btn btn-primary register-work-btn whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
                   style={{ background: '#b8975a', border: 'none', borderRadius: '4px', color: '#1c1917', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}
+                  aria-label="Register a new artwork"
                 >
-                  Register Work
+                  <ImagePlus className="register-work-icon" size={17} aria-hidden="true" />
+                  <span className="register-work-label">Register Work</span>
                 </button>
               )}
-              <button className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11" onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} style={{ padding: 0 }}>
+              <button
+                className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11"
+                onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
+                style={{ padding: 0 }}
+                aria-label="Open account menu"
+                aria-expanded={avatarMenuOpen}
+                aria-controls="account-menu"
+              >
                 <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
               </button>
 
-              <div className={`avatar-dropdown ${avatarMenuOpen ? 'open' : ''}`} style={{ display: avatarMenuOpen ? 'flex' : 'none' }}>
+              <div id="account-menu" className={`avatar-dropdown ${avatarMenuOpen ? 'open' : ''}`} style={{ display: avatarMenuOpen ? 'flex' : 'none' }}>
                 <div className="dropdown-header">
                   <span className="dropdown-name">{user.user_metadata?.name || 'User'}</span>
                   <span className="dropdown-email">{user.email}</span>
@@ -163,16 +200,21 @@ export default function Layout({ user }: { user: any }) {
         </div>
       </header>
 
-      <div className="main-content-wrapper">
+      <div id="main-content" className="main-content-wrapper" tabIndex={-1}>
         <Outlet />
       </div>
 
-      <nav className="mobile-bottom-nav" aria-label="Mobile primary navigation">
+      <nav
+        className="mobile-bottom-nav"
+        aria-label="Mobile primary navigation"
+        style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}
+      >
         {mobileNavItems.map(({ path, label, icon: Icon }) => (
           <Link
             key={path}
             to={path}
-            className={`mobile-bottom-nav-item ${location.pathname === path ? 'active' : ''}`}
+            className={`mobile-bottom-nav-item ${location.pathname === path || (path.startsWith('/profile/') && location.pathname.startsWith('/profile/')) ? 'active' : ''}`}
+            aria-current={location.pathname === path || (path.startsWith('/profile/') && location.pathname.startsWith('/profile/')) ? 'page' : undefined}
           >
             <Icon size={18} strokeWidth={1.8} />
             <span>{label}</span>

@@ -16,11 +16,42 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
 
   // Panning state (fullscreen zoom)
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const dragStart = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (reportModalOpen) setReportModalOpen(false);
+      else if (moreMenuOpen) setMoreMenuOpen(false);
+      else if (fullscreen) setFullscreen(false);
+      else onCloseRef.current();
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [fullscreen, moreMenuOpen, reportModalOpen]);
 
   useEffect(() => {
     if (!fullscreen) setPosition({ x: 0, y: 0 });
@@ -76,15 +107,16 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
       className="modal"
       style={{ display: 'flex' }}
       onClick={onClose}
-      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
-      role="button" tabIndex={0}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="artwork-dialog-title"
+      tabIndex={-1}
+      ref={dialogRef}
     >
       {/* ─── LIGHTBOX CARD ─── */}
       <div
         className="lightbox-content"
         onClick={e => e.stopPropagation()}
-        onKeyDown={e => e.stopPropagation()}
-        role="presentation"
         style={{ flexDirection: 'row', borderRadius: '4px', overflow: 'hidden', maxHeight: '90vh' }}
       >
 
@@ -92,8 +124,14 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
         <div
           className={`lightbox-img-wrapper ${fullscreen ? 'fullscreen' : ''}`}
           onClick={() => !fullscreen && setFullscreen(true)}
-          onKeyDown={e => { if (e.key === 'Enter' && !fullscreen) setFullscreen(true); }}
+          onKeyDown={e => {
+            if ((e.key === 'Enter' || e.key === ' ') && !fullscreen) {
+              e.preventDefault();
+              setFullscreen(true);
+            }
+          }}
           role="button" tabIndex={0}
+          aria-label={fullscreen ? 'Zoomed artwork image. Drag to pan.' : 'Open full-screen artwork image'}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -112,6 +150,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
             <button
               className="fullscreen-close"
               onClick={e => { e.stopPropagation(); setFullscreen(false); }}
+              aria-label="Close full-screen image"
               style={{ zIndex: 100 }}
             >
               <X size={20} />
@@ -142,7 +181,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
 
         {/* ─── RIGHT: Info Panel ─── */}
         {!fullscreen && (
-          <div style={{
+          <div className="lightbox-info-panel" style={{
             width: '360px', flexShrink: 0, display: 'flex', flexDirection: 'column',
             height: '100%', background: '#fdfaf5', borderLeft: '1px solid #d6cfc3',
           }}>
@@ -152,7 +191,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '14px 20px', borderBottom: '1px solid #d6cfc3', flexShrink: 0,
             }}>
-              <button onClick={onClose} className="lb-action-btn" style={{ color: '#78716c' }}>
+              <button onClick={onClose} className="lb-action-btn" style={{ color: '#78716c' }} aria-label="Close artwork details">
                 <ArrowLeft size={18} />
               </button>
 
@@ -162,6 +201,8 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
                   onClick={() => setMoreMenuOpen(!moreMenuOpen)}
                   className="lb-action-btn"
                   style={{ color: '#78716c' }}
+                  aria-label="Open artwork actions"
+                  aria-expanded={moreMenuOpen}
                 >
                   <MoreHorizontal size={18} />
                 </button>
@@ -212,7 +253,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
               {/* Title & Registry No. */}
               <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
-                  <h2 style={{
+                  <h2 id="artwork-dialog-title" style={{
                     fontFamily: "'Playfair Display', serif", fontSize: '22px', fontWeight: 600,
                     color: '#1c1917', margin: 0, lineHeight: 1.2, letterSpacing: '-0.01em', flex: 1,
                   }}>
@@ -341,18 +382,19 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
         <div
           className="modal" style={{ zIndex: 1000000 }}
           onClick={e => { e.stopPropagation(); setReportModalOpen(false); }}
-          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setReportModalOpen(false); } }}
-          role="button" tabIndex={0}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="report-dialog-title"
         >
           <div
             className="modal-content" style={{ maxWidth: '400px', borderRadius: '4px' }}
-            onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} role="presentation"
+            onClick={e => e.stopPropagation()}
           >
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', color: '#991b1b', fontFamily: "'Playfair Display', serif" }}>
+              <h3 id="report-dialog-title" style={{ margin: 0, fontSize: '18px', color: '#991b1b', fontFamily: "'Playfair Display', serif" }}>
                 Report Artwork
               </h3>
-              <button onClick={() => setReportModalOpen(false)} style={{ background: 'none', border: 'none', color: '#78716c', cursor: 'pointer' }}>
+              <button onClick={() => setReportModalOpen(false)} aria-label="Close report dialog" style={{ background: 'none', border: 'none', color: '#78716c', cursor: 'pointer' }}>
                 <X size={22} />
               </button>
             </div>
@@ -372,6 +414,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
                     style={{ height: '100px', resize: 'vertical' }}
                     placeholder="e.g. Inappropriate content, copyright violation"
                     required
+                    autoFocus
                   />
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>

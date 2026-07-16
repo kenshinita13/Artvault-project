@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
@@ -39,6 +39,13 @@ function getRegisteredBy(artwork: Artwork): string {
 
 function getOriginalCreator(artwork: Artwork): string {
   return artwork.artist_name || getRegisteredBy(artwork);
+}
+
+function activateOnKey(event: KeyboardEvent<HTMLElement>, action: () => void) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    action();
+  }
 }
 
 interface Artwork {
@@ -123,7 +130,14 @@ function CatalogCard({ artwork, onClick }: { artwork: Artwork; onClick: () => vo
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   return (
-    <article className="catalog-card" onClick={onClick}>
+    <article
+      className="catalog-card"
+      onClick={onClick}
+      onKeyDown={(event) => activateOnKey(event, onClick)}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open catalog entry for ${artwork.title}`}
+    >
       <div className="catalog-card-image">
         <img
           src={optimizedUrl(artwork.image_url, 600)}
@@ -183,7 +197,14 @@ function CatalogRow({ artwork, onClick }: { artwork: Artwork; onClick: () => voi
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   return (
-    <article className="catalog-row" onClick={onClick}>
+    <article
+      className="catalog-row"
+      onClick={onClick}
+      onKeyDown={(event) => activateOnKey(event, onClick)}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open catalog entry for ${artwork.title}`}
+    >
       <div className="catalog-row-thumb">
         <img src={optimizedUrl(artwork.image_url, 200)} alt={artwork.title} loading="lazy" decoding="async" />
       </div>
@@ -243,8 +264,15 @@ function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: 
   const category = artwork.artwork_categories?.[0]?.categories?.name;
 
   return (
-    <section className="featured-acquisition" onClick={onClick}>
-      <div className="featured-image-panel">
+    <section className="featured-acquisition">
+      <div
+        className="featured-image-panel"
+        onClick={onClick}
+        onKeyDown={(event) => activateOnKey(event, onClick)}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open featured catalog entry for ${artwork.title}`}
+      >
         <img src={optimizedUrl(artwork.image_url, 900)} alt={artwork.title} />
         <div className="featured-image-overlay">
           <span className="featured-label-chip">Latest Acquisition</span>
@@ -319,7 +347,7 @@ function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: 
             </span>
           </div>
         </div>
-        <button className="featured-view-btn">Open Catalog Entry →</button>
+        <button className="featured-view-btn" onClick={onClick}>Open Catalog Entry →</button>
       </div>
     </section>
   );
@@ -342,6 +370,22 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!mobileFiltersOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileFiltersOpen(false);
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileFiltersOpen]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -572,7 +616,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     <div className="dashboard-layout">
       {/* ─── Mobile Filter Toggle ─── */}
       <div className="mobile-filter-toggle md:hidden">
-        <button className="mobile-filter-btn" onClick={() => setMobileFiltersOpen(true)}>
+        <button className="mobile-filter-btn" onClick={() => setMobileFiltersOpen(true)} aria-label="Open artwork filters">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
           Filters {activeFiltersCount > 0 && <span style={{ background: '#b8975a', color: '#1c1917', borderRadius: '10px', padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{activeFiltersCount}</span>}
         </button>
@@ -594,6 +638,15 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
           </svg>
         </button>
       )}
+
+      {mobileFiltersOpen && (
+        <button
+          type="button"
+          className="mobile-filter-backdrop"
+          onClick={() => setMobileFiltersOpen(false)}
+          aria-label="Close artwork filters"
+        />
+      )}
       
       <aside 
         className={`filter-sidebar ${mobileFiltersOpen ? 'open' : ''} ${!sidebarVisible ? 'hidden-desktop' : ''}`}
@@ -607,21 +660,14 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
             document.body.style.cursor = 'col-resize';
           }}
         />
-        {/* Mobile close overlay */}
-        {mobileFiltersOpen && (
-          <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(28,25,23,0.4)', zIndex: 9999, backdropFilter: 'blur(2px)' }}
-            onClick={() => setMobileFiltersOpen(false)}
-          />
-        )}
         <div className="sidebar-header">
           <h3>Archive Filters</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {activeFiltersCount > 0 && (
               <button className="clear-all-btn" onClick={clearAllFilters}>Clear all</button>
             )}
-            <button className="close-sidebar md:hidden" onClick={() => setMobileFiltersOpen(false)}>×</button>
-            <button className="close-sidebar hidden-desktop-toggle" onClick={() => setSidebarVisible(false)} title="Hide Filters" style={{ fontSize: '18px', display: 'flex', alignItems: 'center' }}>
+            <button className="close-sidebar md:hidden" onClick={() => setMobileFiltersOpen(false)} aria-label="Close artwork filters">×</button>
+            <button className="close-sidebar hidden-desktop-toggle" onClick={() => setSidebarVisible(false)} title="Hide Filters" aria-label="Hide artwork filters" style={{ fontSize: '18px', display: 'flex', alignItems: 'center' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="11 17 6 12 11 7"></polyline>
                 <line x1="18" y1="17" x2="18" y2="7"></line>
@@ -809,11 +855,12 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
                 type="text"
                 className="search-panel-input"
                 placeholder="Search by artist, medium, title, or period..."
+                aria-label="Search the artwork registry"
                 value={localSearch}
                 onChange={e => setLocalSearch(e.target.value)}
               />
               {localSearch && (
-                <button type="button" className="search-panel-clear" onClick={() => { setLocalSearch(''); setSearchParams({}); }}>
+                <button type="button" className="search-panel-clear" aria-label="Clear registry search" onClick={() => { setLocalSearch(''); setSearchParams({}); }}>
                   x
                 </button>
               )}
@@ -864,6 +911,8 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
                 className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
                 onClick={() => setViewMode('grid')}
                 title="Grid view"
+                aria-label="Show artworks in a grid"
+                aria-pressed={viewMode === 'grid'}
               >
                 <GridIcon />
               </button>
@@ -871,6 +920,8 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
                 className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
                 onClick={() => setViewMode('list')}
                 title="List view"
+                aria-label="Show artworks in a list"
+                aria-pressed={viewMode === 'list'}
               >
                 <ListIcon />
               </button>
