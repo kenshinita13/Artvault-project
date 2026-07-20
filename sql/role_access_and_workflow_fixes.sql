@@ -61,6 +61,25 @@ as $$
   );
 $$;
 
+create or replace function private.is_curator()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and role = 'curator'
+      and (
+        status = 'active'
+        or (status = 'suspended' and suspension_end <= now())
+      )
+  );
+$$;
+
 create or replace function private.can_upload()
 returns boolean
 language sql
@@ -83,10 +102,12 @@ $$;
 revoke all on function private.is_active_account() from public;
 revoke all on function private.is_admin() from public;
 revoke all on function private.is_staff() from public;
+revoke all on function private.is_curator() from public;
 revoke all on function private.can_upload() from public;
 grant execute on function private.is_active_account() to authenticated;
 grant execute on function private.is_admin() to authenticated;
 grant execute on function private.is_staff() to authenticated;
+grant execute on function private.is_curator() to authenticated;
 grant execute on function private.can_upload() to authenticated;
 
 alter table public.profiles
@@ -255,6 +276,7 @@ drop policy if exists "Owner or staff can update artworks" on public.artworks;
 drop policy if exists "Artists and curators can register own artworks" on public.artworks;
 drop policy if exists "Admins can register artworks for users" on public.artworks;
 drop policy if exists "Owners and staff can update artworks" on public.artworks;
+drop policy if exists "Owners, staff, or curators can update artworks" on public.artworks;
 drop policy if exists "Owners and staff can delete artworks" on public.artworks;
 drop policy if exists "Uploaders or admins can register artworks" on public.artworks;
 
@@ -271,11 +293,41 @@ with check (
   or private.is_admin()
 );
 
-create policy "Owners and staff can update artworks"
+create policy "Owners, staff, or curators can update artworks"
 on public.artworks for update
 to authenticated
-using (((select auth.uid()) = user_id and private.is_active_account()) or private.is_staff())
-with check (((select auth.uid()) = user_id and private.is_active_account()) or private.is_staff());
+using (
+  ((select auth.uid()) = user_id and private.is_active_account())
+  or private.is_staff()
+  or private.is_curator()
+)
+with check (
+  ((select auth.uid()) = user_id and private.is_active_account())
+  or private.is_staff()
+  or private.is_curator()
+);
+
+-- Ownership transfer remains an administrator-only operation even for staff and curators.
+create or replace function private.protect_artwork_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.user_id is distinct from old.user_id
+     and (select auth.uid()) is not null
+     and not private.is_admin() then
+    raise exception 'Only administrators can transfer artwork ownership.' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_artwork_owner on public.artworks;
+create trigger protect_artwork_owner
+before update on public.artworks
+for each row execute function private.protect_artwork_owner();
 
 create policy "Owners and staff can delete artworks"
 on public.artworks for delete
@@ -293,16 +345,21 @@ drop policy if exists "Admins can insert artwork categories" on public.artwork_c
 drop policy if exists "Artwork categories are publicly viewable" on public.artwork_categories;
 drop policy if exists "Owners and admins can tag artworks" on public.artwork_categories;
 drop policy if exists "Owners and admins can untag artworks" on public.artwork_categories;
+drop policy if exists "Owners, admins, or curators can tag artworks" on public.artwork_categories;
+drop policy if exists "Owners, admins, or curators can untag artworks" on public.artwork_categories;
+drop policy if exists "Owners, staff, or curators can tag artworks" on public.artwork_categories;
+drop policy if exists "Owners, staff, or curators can untag artworks" on public.artwork_categories;
 create policy "Artwork categories are publicly viewable"
 on public.artwork_categories for select
 to anon, authenticated
 using (true);
 
-create policy "Owners and admins can tag artworks"
+create policy "Owners, staff, or curators can tag artworks"
 on public.artwork_categories for insert
 to authenticated
 with check (
-  private.is_admin()
+  private.is_staff()
+  or private.is_curator()
   or exists (
     select 1 from public.artworks
     where artworks.id = artwork_categories.artwork_id
@@ -311,11 +368,12 @@ with check (
   )
 );
 
-create policy "Owners and admins can untag artworks"
+create policy "Owners, staff, or curators can untag artworks"
 on public.artwork_categories for delete
 to authenticated
 using (
-  private.is_admin()
+  private.is_staff()
+  or private.is_curator()
   or exists (
     select 1 from public.artworks
     where artworks.id = artwork_categories.artwork_id

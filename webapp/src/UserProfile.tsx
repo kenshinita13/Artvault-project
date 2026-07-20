@@ -66,6 +66,53 @@ interface Board {
   item_count?: number;
 }
 
+function getAccountAge(createdAt?: string) {
+  if (!createdAt) return { value: '—', label: 'Membership Age', joinedLabel: '' };
+
+  const joined = new Date(createdAt);
+  if (Number.isNaN(joined.getTime())) {
+    return { value: '—', label: 'Membership Age', joinedLabel: '' };
+  }
+
+  const now = new Date();
+  const joinedLabel = `Joined ${joined.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })}`;
+  const elapsedDays = Math.max(0, Math.floor((now.getTime() - joined.getTime()) / 86_400_000));
+
+  if (elapsedDays === 0) return { value: 'Today', label: 'Joined ArtVault', joinedLabel };
+  if (elapsedDays < 30) {
+    return {
+      value: String(elapsedDays),
+      label: elapsedDays === 1 ? 'Day on ArtVault' : 'Days on ArtVault',
+      joinedLabel,
+    };
+  }
+
+  let elapsedMonths = (now.getFullYear() - joined.getFullYear()) * 12
+    + now.getMonth()
+    - joined.getMonth();
+  if (now.getDate() < joined.getDate()) elapsedMonths -= 1;
+  elapsedMonths = Math.max(1, elapsedMonths);
+
+  if (elapsedMonths < 12) {
+    return {
+      value: String(elapsedMonths),
+      label: elapsedMonths === 1 ? 'Month on ArtVault' : 'Months on ArtVault',
+      joinedLabel,
+    };
+  }
+
+  const elapsedYears = Math.floor(elapsedMonths / 12);
+  return {
+    value: String(elapsedYears),
+    label: elapsedYears === 1 ? 'Year on ArtVault' : 'Years on ArtVault',
+    joinedLabel,
+  };
+}
+
 function ArtworkImage({ artwork, className = '' }: { artwork: Artwork; className?: string }) {
   const [failed, setFailed] = useState(false);
 
@@ -479,8 +526,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
     .filter(year => Number.isFinite(year));
   const earliestCollectionYear = collectionYears.length ? Math.min(...collectionYears) : null;
   const latestCollectionYear = collectionYears.length ? Math.max(...collectionYears) : null;
-  const memberSince = profile.created_at ? new Date(profile.created_at).getFullYear() : null;
-  const yearsActive = memberSince ? Math.max(1, new Date().getFullYear() - memberSince + 1) : 1;
+  const accountAge = getAccountAge(profile.created_at);
 
   const openProfileNarrativeEditor = () => {
     setSummaryDraft(profile.profile_summary || '');
@@ -577,9 +623,9 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
                 <ImageIcon size={25} aria-hidden="true" />
                 <div><strong>{artworks.length}</strong><span>Registered Works</span></div>
               </div>
-              <div className="artist-profile-metric">
+              <div className="artist-profile-metric" title={accountAge.joinedLabel || undefined}>
                 <CalendarDays size={25} aria-hidden="true" />
-                <div><strong>{yearsActive}+</strong><span>Years Active</span></div>
+                <div><strong>{accountAge.value}</strong><span>{accountAge.label}</span></div>
               </div>
               <div className="artist-profile-metric">
                 <Globe2 size={25} aria-hidden="true" />

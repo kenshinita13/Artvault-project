@@ -83,16 +83,7 @@ interface RegistryStats {
   withProvenance: number;
 }
 
-type DiscoveryEra = 'all' | 'before-1800' | '1800s' | 'early-1900s' | 'post-1950';
 type DiscoveryPath = 'unexpected' | 'old-masters' | 'paper' | 'modern';
-
-const DISCOVERY_ERAS: { id: DiscoveryEra; label: string }[] = [
-  { id: 'all', label: 'All periods' },
-  { id: 'before-1800', label: 'Before 1800' },
-  { id: '1800s', label: '1800-1899' },
-  { id: 'early-1900s', label: '1900-1949' },
-  { id: 'post-1950', label: '1950-now' },
-];
 
 const DISCOVERY_PATHS: { id: DiscoveryPath; label: string; description: string }[] = [
   { id: 'unexpected', label: 'Unexpected', description: 'Three distant records brought together by chance.' },
@@ -105,16 +96,6 @@ function getNumericArtworkYear(value?: string | null): number | null {
   if (!value) return null;
   const match = String(value).match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
   return match ? Number(match[1]) : null;
-}
-
-function artworkMatchesEra(artwork: Artwork, era: DiscoveryEra): boolean {
-  if (era === 'all') return true;
-  const year = getNumericArtworkYear(artwork.creation_year);
-  if (year === null) return false;
-  if (era === 'before-1800') return year < 1800;
-  if (era === '1800s') return year >= 1800 && year <= 1899;
-  if (era === 'early-1900s') return year >= 1900 && year <= 1949;
-  return year >= 1950;
 }
 
 function artworkMatchesDiscoveryPath(artwork: Artwork, path: DiscoveryPath): boolean {
@@ -302,103 +283,6 @@ function CatalogRow({ artwork, onClick }: { artwork: Artwork; onClick: () => voi
   );
 }
 
-// ── Featured Acquisition panel ────────────────────────────────
-function FeaturedAcquisition({ artwork, onClick }: { artwork: Artwork; onClick: () => void }) {
-  const artistDisplay = getOriginalCreator(artwork);
-  const registeredBy = getRegisteredBy(artwork);
-  const regNo = getRegistryNumber(artwork.id);
-  const category = artwork.artwork_categories?.[0]?.categories?.name;
-
-  return (
-    <section className="featured-acquisition">
-      <div
-        className="featured-image-panel"
-        onClick={onClick}
-        onKeyDown={(event) => activateOnKey(event, onClick)}
-        role="button"
-        tabIndex={0}
-        aria-label={`Open featured catalog entry for ${artwork.title}`}
-      >
-        <img src={optimizedUrl(artwork.image_url, 900)} alt={artwork.title} />
-        <div className="featured-image-overlay">
-          <span className="featured-label-chip">Latest Acquisition</span>
-        </div>
-      </div>
-      <div className="featured-info-panel">
-        <div className="featured-header">
-          <span className="featured-section-label">Featured Work</span>
-          <span className="featured-reg-no">{regNo}</span>
-        </div>
-        <h2 className="featured-title">{artwork.title}</h2>
-        <p className="featured-artist">{artistDisplay}</p>
-        <p className="featured-registrant">Registered by {registeredBy}</p>
-        {artwork.description && (
-          <p className="featured-desc">{artwork.description.slice(0, 180)}{artwork.description.length > 180 ? '…' : ''}</p>
-        )}
-        <div className="featured-catalog-table">
-          <div className="featured-row">
-            <span className="featured-row-label">Original Creator</span>
-            <span className="featured-row-value">{artistDisplay}</span>
-          </div>
-          <div className="featured-row">
-            <span className="featured-row-label">Registered By</span>
-            <span className="featured-row-value">{registeredBy}</span>
-          </div>
-          {category && (
-            <div className="featured-row">
-              <span className="featured-row-label">Collection</span>
-              <span className="featured-row-value">{category}</span>
-            </div>
-          )}
-          {artwork.creation_year && (
-            <div className="featured-row">
-              <span className="featured-row-label">Year</span>
-              <span className="featured-row-value">{formatYear(artwork.creation_year)}</span>
-            </div>
-          )}
-          {artwork.material_used && (
-            <div className="featured-row">
-              <span className="featured-row-label">Medium</span>
-              <span className="featured-row-value">{artwork.material_used}</span>
-            </div>
-          )}
-          {artwork.art_style && (
-            <div className="featured-row">
-              <span className="featured-row-label">Art Style</span>
-              <span className="featured-row-value">{artwork.art_style}</span>
-            </div>
-          )}
-          {artwork.dimensions && (
-            <div className="featured-row">
-              <span className="featured-row-label">Dimensions</span>
-              <span className="featured-row-value">{artwork.dimensions}</span>
-            </div>
-          )}
-          {artwork.collector_or_pricing && (
-            <div className="featured-row">
-              <span className="featured-row-label">Current Status</span>
-              <span className="featured-row-value">{artwork.collector_or_pricing}</span>
-            </div>
-          )}
-          {artwork.price != null && (
-            <div className="featured-row">
-              <span className="featured-row-label">Valuation</span>
-              <span className="featured-row-value featured-valuation">${Number(artwork.price).toLocaleString()}</span>
-            </div>
-          )}
-          <div className="featured-row">
-            <span className="featured-row-label">Registered</span>
-            <span className="featured-row-value">
-              {new Date(artwork.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-            </span>
-          </div>
-        </div>
-        <button className="featured-view-btn" onClick={onClick}>Open Catalog Entry →</button>
-      </div>
-    </section>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════
 // MAIN DASHBOARD COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -417,13 +301,11 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   const [currentPage, setCurrentPage] = useState(1);
   const [activeDiscoveryPath, setActiveDiscoveryPath] = useState<DiscoveryPath>('unexpected');
   const [discoveryPathSeed, setDiscoveryPathSeed] = useState(0);
-  const [activeDiscoveryEra, setActiveDiscoveryEra] = useState<DiscoveryEra>('all');
   const [spotlightIndex, setSpotlightIndex] = useState(0);
   const [spotlightPaused, setSpotlightPaused] = useState(false);
   const [dialogueIndex, setDialogueIndex] = useState(0);
   const itemsPerPage = 10;
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const promenadeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mobileFiltersOpen) return;
@@ -721,24 +603,6 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     return Array.from({ length: 6 }, (_, index) => artworks[index * step]).filter(Boolean);
   }, [artworks, curatedDiscoverWorks]);
 
-  const discoveryEraCounts = useMemo(() => {
-    return DISCOVERY_ERAS.reduce<Record<DiscoveryEra, number>>((counts, era) => {
-      counts[era.id] = artworks.filter((artwork) => artworkMatchesEra(artwork, era.id)).length;
-      return counts;
-    }, { all: 0, 'before-1800': 0, '1800s': 0, 'early-1900s': 0, 'post-1950': 0 });
-  }, [artworks]);
-
-  const discoveryEraPool = useMemo(
-    () => artworks.filter((artwork) => artworkMatchesEra(artwork, activeDiscoveryEra)),
-    [activeDiscoveryEra, artworks]
-  );
-
-  const discoverySelection = useMemo(() => {
-    if (discoveryEraPool.length <= 3) return discoveryEraPool;
-    const step = Math.max(1, Math.floor(discoveryEraPool.length / 3));
-    return [discoveryEraPool[0], discoveryEraPool[step], discoveryEraPool[step * 2]];
-  }, [discoveryEraPool]);
-
   const spotlightArtists = useMemo(() => {
     const groups = new Map<string, Artwork[]>();
     artworks.forEach((artwork) => {
@@ -814,9 +678,9 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
   }
 
   function openSurpriseArtwork() {
-    if (discoveryEraPool.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * discoveryEraPool.length);
-    setActiveArtwork(discoveryEraPool[randomIndex]);
+    if (artworks.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * artworks.length);
+    setActiveArtwork(artworks[randomIndex]);
   }
 
   function moveArtistSpotlight(direction: number) {
@@ -842,27 +706,6 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     setCurrentPage(1);
   }
 
-  function movePromenade(direction: number) {
-    const viewport = promenadeRef.current;
-    if (!viewport) return;
-    viewport.scrollBy({ left: direction * viewport.clientWidth * 0.72, behavior: 'smooth' });
-  }
-
-  // Administrators may curate the Discover rotation; otherwise use recent works.
-  const [featuredIndex, setFeaturedIndex] = useState(0);
-  const featuredRotationWorks = curatedDiscoverWorks.length > 0
-    ? curatedDiscoverWorks
-    : artworks.slice(0, 5);
-  
-  useEffect(() => {
-    if (featuredRotationWorks.length === 0) return;
-    setFeaturedIndex(0);
-    const timer = setInterval(() => {
-      setFeaturedIndex(prev => (prev + 1) % featuredRotationWorks.length);
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [featuredRotationWorks.length]);
-
   useEffect(() => {
     if (mode !== 'discover' || spotlightPaused || spotlightArtists.length < 2) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -872,15 +715,13 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
     return () => window.clearInterval(timer);
   }, [mode, spotlightArtists.length, spotlightPaused]);
 
-  const featuredArtwork = featuredRotationWorks[featuredIndex % Math.max(featuredRotationWorks.length, 1)] || null;
   const showDiscoveryExperience = mode === 'discover' && !loading && !loadError && artworks.length > 0 && !searchQuery && activeCategory === 'all' && activeMedium === 'all' && activeArtist === 'all' && activePriceRange === 'all';
-  const showFeatured = showDiscoveryExperience && featuredArtwork;
   const showCatalogIndex = mode === 'registry' || !showDiscoveryExperience;
 
   useEffect(() => {
     if (!showDiscoveryExperience) return;
     const elements = Array.from(document.querySelectorAll<HTMLElement>(
-      '.discovery-portal, .featured-acquisition, .curatorial-lens, .museum-promenade, .artist-spotlight, .visual-dialogue'
+      '.discovery-portal, .curatorial-lens, .museum-promenade, .artist-spotlight, .visual-dialogue'
     ));
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion) {
@@ -1111,14 +952,60 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
           <section className="discovery-portal" aria-labelledby="discovery-portal-title">
             <div className="discovery-portal-copy">
               <div className="discovery-portal-eyebrow">
-                <span>Discovery Room</span>
-                <span>{artworks.length} works in motion</span>
+                <span>ArtVault / Discover</span>
+                <span>{artworks.length} works</span>
               </div>
-              <h1 id="discovery-portal-title">Begin with what catches your eye.</h1>
+              <h1 id="discovery-portal-title">Look closer.<br /><em>Stay curious.</em></h1>
               <p className="discovery-portal-intro">
-                Move through the collection by instinct, material, period, and unexpected kinship.
+                A quiet encounter with works selected from across the archive. Follow an instinct, then let the collection lead you somewhere unexpected.
               </p>
+              <div className="discovery-portal-actions">
+                <button
+                  type="button"
+                  onClick={() => setDiscoveryPathSeed((seed) => seed + 7)}
+                  disabled={discoveryPathWorks.length < 2}
+                >
+                  <Shuffle size={15} /> Show another
+                </button>
+                <button type="button" className="discovery-surprise-action" onClick={openSurpriseArtwork} disabled={artworks.length === 0}>
+                  Surprise me
+                </button>
+              </div>
+            </div>
 
+            <div className="discovery-portal-stage">
+              {discoveryPathWorks.slice(0, 1).map((artwork) => (
+                <button
+                  key={`${activeDiscoveryPath}-${artwork.id}`}
+                  type="button"
+                  className="discovery-portal-work discovery-portal-work-featured"
+                  onClick={() => setActiveArtwork(artwork)}
+                  aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
+                >
+                  <img
+                    src={optimizedUrl(artwork.image_url, 1600, 92)}
+                    alt=""
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                      event.currentTarget.parentElement?.classList.add('image-unavailable');
+                    }}
+                  />
+                  <span className="discovery-portal-work-shade" />
+                  <span className="discovery-portal-work-copy">
+                    <small>{getRegistryNumber(artwork.id)} / {formatYear(artwork.creation_year) || 'Undated'}</small>
+                    <strong>{artwork.title}</strong>
+                    <span>{getOriginalCreator(artwork)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="discovery-lens-bar">
+              <div className="discovery-lens-intro" aria-live="polite">
+                <span>Explore by lens</span>
+                <p>{activeDiscoveryPathMeta.description}</p>
+              </div>
               <div className="discovery-path-nav" aria-label="Choose a discovery path">
                 {DISCOVERY_PATHS.map((path) => (
                   <button
@@ -1137,53 +1024,6 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
                   </button>
                 ))}
               </div>
-
-              <div className="discovery-path-note" aria-live="polite">
-                <div>
-                  <span>Current path</span>
-                  <p>{activeDiscoveryPathMeta.description}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDiscoveryPathSeed((seed) => seed + 7)}
-                  disabled={discoveryPathWorks.length < 2}
-                >
-                  <Shuffle size={15} /> Reshuffle
-                </button>
-              </div>
-            </div>
-
-            <div className="discovery-portal-stage">
-              {discoveryPathWorks.map((artwork, index) => (
-                <button
-                  key={`${activeDiscoveryPath}-${artwork.id}`}
-                  type="button"
-                  className={`discovery-portal-work discovery-portal-work-${index + 1}`}
-                  onClick={() => setActiveArtwork(artwork)}
-                  aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
-                >
-                  <span
-                    className="discovery-portal-work-backdrop"
-                    style={{ backgroundImage: `url("${optimizedUrl(artwork.image_url, 1000, 82)}")` }}
-                    aria-hidden="true"
-                  />
-                  <img
-                    src={optimizedUrl(artwork.image_url, index === 0 ? 1200 : 800, 88)}
-                    alt=""
-                    decoding="async"
-                    onError={(event) => {
-                      event.currentTarget.style.display = 'none';
-                      event.currentTarget.parentElement?.classList.add('image-unavailable');
-                    }}
-                  />
-                  <span className="discovery-portal-work-shade" />
-                  <span className="discovery-portal-work-copy">
-                    <small>{String(index + 1).padStart(2, '0')} / {formatYear(artwork.creation_year) || 'Undated'}</small>
-                    <strong>{artwork.title}</strong>
-                    <span>{getOriginalCreator(artwork)}</span>
-                  </span>
-                </button>
-              ))}
             </div>
           </section>
         )}
@@ -1247,101 +1087,20 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
           </div>
         </div>}
 
-        {/* ── Featured Acquisition ──────────────────────────── */}
-        {showFeatured && featuredArtwork && (
-          <FeaturedAcquisition key={featuredArtwork.id} artwork={featuredArtwork} onClick={() => setActiveArtwork(featuredArtwork)} />
-        )}
-
         {/* ── Curatorial Lens ───────────────────────────────── */}
-        {showDiscoveryExperience && artworks.length > 0 && (
-          <section className="curatorial-lens" aria-labelledby="curatorial-lens-title">
-            <div className="curatorial-lens-header">
-              <div className="curatorial-lens-heading">
-                <span className="curatorial-lens-kicker">Curatorial Lens</span>
-                <h2 id="curatorial-lens-title">A route through time</h2>
-                <p>Five centuries of practice, material, and provenance drawn from the live collection.</p>
-              </div>
-              <button
-                type="button"
-                className="curatorial-surprise-btn"
-                onClick={openSurpriseArtwork}
-                disabled={discoveryEraPool.length === 0}
-              >
-                <Shuffle size={16} /> Surprise Me
-              </button>
-            </div>
-
-            <div className="curatorial-era-nav" aria-label="Browse discovery works by period">
-              {DISCOVERY_ERAS.map((era) => (
-                <button
-                  key={era.id}
-                  type="button"
-                  className={activeDiscoveryEra === era.id ? 'active' : ''}
-                  aria-pressed={activeDiscoveryEra === era.id}
-                  disabled={discoveryEraCounts[era.id] === 0}
-                  onClick={() => setActiveDiscoveryEra(era.id)}
-                >
-                  <span>{era.label}</span>
-                  <small>{discoveryEraCounts[era.id]}</small>
-                </button>
-              ))}
-            </div>
-
-            {discoverySelection.length > 0 ? (
-              <div className="curatorial-mosaic">
-                {discoverySelection.map((artwork, index) => (
-                  <button
-                    key={artwork.id}
-                    type="button"
-                    className={`curatorial-work ${index === 0 ? 'curatorial-work-primary' : ''}`}
-                    onClick={() => setActiveArtwork(artwork)}
-                    aria-label={`Open ${artwork.title} by ${getOriginalCreator(artwork)}`}
-                  >
-                    <img
-                      src={optimizedUrl(artwork.image_url, index === 0 ? 1200 : 700, 86)}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      onError={(event) => {
-                        event.currentTarget.style.display = 'none';
-                        event.currentTarget.parentElement?.classList.add('image-unavailable');
-                      }}
-                    />
-                    <span className="curatorial-work-shade" />
-                    <span className="curatorial-work-copy">
-                      <small>{getRegistryNumber(artwork.id)}{artwork.creation_year ? ` / ${formatYear(artwork.creation_year)}` : ''}</small>
-                      <strong>{artwork.title}</strong>
-                      <span>{getOriginalCreator(artwork)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="curatorial-empty">No dated works are available for this period.</div>
-            )}
-          </section>
-        )}
-
         {/* ── Museum Promenade ──────────────────────────────── */}
         {showDiscoveryExperience && promenadeWorks.length > 0 && (
           <section className="museum-promenade" aria-labelledby="museum-promenade-title">
             <div className="museum-promenade-header">
               <div>
-                <span className="museum-promenade-kicker">Open Display / Gallery 01</span>
-                <h2 id="museum-promenade-title">The collection, installed</h2>
-                <p>A changing salon of works brought out of the archive and into conversation.</p>
+                <span className="museum-promenade-kicker">Open Display / Curator's Selection</span>
+                <h2 id="museum-promenade-title">Selected for this room</h2>
+                <p>A concise edit of works chosen for the public Discover display.</p>
               </div>
-              <div className="museum-promenade-controls" aria-label="Move through the gallery display">
-                <button type="button" onClick={() => movePromenade(-1)} aria-label="Previous gallery works" title="Previous works">
-                  <ChevronLeft size={19} />
-                </button>
-                <button type="button" onClick={() => movePromenade(1)} aria-label="Next gallery works" title="Next works">
-                  <ChevronRight size={19} />
-                </button>
-              </div>
+              <span className="museum-promenade-count">{promenadeWorks.length} works on view</span>
             </div>
 
-            <div className="museum-promenade-viewport" ref={promenadeRef}>
+            <div className="museum-promenade-viewport">
               <div className="museum-promenade-wall">
                 {promenadeWorks.map((artwork, index) => (
                   <article key={artwork.id} className={`museum-promenade-piece museum-promenade-piece-${index % 3}`}>
@@ -1373,7 +1132,10 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
                 ))}
               </div>
             </div>
-            <div className="museum-promenade-floorline" aria-hidden="true"><span>ArtVault / Permanent Collection</span></div>
+            <div className="museum-promenade-floorline" aria-hidden="true">
+              <span>ArtVault / Permanent Collection</span>
+              <span>Open Display</span>
+            </div>
           </section>
         )}
 
@@ -1415,7 +1177,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
 
             <div className="artist-spotlight-info">
               <div className="artist-spotlight-topline">
-                <span className="artist-spotlight-kicker">Artist Spotlight</span>
+                <span className="artist-spotlight-kicker">Artist in Focus / Gallery 03</span>
                 <div className="artist-spotlight-controls">
                   <button type="button" onClick={() => moveArtistSpotlight(-1)} aria-label="Previous featured artist" title="Previous artist">
                     <ChevronLeft size={18} />
@@ -1448,7 +1210,7 @@ export default function Dashboard({ user, mode = 'discover' }: { user: any; mode
           <section className="visual-dialogue" aria-labelledby="visual-dialogue-title">
             <div className="visual-dialogue-header">
               <div>
-                <span className="visual-dialogue-kicker">Visual Dialogue</span>
+                <span className="visual-dialogue-kicker">Study Room / Visual Dialogue</span>
                 <h2 id="visual-dialogue-title">Two records, one conversation</h2>
               </div>
               <button type="button" className="visual-dialogue-refresh" onClick={() => setDialogueIndex((current) => current + 1)}>

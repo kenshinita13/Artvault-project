@@ -7,7 +7,7 @@ import Avatar from './Avatar';
 import CreatePanel from './CreatePanel';
 import { useCachedQuery } from './useCachedQuery';
 import './Dashboard.css';
-import { canUpload, canAccessAdmin, canAccessModeration } from './roles';
+import { canUpload, canAccessAdmin, canAccessStaffConsole } from './roles';
 
 export default function Layout({ user }: { user: any }) {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
@@ -55,6 +55,7 @@ export default function Layout({ user }: { user: any }) {
         { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
         async (payload) => {
           const newData = payload.new;
+          setProfile((current: any) => ({ ...(current || {}), ...newData }));
           if (newData.status === 'banned') {
             await supabase.auth.signOut();
             toast.error('Your account has just been permanently banned by an administrator.');
@@ -77,10 +78,12 @@ export default function Layout({ user }: { user: any }) {
   }, [location.pathname]);
 
   useEffect(() => {
-    const openPublisher = () => setCreatePanelOpen(true);
+    const openPublisher = () => {
+      if (canUpload(profile?.role)) setCreatePanelOpen(true);
+    };
     window.addEventListener('open-artvault-publisher', openPublisher);
     return () => window.removeEventListener('open-artvault-publisher', openPublisher);
-  }, []);
+  }, [profile?.role]);
 
   useEffect(() => {
     if (!avatarMenuOpen) return;
@@ -114,7 +117,9 @@ export default function Layout({ user }: { user: any }) {
     { path: '/home', label: 'Discover', icon: Home },
     { path: '/registry', label: 'Registry', icon: Archive },
     { path: '/artists', label: 'Artists', icon: Users },
-    { path: '/about', label: 'About', icon: Info },
+    ...(canAccessStaffConsole(profile?.role)
+      ? [{ path: '/admin_panel', label: 'Workspace', icon: Shield }]
+      : [{ path: '/about', label: 'About', icon: Info }]),
     ...(user ? [{ path: `/profile/${user.id}`, label: 'Profile', icon: User }] : []),
   ];
 
@@ -150,15 +155,25 @@ export default function Layout({ user }: { user: any }) {
         <div className="nav-actions shrink-0 hidden md:flex items-center">
           {user ? (
             <div ref={accountMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {canAccessStaffConsole(profile?.role) && (
+                <Link
+                  to="/admin_panel"
+                  className="btn staff-workspace-link whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
+                  style={{ border: '1px solid #8e7450', borderRadius: '4px', color: '#503d25', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '7px' }}
+                  aria-label="Open operations workspace"
+                >
+                  <Shield size={16} strokeWidth={1.8} aria-hidden="true" />
+                  Workspace
+                </Link>
+              )}
               {canUpload(profile?.role) && (
                 <button
                   onClick={() => setCreatePanelOpen(true)}
-                  className="btn btn-primary register-work-btn whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
-                  style={{ background: '#b8975a', border: 'none', borderRadius: '4px', color: '#1c1917', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}
+                  className="mobile-register-work-btn"
                   aria-label="Register a new artwork"
+                  title="Register artwork"
                 >
-                  <ImagePlus className="register-work-icon" size={17} aria-hidden="true" />
-                  <span className="register-work-label">Register Work</span>
+                  <ImagePlus size={19} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               )}
               <button
@@ -177,20 +192,34 @@ export default function Layout({ user }: { user: any }) {
                   <span className="dropdown-name">{user.user_metadata?.name || 'User'}</span>
                   <span className="dropdown-email">{user.email}</span>
                 </div>
+                {canUpload(profile?.role) && (
+                  <>
+                    <button
+                      type="button"
+                      className="dropdown-item dropdown-item-register"
+                      onClick={() => {
+                        setAvatarMenuOpen(false);
+                        setCreatePanelOpen(true);
+                      }}
+                    >
+                      <ImagePlus size={16} /> Register New Artwork
+                    </button>
+                    <hr className="dropdown-divider" />
+                  </>
+                )}
                 <Link to={`/profile/${user.id}`} className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
                   <User size={16} /> My Profile
                 </Link>
                 <Link to="/settings" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
                   <Settings size={16} /> Profile Settings
                 </Link>
-                {canAccessAdmin(profile?.role) && (
+                {canAccessStaffConsole(profile?.role) && (
                   <Link to="/admin_panel" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
-                    <Shield size={16} /> Administrator Panel
-                  </Link>
-                )}
-                {canAccessModeration(profile?.role) && (
-                  <Link to="/moderation" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
-                    <Shield size={16} /> Moderation Panel
+                    <Shield size={16} /> {canAccessAdmin(profile?.role)
+                      ? 'Administrator Panel'
+                      : profile?.role === 'moderator'
+                        ? 'Moderation Workspace'
+                        : 'Curatorial Workspace'}
                   </Link>
                 )}
                 <hr className="dropdown-divider" />

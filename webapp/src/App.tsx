@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
-import { canAccessAdmin, canAccessModeration } from './roles';
+import { canAccessStaffConsole } from './roles';
 
 const Layout = lazy(() => import('./Layout'));
 const Dashboard = lazy(() => import('./Dashboard'));
@@ -12,61 +12,10 @@ const UserProfile = lazy(() => import('./UserProfile'));
 const CollageView = lazy(() => import('./CollageView'));
 const Settings = lazy(() => import('./Settings'));
 const AdminPanel = lazy(() => import('./AdminPanel'));
-const ModerationPanel = lazy(() => import('./ModerationPanel'));
 const LandingPage = lazy(() => import('./LandingPage'));
 const About = lazy(() => import('./About'));
 const LegalPage = lazy(() => import('./LegalPage'));
 const AuthForm = lazy(() => import('./AuthForm'));
-
-function RoleGate({
-  user,
-  allow,
-  children,
-}: {
-  user: any;
-  allow: (role: string) => boolean;
-  children: React.ReactNode;
-}) {
-  const [state, setState] = useState<'checking' | 'allowed' | 'denied'>('checking');
-
-  useEffect(() => {
-    let active = true;
-
-    async function checkRole() {
-      if (!user?.id) {
-        setState('denied');
-        return;
-      }
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('role, status, suspension_end')
-        .eq('id', user.id)
-        .single();
-
-      if (!active) return;
-      const restrictionExpired = data?.status === 'suspended'
-        && data.suspension_end
-        && new Date(data.suspension_end) <= new Date();
-      const hasActiveAccess = data?.status === 'active' || restrictionExpired;
-      setState(data && hasActiveAccess && allow(data.role) ? 'allowed' : 'denied');
-    }
-
-    setState('checking');
-    checkRole();
-
-    return () => {
-      active = false;
-    };
-  }, [user?.id, allow]);
-
-  if (!user) return <Navigate to="/login" replace />;
-  if (state === 'checking') {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>Checking Access...</div>;
-  }
-  if (state === 'denied') return <Navigate to="/home" replace />;
-  return <>{children}</>;
-}
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -217,10 +166,8 @@ function App() {
       setIsValidatingLogin(false);
       setShowMfaChallenge(false);
       
-      if (userRole === 'admin') {
+      if (canAccessStaffConsole(userRole)) {
         navigate('/admin_panel');
-      } else if (userRole === 'moderator') {
-        navigate('/moderation');
       } else {
         navigate('/home');
       }
@@ -274,19 +221,11 @@ function App() {
           <Route path="/settings" element={session ? <Settings user={session.user} /> : <Navigate to="/login" replace />} />
           <Route
             path="/admin_panel"
-            element={
-              <RoleGate user={session?.user || null} allow={canAccessAdmin}>
-                <AdminPanel user={session?.user || null} />
-              </RoleGate>
-            }
+            element={session ? <AdminPanel user={session.user} /> : <Navigate to="/login" replace />}
           />
           <Route
             path="/moderation"
-            element={
-              <RoleGate user={session?.user || null} allow={canAccessModeration}>
-                <ModerationPanel user={session?.user || null} />
-              </RoleGate>
-            }
+            element={session ? <Navigate to="/admin_panel" replace /> : <Navigate to="/login" replace />}
           />
           
           <Route path="*" element={<Navigate to="/home" replace />} />

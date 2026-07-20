@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 import { logAudit } from './auditHelper';
-import { ROLES, type ArtVaultRole, canAccessAdmin } from './roles';
+import {
+  ROLES,
+  type ArtVaultRole,
+  canAccessAdmin,
+  canAccessModeration,
+  canAccessStaffConsole,
+  canCurateRegistry,
+} from './roles';
 import CreatePanel from './CreatePanel';
 import {
   Activity,
@@ -15,6 +22,7 @@ import {
   Flag,
   Images,
   LayoutDashboard,
+  Search,
   ScrollText,
   ShieldCheck,
   UserCog,
@@ -121,6 +129,7 @@ function ConfirmModal({ title, message, danger = false, onConfirm, onCancel, chi
 export default function AdminPanel({ user }: { user: any }) {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [registryLoading, setRegistryLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
 
@@ -165,9 +174,11 @@ export default function AdminPanel({ user }: { user: any }) {
   const [discoverDisplayModalOpen, setDiscoverDisplayModalOpen] = useState(false);
   const [discoverDisplayDraftIds, setDiscoverDisplayDraftIds] = useState<string[]>([]);
   const [discoverDisplaySearch, setDiscoverDisplaySearch] = useState('');
+  const [discoverDisplayPage, setDiscoverDisplayPage] = useState(1);
   const [discoverDisplaySaving, setDiscoverDisplaySaving] = useState(false);
   const [suspendDays, setSuspendDays]       = useState('7');
   const [pendingRole, setPendingRole]       = useState('');
+  const [roleSaving, setRoleSaving]         = useState(false);
 
   // Pagination
   const PER_PAGE = 12;
@@ -178,6 +189,30 @@ export default function AdminPanel({ user }: { user: any }) {
 
   // ── Fetch ────────────────────────────────────────────────────────
   useEffect(() => { init(); }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`workspace-access:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        payload => {
+          const updatedProfile = payload.new;
+          setProfile((current: any) => ({ ...(current || {}), ...updatedProfile }));
+
+          if (updatedProfile.role === 'moderator') setTab('reports');
+          if (updatedProfile.role === 'curator') setTab('registry');
+          if (updatedProfile.role === 'admin') setTab('dashboard');
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!discoverDisplayModalOpen) return;
@@ -200,14 +235,34 @@ export default function AdminPanel({ user }: { user: any }) {
 
   async function init() {
     setLoading(true);
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, name, username, role, status, suspension_end')
+      .eq('id', user.id)
+      .single();
+
     if (data) {
       setProfile(data);
-      if (canAccessAdmin(data.role)) {
-        await Promise.all([fetchUsers(), fetchArtworks(), fetchReports(), fetchLogs(), fetchCategories(), fetchBoards()]);
+      if (canAccessStaffConsole(data.role)) {
+        setTab(canAccessAdmin(data.role) ? 'dashboard' : data.role === 'moderator' ? 'reports' : 'registry');
+        setLoading(false);
+        void loadWorkspaceData(data.role);
+        return;
       }
     }
     setLoading(false);
+  }
+
+  async function loadWorkspaceData(role: string) {
+    setRegistryLoading(true);
+    const registryTask = Promise.all([fetchArtworks(), fetchCategories()])
+      .finally(() => setRegistryLoading(false));
+    const tasks: Promise<unknown>[] = [registryTask];
+
+    if (canAccessModeration(role)) tasks.push(fetchReports());
+    if (canAccessAdmin(role)) tasks.push(fetchUsers(), fetchLogs(), fetchBoards());
+
+    await Promise.allSettled(tasks);
   }
 
   async function fetchUsers() {
@@ -218,7 +273,7 @@ export default function AdminPanel({ user }: { user: any }) {
   async function fetchArtworks() {
     const { data } = await supabase
       .from('artworks')
-      .select('*, profiles(id, name, username, role), artwork_categories(category_id, categories(id, name, slug))')
+      .select('id, user_id, title, description, image_url, artist_name, creation_year, material_used, art_style, dimensions, collector_or_pricing, price, tags, discover_display_rank, created_at, profiles(id, name, username, role), artwork_categories(category_id, categories(id, name, slug))')
       .order('created_at', { ascending: false });
     if (data) setAllArtworks(data);
   }
@@ -314,6 +369,14 @@ export default function AdminPanel({ user }: { user: any }) {
     artwork.art_style,
     artwork.profiles?.username,
   ].some(value => String(value || '').toLowerCase().includes(normalizedDiscoverDisplaySearch)));
+  const DISCOVER_DISPLAY_PAGE_SIZE = 10;
+  const discoverDisplayPageCount = Math.max(1, Math.ceil(discoverDisplayCandidates.length / DISCOVER_DISPLAY_PAGE_SIZE));
+  const safeDiscoverDisplayPage = Math.min(discoverDisplayPage, discoverDisplayPageCount);
+  const discoverDisplayPageStart = (safeDiscoverDisplayPage - 1) * DISCOVER_DISPLAY_PAGE_SIZE;
+  const pagedDiscoverDisplayCandidates = discoverDisplayCandidates.slice(
+    discoverDisplayPageStart,
+    discoverDisplayPageStart + DISCOVER_DISPLAY_PAGE_SIZE
+  );
 
   const filteredReports = reports.filter(r => {
     const q = reportSearch.toLowerCase();
@@ -414,15 +477,26 @@ export default function AdminPanel({ user }: { user: any }) {
   };
 
   const handleChangeRole = async () => {
-    if (!roleModal || !pendingRole) return;
+    if (!roleModal || !pendingRole || roleSaving) return;
     if (roleModal.id === user.id) { toast.error("Cannot change your own role."); return; }
     if (roleModal.role === 'admin') { toast.error('Administrator accounts are protected from role changes.'); return; }
     if (!ROLES[pendingRole as ArtVaultRole]) { toast.error('Invalid role selected.'); return; }
-    const { error } = await supabase.from('profiles').update({ role: pendingRole }).eq('id', roleModal.id);
-    if (error) { toast.error(error.message); return; }
-    setAllUsers(prev => prev.map(u => u.id === roleModal.id ? { ...u, role: pendingRole } : u));
-    logAudit('Role Changed', `Changed @${roleModal.username} role to ${pendingRole}.`);
-    toast.success(`Role updated to ${ROLES[pendingRole as ArtVaultRole]?.label || pendingRole}.`);
+    setRoleSaving(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ role: pendingRole })
+      .eq('id', roleModal.id)
+      .select('id, role')
+      .single();
+    if (error || !data) {
+      toast.error(error?.message || 'The role update was not accepted by the database.');
+      setRoleSaving(false);
+      return;
+    }
+    setAllUsers(prev => prev.map(u => u.id === roleModal.id ? { ...u, role: data.role } : u));
+    await logAudit('Role Changed', `Changed @${roleModal.username} role to ${data.role}.`);
+    toast.success(`Role updated to ${ROLES[data.role as ArtVaultRole]?.label || data.role}.`);
+    setRoleSaving(false);
     setRoleModal(null);
   };
 
@@ -482,7 +556,7 @@ export default function AdminPanel({ user }: { user: any }) {
     const { error } = await supabase.from('artworks').delete().eq('id', deleteArtworkModal.id);
     if (error) { toast.error(error.message); return; }
     setAllArtworks(prev => prev.filter(a => a.id !== deleteArtworkModal.id));
-    logAudit('Artwork Deleted', `Admin deleted artwork: ${deleteArtworkModal.title}.`);
+    logAudit('Artwork Deleted', `${workspaceLabel} deleted artwork: ${deleteArtworkModal.title}.`);
     toast.success('Artwork removed from registry.');
     setDeleteArtworkModal(null);
   };
@@ -545,6 +619,7 @@ export default function AdminPanel({ user }: { user: any }) {
   const openDiscoverDisplayManager = () => {
     setDiscoverDisplayDraftIds(discoverDisplayArtworks.map(artwork => artwork.id));
     setDiscoverDisplaySearch('');
+    setDiscoverDisplayPage(1);
     setDiscoverDisplayModalOpen(true);
   };
 
@@ -739,8 +814,8 @@ export default function AdminPanel({ user }: { user: any }) {
   };
 
   // ── Pagination helper ──────────────────────────────────────────────
-  function renderPagination(page: number, setPage: (p: number) => void, total: number) {
-    const pages = Math.ceil(total / PER_PAGE);
+  function renderPagination(page: number, setPage: (p: number) => void, total: number, pageSize = PER_PAGE) {
+    const pages = Math.ceil(total / pageSize);
     if (pages <= 1) return null;
     return (
       <div className="ap-pagination">
@@ -751,19 +826,47 @@ export default function AdminPanel({ user }: { user: any }) {
     );
   }
 
+  const profileRole = String(profile?.role || '');
+  const isAdministrator = canAccessAdmin(profileRole);
+  const canModerate = canAccessModeration(profileRole);
+  const canCurate = canCurateRegistry(profileRole);
+  const restrictionExpired = profile?.status === 'suspended'
+    && profile.suspension_end
+    && new Date(profile.suspension_end) <= new Date();
+  const hasActiveWorkspaceAccess = profile?.status === 'active' || restrictionExpired;
+  const workspaceLabel = isAdministrator
+    ? 'Administrator'
+    : profileRole === 'moderator'
+      ? 'Moderator'
+      : 'Curator';
+  const navigationItems: Array<{
+    id: Tab;
+    icon: typeof LayoutDashboard;
+    label: string;
+    badge?: number;
+  }> = [
+    ...(isAdministrator ? [
+      { id: 'dashboard' as Tab, icon: LayoutDashboard, label: 'Dashboard' },
+      { id: 'users' as Tab, icon: Users, label: 'Users & Roles' },
+    ] : []),
+    ...(canCurate ? [{ id: 'registry' as Tab, icon: Images, label: 'Art Registry' }] : []),
+    ...(canModerate ? [{ id: 'reports' as Tab, icon: Flag, label: 'Reports', badge: stats.pendingReports }] : []),
+    ...(isAdministrator ? [{ id: 'logs' as Tab, icon: ScrollText, label: 'Audit Logs' }] : []),
+  ];
+
   // ── Guards ─────────────────────────────────────────────────────────
   if (loading) return (
     <div className="ap-loading">
       <div className="ap-loading-spinner" />
-      <p>Loading Admin Panel…</p>
+      <p>Opening operations workspace...</p>
     </div>
   );
 
-  if (!profile || !canAccessAdmin(profile.role)) return (
+  if (!profile || !hasActiveWorkspaceAccess || !canAccessStaffConsole(profile.role)) return (
     <div className="ap-unauthorized">
       <div className="ap-unauth-icon">⛔</div>
       <h2>Unauthorized Access</h2>
-      <p>You do not have permission to access the Administrator Panel.</p>
+      <p>You do not have permission to access the collection operations console.</p>
     </div>
   );
 
@@ -776,17 +879,11 @@ export default function AdminPanel({ user }: { user: any }) {
         <div className="ap-sidebar-brand">
           <div className="ap-sidebar-mark"><ShieldCheck size={18} strokeWidth={1.8} /></div>
           <div className="ap-sidebar-brand-copy">
-            <span className="ap-sidebar-label">ADMINISTRATION</span>
-            <span className="ap-sidebar-caption">Control center</span>
+            <span className="ap-sidebar-label">{isAdministrator ? 'ADMINISTRATION' : profileRole === 'moderator' ? 'MODERATION' : 'CURATORIAL'}</span>
+            <span className="ap-sidebar-caption">Operations console</span>
           </div>
         </div>
-        {([
-          { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard',      badge: undefined as number | undefined },
-          { id: 'users',     icon: Users,           label: 'Users & Roles',  badge: undefined as number | undefined },
-          { id: 'registry',  icon: Images,          label: 'Art Registry',   badge: undefined as number | undefined },
-          { id: 'reports',   icon: Flag,            label: 'Reports',        badge: stats.pendingReports as number | undefined },
-          { id: 'logs',      icon: ScrollText,      label: 'Audit Logs',     badge: undefined as number | undefined },
-        ] as const).map(item => (
+        {navigationItems.map(item => (
           <button
             key={item.id}
             className={`ap-nav-item ${tab === item.id ? 'active' : ''}`}
@@ -801,7 +898,7 @@ export default function AdminPanel({ user }: { user: any }) {
           <div className="ap-admin-avatar">{(profile.name || profile.username || 'A').charAt(0).toUpperCase()}</div>
           <div className="ap-admin-identity">
             <strong>{profile.name || profile.username}</strong>
-            <span>Administrator</span>
+            <span>{workspaceLabel}</span>
           </div>
         </div>
       </aside>
@@ -810,7 +907,7 @@ export default function AdminPanel({ user }: { user: any }) {
       <main className="ap-main">
 
         {/* ── DASHBOARD ── */}
-        {tab === 'dashboard' && (
+        {tab === 'dashboard' && isAdministrator && (
           <div className="ap-content ap-dashboard-content">
             <div className="ap-page-header">
               <div>
@@ -943,7 +1040,7 @@ export default function AdminPanel({ user }: { user: any }) {
         )}
 
         {/* ── USERS & ROLES ── */}
-        {tab === 'users' && (
+        {tab === 'users' && isAdministrator && (
           <div className="ap-content">
             <div className="ap-page-header">
               <h1 className="ap-page-title">Users & Roles</h1>
@@ -1026,7 +1123,7 @@ export default function AdminPanel({ user }: { user: any }) {
         )}
 
         {/* ── REGISTRY ── */}
-        {tab === 'registry' && (
+        {tab === 'registry' && canCurate && (
           <div className="ap-content">
             <div className="ap-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
@@ -1041,10 +1138,12 @@ export default function AdminPanel({ user }: { user: any }) {
                 {selectedArtist && (
                   <button className="ap-btn ap-btn-ghost" onClick={() => setSelectedArtist(null)}>← All Artworks</button>
                 )}
-                <button className="ap-btn ap-btn-primary" onClick={() => setCreatePanelOpen(true)}>Post on behalf of user</button>
+                {isAdministrator && (
+                  <button className="ap-btn ap-btn-primary" onClick={() => setCreatePanelOpen(true)}>Post on behalf of user</button>
+                )}
               </div>
             </div>
-            {!selectedArtist && (
+            {isAdministrator && !selectedArtist && (
               <section className="ap-card ap-discover-display-panel" aria-labelledby="admin-discover-display-title">
                 <div className="ap-discover-display-header">
                   <div>
@@ -1081,7 +1180,7 @@ export default function AdminPanel({ user }: { user: any }) {
                 )}
               </section>
             )}
-            {selectedArtist && (
+            {isAdministrator && selectedArtist && (
               <div className="ap-card ap-portfolio-panel">
                 <div className="ap-portfolio-panel-header">
                   <div>
@@ -1118,12 +1217,21 @@ export default function AdminPanel({ user }: { user: any }) {
             <div className="ap-card">
               <div className="ap-toolbar">
                 <input className="ap-search" placeholder={selectedArtist ? 'Search in this folder…' : 'Search artwork or artist…'} value={artworkSearch} onChange={e => { setArtworkSearch(e.target.value); setArtworkPage(1); }} />
-                <span className="ap-count">{filteredArtworks.length} works</span>
+                <span className="ap-count">{registryLoading ? 'Syncing registry...' : `${filteredArtworks.length} works`}</span>
               </div>
               <div className="ap-artwork-grid">
+                {registryLoading && (
+                  <div className="ap-inline-loading" role="status" aria-live="polite">
+                    <div className="ap-loading-spinner" />
+                    <div>
+                      <strong>Preparing the registry</strong>
+                      <span>The workspace is ready while collection records finish loading.</span>
+                    </div>
+                  </div>
+                )}
                 {filteredArtworks.slice((artworkPage-1)*PER_PAGE, artworkPage*PER_PAGE).map(a => (
                   <div key={a.id} className="ap-artwork-card">
-                    <img src={a.image_url} alt={a.title} className="ap-artwork-img" />
+                    <img src={a.image_url} alt={a.title} className="ap-artwork-img" loading="lazy" decoding="async" />
                     <div className="ap-artwork-body">
                       <div className="ap-artwork-title">{a.title}</div>
                       <div className="ap-artwork-artist">
@@ -1142,7 +1250,7 @@ export default function AdminPanel({ user }: { user: any }) {
                       {a.description && <div className="ap-artwork-desc">{a.description}</div>}
                     </div>
                     <div className="ap-artwork-actions">
-                      {selectedArtistBoards.length > 0 && (
+                      {isAdministrator && selectedArtistBoards.length > 0 && (
                         <button
                           className="ap-btn ap-btn-sm ap-btn-ghost"
                           onClick={() => openPortfolioManager(selectedArtistBoards[0])}
@@ -1167,19 +1275,21 @@ export default function AdminPanel({ user }: { user: any }) {
                           image_url: a.image_url || '',
                         });
                       }}>Edit</button>
-                      <button className="ap-btn ap-btn-sm ap-btn-danger" onClick={() => setDeleteArtworkModal(a)}>Remove</button>
+                      {canModerate && (
+                        <button className="ap-btn ap-btn-sm ap-btn-danger" onClick={() => setDeleteArtworkModal(a)}>Remove</button>
+                      )}
                     </div>
                   </div>
                 ))}
-                {filteredArtworks.length === 0 && <p className="ap-empty">No artworks found.</p>}
+                {!registryLoading && filteredArtworks.length === 0 && <p className="ap-empty">No artworks found.</p>}
               </div>
-              {renderPagination(artworkPage, setArtworkPage, filteredArtworks.length)}
+              {!registryLoading && renderPagination(artworkPage, setArtworkPage, filteredArtworks.length)}
             </div>
           </div>
         )}
 
         {/* ── REPORTS ── */}
-        {tab === 'reports' && (
+        {tab === 'reports' && canModerate && (
           <div className="ap-content">
             <div className="ap-page-header">
               <h1 className="ap-page-title">Reports & Tickets</h1>
@@ -1244,7 +1354,7 @@ export default function AdminPanel({ user }: { user: any }) {
         )}
 
         {/* ── AUDIT LOGS ── */}
-        {tab === 'logs' && (
+        {tab === 'logs' && isAdministrator && (
           <div className="ap-content">
             <div className="ap-page-header">
               <h1 className="ap-page-title">Audit Logs</h1>
@@ -1354,7 +1464,10 @@ export default function AdminPanel({ user }: { user: any }) {
                   className="ap-search"
                   type="search"
                   value={discoverDisplaySearch}
-                  onChange={event => setDiscoverDisplaySearch(event.target.value)}
+                  onChange={event => {
+                    setDiscoverDisplaySearch(event.target.value);
+                    setDiscoverDisplayPage(1);
+                  }}
                   placeholder="Search title, creator, year, medium, or registrant"
                 />
                 <strong>{discoverDisplayDraftIds.length} of 6 selected</strong>
@@ -1385,7 +1498,7 @@ export default function AdminPanel({ user }: { user: any }) {
               )}
 
               <div className="ap-discover-display-picker">
-                {discoverDisplayCandidates.map(artwork => {
+                {pagedDiscoverDisplayCandidates.map(artwork => {
                   const selectedIndex = discoverDisplayDraftIds.indexOf(artwork.id);
                   return (
                     <article key={artwork.id} className={`ap-discover-display-candidate ${selectedIndex >= 0 ? 'selected' : ''}`}>
@@ -1405,7 +1518,23 @@ export default function AdminPanel({ user }: { user: any }) {
                     </article>
                   );
                 })}
+                {discoverDisplayCandidates.length === 0 && (
+                  <div className="ap-discover-display-empty">
+                    <Search size={20} aria-hidden="true" />
+                    <strong>No matching artworks</strong>
+                    <span>Try a title, creator, year, medium, or registrant.</span>
+                  </div>
+                )}
               </div>
+
+              {discoverDisplayCandidates.length > 0 && (
+                <div className="ap-discover-display-pagination">
+                  <span>
+                    Showing {discoverDisplayPageStart + 1}-{Math.min(discoverDisplayPageStart + DISCOVER_DISPLAY_PAGE_SIZE, discoverDisplayCandidates.length)} of {discoverDisplayCandidates.length} works
+                  </span>
+                  {renderPagination(safeDiscoverDisplayPage, setDiscoverDisplayPage, discoverDisplayCandidates.length, DISCOVER_DISPLAY_PAGE_SIZE)}
+                </div>
+              )}
 
               <div className="ap-modal-actions ap-discover-display-modal-actions">
                 <button className="ap-btn ap-btn-ghost" onClick={() => setDiscoverDisplayModalOpen(false)} disabled={discoverDisplaySaving}>Cancel</button>
@@ -1420,7 +1549,13 @@ export default function AdminPanel({ user }: { user: any }) {
 
       {/* Change Role */}
       {roleModal && (
-        <ConfirmModal title="Change User Role" onConfirm={handleChangeRole} onCancel={() => setRoleModal(null)}>
+        <ConfirmModal
+          title="Change User Role"
+          onConfirm={handleChangeRole}
+          onCancel={() => { if (!roleSaving) setRoleModal(null); }}
+          confirmLabel={roleSaving ? 'Saving Role...' : 'Save Role'}
+          confirmDisabled={roleSaving}
+        >
           <p style={{ color: '#57534e', marginBottom: 16 }}>Changing role for <strong>@{roleModal.username}</strong>:</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
             {(['admin','moderator','curator','artist','user'] as ArtVaultRole[]).map(r => (
@@ -1428,7 +1563,10 @@ export default function AdminPanel({ user }: { user: any }) {
                 <input type="radio" checked={pendingRole === r} onChange={() => setPendingRole(r)} style={{ display: 'none' }} />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <RoleBadge role={r} />
-                  <span style={{ fontSize: 12, color: '#78716c', maxWidth: 240, textAlign: 'right' }}>{ROLES[r].description}</span>
+                  <div className="ap-role-option-copy">
+                    <strong>{ROLES[r].description}</strong>
+                    <span>{ROLES[r].capabilities.join(' · ')}</span>
+                  </div>
                 </div>
               </label>
             ))}
@@ -1799,7 +1937,7 @@ export default function AdminPanel({ user }: { user: any }) {
       )}
 
       {/* Proxy Create Modal */}
-      {createPanelOpen && (
+      {isAdministrator && createPanelOpen && (
         <CreatePanel
           isOpen={createPanelOpen}
           onClose={() => setCreatePanelOpen(false)}
