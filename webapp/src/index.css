@@ -179,11 +179,11 @@ p, span, li, td, th, label, input, select, textarea, button {
    AUTH FORM CARD
    ═══════════════════════════════════════════ */
 .form-box {
-  background: var(--ivory-white);
+  background: #fcfbf9;
   border: 1px solid var(--beige);
-  padding: 48px 44px;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  padding: 40px 32px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
   animation: cardFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
@@ -193,7 +193,7 @@ p, span, li, td, th, label, input, select, textarea, button {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-dark));
+  background: linear-gradient(90deg, #b59b66, #d6c192, #b59b66);
 }
 
 @keyframes cardFadeIn {
@@ -229,8 +229,8 @@ p, span, li, td, th, label, input, select, textarea, button {
 .form-control {
   width: 100%;
   padding: 13px 16px;
-  background: var(--ivory);
-  border: 1px solid var(--beige);
+  background: #eef4fe;
+  border: 1px solid #d2d6dc;
   border-radius: var(--radius-md);
   color: var(--charcoal);
   font-family: var(--font-body);
@@ -244,9 +244,9 @@ p, span, li, td, th, label, input, select, textarea, button {
 }
 
 .form-control:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(184, 151, 90, 0.12);
-  background: var(--ivory-white);
+  border-color: #a0aec0;
+  box-shadow: 0 0 0 3px rgba(160, 174, 192, 0.2);
+  background: #e5effa;
 }
 
 select.form-control {
@@ -268,13 +268,13 @@ select.form-control option {
 .form-box button[type="submit"] {
   width: 100%;
   padding: 14px;
-  background: var(--charcoal);
-  color: var(--ivory-white);
-  border: 1px solid var(--charcoal);
+  background: #231f20;
+  color: #ffffff;
+  border: 1px solid #231f20;
   border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   cursor: pointer;

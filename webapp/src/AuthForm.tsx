@@ -561,10 +561,10 @@ export default function AuthForm({
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-auto filter brightness-0 pointer-events-none" 
               />
             </div>
-            <h2 className="text-3xl font-extrabold text-zinc-900 mb-2 tracking-tight mt-4">
+            <h2 className="text-4xl text-zinc-900 mb-2 mt-4" style={{ fontFamily: 'var(--font-heading)' }}>
               {isAdminRoute ? 'Admin Portal' : activeForm === 'register' ? 'Join the Studio' : 'Welcome Back'}
             </h2>
-            <p className="text-zinc-600 text-base">
+            <p className="text-zinc-500 text-base font-medium">
               {isAdminRoute ? 'Secure access to ArtVault administration.' : activeForm === 'register' ? 'Join the community and share your work.' : 'Access your creative portfolio.'}
             </p>
           </div>
@@ -639,11 +639,8 @@ export default function AuthForm({
                 {loading ? 'Authenticating...' : 'Enter Studio'}
               </button>
 
-              <div
-                className="mt-4 w-full overflow-hidden border border-[#d6c7ad] bg-[#fdfbf7] p-1 shadow-[0_10px_24px_rgba(37,31,24,0.08)]"
-                style={{ borderRadius: '14px' }}
-              >
-                <div ref={loginGoogleButtonRef} className="flex min-h-[44px] w-full items-center justify-center" aria-label="Continue with Google" />
+              <div style={{ marginTop: '24px' }} className="w-full flex justify-center">
+                <div ref={loginGoogleButtonRef} className="w-full flex justify-center" aria-label="Continue with Google" />
               </div>
 
               <div className="form-footer">
@@ -791,15 +788,12 @@ export default function AuthForm({
                 </div>
               </div>
 
-              <button type="submit" disabled={loading} className="w-full bg-[#4a3424] hover:bg-[#382619] text-[#fdfbf7] font-bold py-3 px-4 rounded-xl shadow-lg transition-all mt-4">
+              <button type="submit" disabled={loading}>
                 {loading ? 'Registering...' : 'Onboard Account'}
               </button>
 
-              <div
-                className="mt-4 w-full overflow-hidden border border-[#d6c7ad] bg-[#fdfbf7] p-1 shadow-[0_10px_24px_rgba(37,31,24,0.08)]"
-                style={{ borderRadius: '14px' }}
-              >
-                <div ref={registerGoogleButtonRef} className="flex min-h-[44px] w-full items-center justify-center" aria-label="Continue with Google" />
+              <div style={{ marginTop: '24px' }} className="w-full flex justify-center">
+                <div ref={registerGoogleButtonRef} className="w-full flex justify-center" aria-label="Continue with Google" />
               </div>
 
               <div className="text-center mt-6 text-zinc-600 text-sm">
