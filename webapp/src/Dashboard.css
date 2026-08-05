@@ -298,8 +298,65 @@
   gap: 12px;
 }
 
-.mobile-register-work-btn {
+.header-publish-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #a98244;
+  border-radius: 4px;
+  background: #b8975a;
+  color: #1c1917;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.header-publish-btn:hover,
+.header-publish-btn:focus-visible {
+  border-color: var(--charcoal);
+  background: var(--charcoal);
+  color: var(--ivory-white);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mobile-publish-fab {
+  position: fixed;
+  right: 14px;
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  z-index: 999;
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid #9b7b47;
+  border-radius: 999px;
+  background: #1c1917;
+  color: #f8f3ea;
   display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 12px 30px rgba(28, 25, 23, 0.24);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+
+.mobile-publish-fab:hover,
+.mobile-publish-fab:focus-visible {
+  background: #b8975a;
+  color: #1c1917;
+  outline: 3px solid rgba(184, 151, 90, 0.28);
+  outline-offset: 2px;
 }
 
 /* ─── Buttons ─── */
@@ -6727,27 +6784,8 @@
     display: none !important;
   }
 
-  .mobile-register-work-btn {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
-    padding: 0;
-    border: 1px solid #9b7b47;
-    border-radius: 4px;
-    background: #b8975a;
-    color: #1c1917;
+  .mobile-publish-fab {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-  }
-
-  .mobile-register-work-btn:hover,
-  .mobile-register-work-btn:focus-visible {
-    border-color: var(--charcoal);
-    background: var(--charcoal);
-    color: var(--ivory-white);
-    outline: none;
   }
 
   .nav-avatar-btn {

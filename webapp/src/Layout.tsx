@@ -169,11 +169,12 @@ export default function Layout({ user }: { user: any }) {
               {canUpload(profile?.role) && (
                 <button
                   onClick={() => setCreatePanelOpen(true)}
-                  className="mobile-register-work-btn"
+                  className="header-publish-btn"
                   aria-label="Register a new artwork"
                   title="Register artwork"
                 >
                   <ImagePlus size={19} strokeWidth={1.8} aria-hidden="true" />
+                  <span>Publish Art</span>
                 </button>
               )}
               <button
@@ -243,6 +244,18 @@ export default function Layout({ user }: { user: any }) {
       <div id="main-content" className="main-content-wrapper" tabIndex={-1}>
         <Outlet />
       </div>
+
+      {user && canUpload(profile?.role) && (
+        <button
+          type="button"
+          className="mobile-publish-fab"
+          onClick={() => setCreatePanelOpen(true)}
+          aria-label="Publish artwork"
+        >
+          <ImagePlus size={18} strokeWidth={1.9} aria-hidden="true" />
+          <span>Publish</span>
+        </button>
+      )}
 
       <nav
         className="mobile-bottom-nav"
