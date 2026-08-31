@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 import { logAudit } from './auditHelper';
+import { resolveArtworkImageUrl } from './imageUtils';
 import {
   ROLES,
   type ArtVaultRole,
@@ -1165,7 +1166,7 @@ export default function AdminPanel({ user }: { user: any }) {
                       <div key={artwork.id} className="ap-discover-display-preview-item">
                         <span>{index + 1}</span>
                         <div className="ap-discover-display-preview-image">
-                          <img src={artwork.image_url} alt="" loading="lazy" />
+                          <img src={resolveArtworkImageUrl(artwork.image_url)} alt="" loading="lazy" />
                         </div>
                         <strong>{artwork.title}</strong>
                         <small>{artwork.artist_name || 'Unknown creator'}</small>
@@ -1231,7 +1232,7 @@ export default function AdminPanel({ user }: { user: any }) {
                 )}
                 {filteredArtworks.slice((artworkPage-1)*PER_PAGE, artworkPage*PER_PAGE).map(a => (
                   <div key={a.id} className="ap-artwork-card">
-                    <img src={a.image_url} alt={a.title} className="ap-artwork-img" loading="lazy" decoding="async" />
+                    <img src={resolveArtworkImageUrl(a.image_url)} alt={a.title} className="ap-artwork-img" loading="lazy" decoding="async" />
                     <div className="ap-artwork-body">
                       <div className="ap-artwork-title">{a.title}</div>
                       <div className="ap-artwork-artist">
@@ -1321,7 +1322,7 @@ export default function AdminPanel({ user }: { user: any }) {
                         <td>
                           {r.artworks ? (
                             <div className="ap-report-artwork">
-                              <img src={r.artworks.image_url} alt="" className="ap-report-thumb" />
+                              <img src={resolveArtworkImageUrl(r.artworks.image_url)} alt="" className="ap-report-thumb" />
                               <div>
                                 <div className="ap-user-name">{r.artworks.title}</div>
                                 <div className="ap-user-sub">@{r.artworks.profiles?.username}</div>
@@ -1481,7 +1482,7 @@ export default function AdminPanel({ user }: { user: any }) {
                     return (
                       <div key={artwork.id} className="ap-discover-display-order-item">
                         <span className="ap-discover-display-rank">{index + 1}</span>
-                        <img src={artwork.image_url} alt="" />
+                        <img src={resolveArtworkImageUrl(artwork.image_url)} alt="" />
                         <div>
                           <strong>{artwork.title}</strong>
                           <small>{artwork.artist_name || 'Unknown creator'}{artwork.creation_year ? ` / ${artwork.creation_year}` : ''}</small>
@@ -1502,7 +1503,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   const selectedIndex = discoverDisplayDraftIds.indexOf(artwork.id);
                   return (
                     <article key={artwork.id} className={`ap-discover-display-candidate ${selectedIndex >= 0 ? 'selected' : ''}`}>
-                      <div className="ap-discover-display-candidate-image"><img src={artwork.image_url} alt="" loading="lazy" /></div>
+                      <div className="ap-discover-display-candidate-image"><img src={resolveArtworkImageUrl(artwork.image_url)} alt="" loading="lazy" /></div>
                       <div>
                         <strong>{artwork.title}</strong>
                         <span>{artwork.artist_name || 'Unknown creator'}{artwork.creation_year ? ` / ${artwork.creation_year}` : ''}</span>
@@ -1844,7 +1845,7 @@ export default function AdminPanel({ user }: { user: any }) {
                       const inPortfolio = portfolioArtworkIds.includes(artwork.id);
                       return (
                         <div key={artwork.id} className="ap-portfolio-artwork-row">
-                          <img src={artwork.image_url} alt={artwork.title} />
+                          <img src={resolveArtworkImageUrl(artwork.image_url)} alt={artwork.title} />
                           <div className="ap-portfolio-artwork-info">
                             <div className="ap-portfolio-artwork-title">{artwork.title}</div>
                             <div className="ap-portfolio-artwork-sub">
@@ -1915,7 +1916,7 @@ export default function AdminPanel({ user }: { user: any }) {
                   {portfolioPreviewArtworks.map(artwork => (
                     <div key={artwork.id} className="ap-preview-artwork-card">
                       <div className="ap-preview-image-wrap">
-                        <img src={artwork.image_url} alt={artwork.title} />
+                        <img src={resolveArtworkImageUrl(artwork.image_url)} alt={artwork.title} />
                       </div>
                       <div className="ap-preview-artwork-body">
                         <div className="ap-preview-artwork-title">{artwork.title}</div>

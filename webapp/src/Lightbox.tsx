@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Flag, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import { resolveArtworkImageUrl, isGoogleDriveUrl } from './imageUtils';
 import toast from 'react-hot-toast';
 import Avatar from './Avatar';
 
@@ -98,6 +99,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
     artwork.dimensions     && { label: 'Dimensions',    value: artwork.dimensions },
     artwork.collector_or_pricing && { label: 'Status',  value: artwork.collector_or_pricing },
     artwork.price != null  && { label: 'Valuation',     value: `$${Number(artwork.price).toLocaleString()}`, highlight: true },
+    isGoogleDriveUrl(artwork.image_url) && { label: 'Asset Storage', value: 'Google Drive Live Vault' },
     { label: 'Registry No.', value: registryNo },
     { label: 'Date Registered', value: new Date(artwork.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },
   ].filter(Boolean) as { label: string; value: React.ReactNode; highlight?: boolean }[];
@@ -156,7 +158,7 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
             </button>
           )}
           <img
-            src={artwork.image_url}
+            src={resolveArtworkImageUrl(artwork.image_url)}
             alt={artwork.title}
             style={fullscreen
               ? { transform: `scale(2) translate(${position.x / 2}px, ${position.y / 2}px)`, transition: isDragging ? 'none' : 'transform 0.1s ease-out' }

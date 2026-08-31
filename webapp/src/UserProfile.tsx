@@ -23,6 +23,7 @@ import {
 import Avatar from './Avatar';
 import Lightbox from './Lightbox';
 import { logAudit } from './auditHelper';
+import { resolveArtworkImageUrl } from './imageUtils';
 import { canUpload } from './roles';
 import './Dashboard.css';
 import './UserProfile.css';
@@ -127,7 +128,7 @@ function ArtworkImage({ artwork, className = '' }: { artwork: Artwork; className
 
   return (
     <img
-      src={artwork.image_url}
+      src={resolveArtworkImageUrl(artwork.image_url)}
       alt={artwork.title}
       className={className}
       loading="lazy"
@@ -287,7 +288,7 @@ export default function UserProfile({ currentUser }: { currentUser: any | null }
         return {
           ...b,
           item_count: boardItems.length,
-          preview_images: boardItems.slice(0, 4).map((i: any) => i.artworks?.image_url).filter(Boolean)
+          preview_images: boardItems.slice(0, 4).map((i: any) => resolveArtworkImageUrl(i.artworks?.image_url)).filter(Boolean)
         };
       });
       setCollages(enrichedBoards);

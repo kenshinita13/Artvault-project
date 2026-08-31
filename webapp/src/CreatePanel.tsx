@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Check, Cloud, FolderPlus, ImagePlus, Link2, Minus, Search, Upload, X } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { checkImageIsSafe } from './nsfwHelper';
+import { extractGoogleDriveFileId, isGoogleDriveUrl, resolveArtworkImageUrl } from './imageUtils';
 import toast from 'react-hot-toast';
 import './CreatePanel.css';
 
@@ -59,31 +60,42 @@ const compressImage = (file: File): Promise<File> => {
 };
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
-const formatFileSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-const ARTWORK_DRAFT_DB = 'artvault-publisher-drafts';
-const ARTWORK_DRAFT_FILE_STORE = 'artwork-files';
+const ARTWORK_DRAFT_DB = 'artvault_publisher_drafts';
+const ARTWORK_DRAFT_FILE_STORE = 'artwork_draft_files';
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 const openArtworkDraftDatabase = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+  if (!window.indexedDB) {
+    reject(new Error('IndexedDB not supported'));
+    return;
+  }
   const request = window.indexedDB.open(ARTWORK_DRAFT_DB, 1);
   request.onupgradeneeded = () => {
-    if (!request.result.objectStoreNames.contains(ARTWORK_DRAFT_FILE_STORE)) {
-      request.result.createObjectStore(ARTWORK_DRAFT_FILE_STORE);
+    const db = request.result;
+    if (!db.objectStoreNames.contains(ARTWORK_DRAFT_FILE_STORE)) {
+      db.createObjectStore(ARTWORK_DRAFT_FILE_STORE);
     }
   };
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
 });
 
-const saveArtworkDraftFile = async (key: string, file: File | null) => {
+const saveArtworkDraftFile = async (key: string, file: File | null): Promise<void> => {
   if (!window.indexedDB) return;
   const database = await openArtworkDraftDatabase();
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(ARTWORK_DRAFT_FILE_STORE, 'readwrite');
-    const store = transaction.objectStore(ARTWORK_DRAFT_FILE_STORE);
-    if (file) store.put(file, key);
-    else store.delete(key);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
+    if (file) {
+      transaction.objectStore(ARTWORK_DRAFT_FILE_STORE).put(file, key);
+    } else {
+      transaction.objectStore(ARTWORK_DRAFT_FILE_STORE).delete(key);
+    }
   });
   database.close();
 };
@@ -103,9 +115,23 @@ const loadArtworkDraftFile = async (key: string): Promise<File | null> => {
 };
 
 const validateHttpsImageUrl = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error('Please enter a valid image URL or Google Drive sharing link.');
+  }
+
+  // Handle Google Drive / Docs sharing links
+  if (isGoogleDriveUrl(trimmed)) {
+    const fileId = extractGoogleDriveFileId(trimmed);
+    if (!fileId) {
+      throw new Error('Could not identify a valid Google Drive file ID. Please ensure the link is a valid Google Drive share URL.');
+    }
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
+  }
+
   let parsed: URL;
   try {
-    parsed = new URL(value.trim());
+    parsed = new URL(trimmed);
   } catch {
     throw new Error('Enter a valid HTTPS image URL.');
   }
@@ -113,31 +139,34 @@ const validateHttpsImageUrl = (value: string): string => {
   if (parsed.protocol !== 'https:') {
     throw new Error('Image URLs must use HTTPS.');
   }
-  if (parsed.hostname === 'drive.google.com' || parsed.hostname === 'docs.google.com') {
-    throw new Error('Google Drive sharing links are coming soon. Use a direct public HTTPS image URL for now.');
-  }
   return parsed.toString();
 };
 
 const confirmRemoteImageLoads = (url: string): Promise<void> => new Promise((resolve, reject) => {
+  const resolved = resolveArtworkImageUrl(url);
   const image = new Image();
-  const timeout = window.setTimeout(() => reject(new Error('The image URL took too long to respond.')), 12000);
+  const timeout = window.setTimeout(() => reject(new Error('The image URL took too long to respond.')), 14000);
   image.onload = () => {
     window.clearTimeout(timeout);
     resolve();
   };
   image.onerror = () => {
     window.clearTimeout(timeout);
-    reject(new Error('The HTTPS address could not be displayed as an image.'));
+    if (isGoogleDriveUrl(url)) {
+      reject(new Error('Could not display image from Google Drive. Please ensure the file sharing setting is set to "Anyone with the link can view".'));
+    } else {
+      reject(new Error('The HTTPS address could not be displayed as an image.'));
+    }
   };
-  image.src = url;
+  image.src = resolved;
 });
 
 const fetchRemoteImageForReview = async (url: string): Promise<File | null> => {
+  const resolved = resolveArtworkImageUrl(url);
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(resolved, { signal: controller.signal });
     const contentType = response.headers.get('content-type') || '';
     if (!response.ok || !contentType.startsWith('image/')) return null;
     const blob = await response.blob();
@@ -198,7 +227,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   // Artwork form
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [imageSource, setImageSource] = useState<'file' | 'url'>('file');
+  const [imageSource, setImageSource] = useState<'file' | 'url' | 'gdrive'>('file');
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [artistName, setArtistName] = useState('');
@@ -291,7 +320,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
       setTitle(typeof draft.title === 'string' ? draft.title : '');
       setDescription(typeof draft.description === 'string' ? draft.description : '');
-      setImageSource(draft.imageSource === 'url' ? 'url' : 'file');
+      setImageSource(draft.imageSource === 'gdrive' ? 'gdrive' : draft.imageSource === 'url' ? 'url' : 'file');
       setImageUrl(typeof draft.imageUrl === 'string' ? draft.imageUrl : '');
       setArtistName(typeof draft.artistName === 'string' ? draft.artistName : '');
       setSelectedCategories(Array.isArray(draft.selectedCategories) ? draft.selectedCategories.filter((id: unknown) => typeof id === 'string') : []);
@@ -340,7 +369,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
           const draft = JSON.parse(saved);
           setTitle(typeof draft.title === 'string' ? draft.title : '');
           setDescription(typeof draft.description === 'string' ? draft.description : '');
-          setImageSource(draft.imageSource === 'url' ? 'url' : 'file');
+          setImageSource(draft.imageSource === 'gdrive' ? 'gdrive' : draft.imageSource === 'url' ? 'url' : 'file');
           setImageUrl(typeof draft.imageUrl === 'string' ? draft.imageUrl : '');
           setArtistName(typeof draft.artistName === 'string' ? draft.artistName : '');
           setSelectedCategories(Array.isArray(draft.selectedCategories) ? draft.selectedCategories.filter((id: unknown) => typeof id === 'string') : []);
@@ -861,30 +890,32 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               </button>
 
               <button
-                type="button"
-                disabled
-                aria-disabled="true"
+                className="publish-choice-card"
+                onClick={() => {
+                  setActiveTab('artwork');
+                  setImageSource('gdrive');
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 20px',
-                  background: 'linear-gradient(135deg, rgba(184, 145, 85, 0.10), rgba(255, 255, 255, 0.65))',
-                  border: '1px solid rgba(184, 145, 85, 0.35)',
-                  borderRadius: '16px', cursor: 'not-allowed', color: '#1a1a1a', textAlign: 'left',
-                  opacity: 0.95,
+                  background: 'rgba(0,0,0,0.04)', border: '1px solid #e5e0d8',
+                  borderRadius: '16px', cursor: 'pointer', color: '#1a1a1a', textAlign: 'left', transition: 'all 0.2s',
                 }}
+                onMouseOver={e => { e.currentTarget.style.background = 'rgba(74, 52, 36, 0.1)'; e.currentTarget.style.borderColor = 'rgba(74, 52, 36, 0.3)'; }}
+                onMouseOut={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.borderColor = '#e5e0d8'; }}
               >
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #b89155, #4a3424)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fdfbf7' }}>
                   <Cloud size={22} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Google Drive Image Vault</p>
-                    <span style={{ border: '1px solid rgba(184, 145, 85, 0.45)', color: '#8c6e3d', borderRadius: '999px', padding: '2px 8px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Coming soon</span>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: '16px' }}>Google Drive Live Vault</p>
+                    <span style={{ background: '#4a3424', color: '#fdfbf7', borderRadius: '999px', padding: '2px 8px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Live CDN</span>
                   </div>
                   <p style={{ margin: 0, color: '#666', fontSize: '13px', marginTop: '2px' }}>
-                    Future image storage and display integration using Google Drive.
+                    Link artwork directly from any Google Drive share link with instant live stream rendering
                   </p>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-                    {['GoogleDriveStorage', 'ImageVault', 'ComingSoon'].map(tag => (
+                    {['GoogleDrive', 'LiveStream', 'OriginalQuality'].map(tag => (
                       <span key={tag} style={{ background: 'rgba(74, 52, 36, 0.08)', color: '#4a3424', borderRadius: '999px', padding: '3px 8px', fontSize: '11px', fontWeight: 700 }}>#{tag}</span>
                     ))}
                   </div>
@@ -945,22 +976,30 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '13px', fontWeight: 600 }}>Image Source</label>
-                <div role="group" aria-label="Image source" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #d7d0c5', borderRadius: '4px', overflow: 'hidden', background: '#f3efe8' }}>
+                <div role="group" aria-label="Image source" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', border: '1px solid #d7d0c5', borderRadius: '4px', overflow: 'hidden', background: '#f3efe8' }}>
                   <button
                     type="button"
                     aria-pressed={imageSource === 'file'}
                     onClick={() => setImageSource('file')}
-                    style={{ minHeight: '42px', border: 0, borderRight: '1px solid #d7d0c5', background: imageSource === 'file' ? '#1c1917' : 'transparent', color: imageSource === 'file' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                    style={{ minHeight: '42px', border: 0, borderRight: '1px solid #d7d0c5', background: imageSource === 'file' ? '#1c1917' : 'transparent', color: imageSource === 'file' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
                   >
-                    <Upload size={15} /> Upload File
+                    <Upload size={14} /> Upload File
                   </button>
                   <button
                     type="button"
                     aria-pressed={imageSource === 'url'}
                     onClick={() => setImageSource('url')}
-                    style={{ minHeight: '42px', border: 0, background: imageSource === 'url' ? '#1c1917' : 'transparent', color: imageSource === 'url' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                    style={{ minHeight: '42px', border: 0, borderRight: '1px solid #d7d0c5', background: imageSource === 'url' ? '#1c1917' : 'transparent', color: imageSource === 'url' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
                   >
-                    <Link2 size={15} /> HTTPS URL
+                    <Link2 size={14} /> Direct URL
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={imageSource === 'gdrive'}
+                    onClick={() => setImageSource('gdrive')}
+                    style={{ minHeight: '42px', border: 0, background: imageSource === 'gdrive' ? '#1c1917' : 'transparent', color: imageSource === 'gdrive' ? '#fff' : '#57534e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                  >
+                    <Cloud size={14} /> Google Drive
                   </button>
                 </div>
               </div>
@@ -990,48 +1029,51 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Link2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8a8178', pointerEvents: 'none' }} />
+                    {imageSource === 'gdrive' ? (
+                      <Cloud size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8e7450', pointerEvents: 'none' }} />
+                    ) : (
+                      <Link2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8a8178', pointerEvents: 'none' }} />
+                    )}
                     <input
                       type="url"
                       inputMode="url"
                       value={imageUrl}
                       onChange={e => setImageUrl(e.target.value)}
-                      placeholder="https://images.example.com/artwork.jpg"
-                      aria-label="Direct HTTPS image URL"
-                      required={imageSource === 'url'}
+                      placeholder={imageSource === 'gdrive' ? 'https://drive.google.com/file/d/.../view?usp=sharing' : 'https://images.example.com/artwork.jpg'}
+                      aria-label={imageSource === 'gdrive' ? 'Google Drive sharing URL' : 'Direct HTTPS image URL'}
+                      required={imageSource === 'url' || imageSource === 'gdrive'}
                       className="search-input"
                       style={{ width: '100%', paddingLeft: '38px' }}
                     />
                   </div>
-                  {imageUrl.trim().startsWith('https://') && (
+
+                  {Boolean(imageUrl.trim() && (imageUrl.trim().startsWith('https://') || isGoogleDriveUrl(imageUrl))) && (
                     <div style={{ border: '1px solid #d7d0c5', background: '#eee8dd', minHeight: '180px', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
                       <img
-                        src={imageUrl.trim()}
-                        alt="Remote artwork preview"
+                        src={resolveArtworkImageUrl(imageUrl.trim())}
+                        alt="Artwork preview"
                         style={{ display: 'block', width: '100%', height: '220px', objectFit: 'contain' }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     </div>
                   )}
-                  <p style={{ margin: 0, color: '#7a6f63', fontSize: '11px', lineHeight: 1.5 }}>
-                    Original HTTPS file referenced directly. No compression, conversion, or re-upload.
-                  </p>
+
+                  {isGoogleDriveUrl(imageUrl) || imageSource === 'gdrive' ? (
+                    <div style={{ border: '1px solid rgba(184, 145, 85, 0.35)', background: 'rgba(184, 145, 85, 0.10)', borderRadius: '8px', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Cloud size={16} color="#8e7450" />
+                      <p style={{ margin: 0, color: '#503d25', fontSize: '11px', lineHeight: 1.4 }}>
+                        <strong>Google Drive Live Sharing Active:</strong> Make sure your file permissions are set to <em>"Anyone with the link can view"</em> for high-resolution streaming.
+                      </p>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, color: '#7a6f63', fontSize: '11px', lineHeight: 1.5 }}>
+                      Original HTTPS file referenced directly. No compression, conversion, or re-upload.
+                    </p>
+                  )}
                 </div>
               )}
-
-              <div style={{ border: '1px solid rgba(184, 145, 85, 0.28)', background: 'rgba(184, 145, 85, 0.08)', borderRadius: '14px', padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: '#4a3424', fontWeight: 800, fontSize: '13px' }}>
-                  <Cloud size={16} />
-                  Google Drive image storage is coming soon
-                </div>
-                <p style={{ margin: 0, color: '#6f6358', fontSize: '12px', lineHeight: 1.5 }}>
-                  Direct HTTPS image URLs are available now. Google Drive sharing and managed display integration will arrive in a future release.
-                </p>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-                  {['GoogleDriveStorage', 'ImageDisplay', 'ComingSoon'].map(tag => (
-                    <span key={tag} style={{ background: '#fdfbf7', color: '#4a3424', border: '1px solid rgba(74, 52, 36, 0.12)', borderRadius: '999px', padding: '3px 8px', fontSize: '11px', fontWeight: 700 }}>#{tag}</span>
-                  ))}
-                </div>
-              </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Artwork Title</label>

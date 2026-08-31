@@ -4,26 +4,8 @@ import { ArrowLeftRight, ChevronLeft, ChevronRight, RefreshCw, Shuffle } from 'l
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
 import { useCachedQuery } from './useCachedQuery';
+import { resolveArtworkImageUrl, optimizedArtworkUrl as optimizedUrl } from './imageUtils';
 import './Dashboard.css';
-
-const IMAGE_URL_REPLACEMENTS: Record<string, string> = {
-  'https://www.artic.edu/iiif/2/8f9f77a5-003f-a185-873d-8c0f71cf5cf1/full/843,/0/default.jpg':
-    'https://upload.wikimedia.org/wikipedia/commons/1/15/Adolph_Menzel_-_Halbfigur_eines_alten_Mannes_%281855%29.jpg',
-  'https://www.artic.edu/iiif/2/7f753e93-8579-abab-6c79-1a35ff67ba53/full/843,/0/default.jpg':
-    'https://upload.wikimedia.org/wikipedia/commons/1/1b/Adolph_Menzel%2C_Study_of_a_Woman%2C_c._1875-1890%2C_NGA_56918.jpg',
-};
-
-function resolveArtworkImageUrl(url: string): string {
-  return IMAGE_URL_REPLACEMENTS[url] || url;
-}
-
-// Supabase image optimization helper — serves WebP at correct size
-function optimizedUrl(url: string, width: number, quality = 80): string {
-  url = resolveArtworkImageUrl(url);
-  if (!url || !url.includes('supabase.co')) return url;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}width=${width}&quality=${quality}`;
-}
 
 function formatYear(val?: string | number | null): string {
   if (!val) return '';

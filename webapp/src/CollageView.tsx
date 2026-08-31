@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Lightbox from './Lightbox';
+import { resolveArtworkImageUrl } from './imageUtils';
 import { ArrowLeft, Lock, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -130,7 +131,7 @@ export default function CollageView({ user }: { user: any }) {
             {artworks.map(artwork => (
               <div key={artwork.id} className="art-card" onClick={() => setActiveArtwork(artwork)} role="button" tabIndex={0}>
                 <div className="art-preview">
-                  <img src={artwork.image_url} alt={artwork.title} />
+                  <img src={resolveArtworkImageUrl(artwork.image_url)} alt={artwork.title} />
                 </div>
                 <div className="art-details">
                   <div className="art-title">{artwork.title}</div>
