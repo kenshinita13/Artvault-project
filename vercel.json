@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd webapp && npm run build",
+  "outputDirectory": "webapp/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

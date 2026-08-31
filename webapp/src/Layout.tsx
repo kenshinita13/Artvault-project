@@ -118,7 +118,7 @@ export default function Layout({ user }: { user: any }) {
     { path: '/registry', label: 'Registry', icon: Archive },
     { path: '/artists', label: 'Artists', icon: Users },
     ...(canAccessStaffConsole(profile?.role)
-      ? [{ path: '/admin_panel', label: 'Workspace', icon: Shield }]
+      ? [{ path: '/staff_panel', label: 'Workspace', icon: Shield }]
       : [{ path: '/about', label: 'About', icon: Info }]),
     ...(user ? [{ path: `/profile/${user.id}`, label: 'Profile', icon: User }] : []),
   ];
@@ -157,7 +157,7 @@ export default function Layout({ user }: { user: any }) {
             <div ref={accountMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px' }}>
               {canAccessStaffConsole(profile?.role) && (
                 <Link
-                  to="/admin_panel"
+                  to="/staff_panel"
                   className="btn staff-workspace-link whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
                   style={{ border: '1px solid #8e7450', borderRadius: '4px', color: '#503d25', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '7px' }}
                   aria-label="Open operations workspace"
@@ -215,7 +215,7 @@ export default function Layout({ user }: { user: any }) {
                   <Settings size={16} /> Profile Settings
                 </Link>
                 {canAccessStaffConsole(profile?.role) && (
-                  <Link to="/admin_panel" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
+                  <Link to="/staff_panel" className="dropdown-item" onClick={() => setAvatarMenuOpen(false)}>
                     <Shield size={16} /> {canAccessAdmin(profile?.role)
                       ? 'Administrator Panel'
                       : profile?.role === 'moderator'

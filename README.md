@@ -47,9 +47,11 @@ This project has been fully modernized and is built natively on **React**, **Vit
 
 ---
 
-## 🛡️ Administrator Access
-Administrator credentials are intentionally not stored in this repository. An
-existing administrator can assign the `admin` role through the protected admin
-workflow. Never commit account passwords or service-role keys to GitHub.
+## 🛡️ Staff Directory Access
+Staff and administrative credentials are intentionally not stored in this repository. An
+existing administrator can assign authorized staff roles (`admin`, `moderator`, `curator`)
+through the protected governance workflow. Never commit account passwords or service-role keys to GitHub.
 
-The administrator sign-in page is available at `http://localhost:5173/admin`.
+- **Staff Sign-in Directory**: `http://localhost:5173/staff` (or `https://your-domain.com/staff` in production)
+- **Staff Operations Workspace**: `/staff_panel` (automatically redirected upon staff authentication)
+

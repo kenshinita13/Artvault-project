@@ -1,0 +1,16 @@
+# ArtVault SPA Routing & Server Security Configuration
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Block direct access to hidden files and sensitive directories
+  RewriteRule "(^|/)\.(?!well-known)" - [F]
+
+  # Route all requests to index.html if file or directory does not exist
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . index.html [L]
+</IfModule>

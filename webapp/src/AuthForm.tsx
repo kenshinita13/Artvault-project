@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { logAudit } from './auditHelper';
-import { REGISTRATION_ROLES, ROLES } from './roles';
+import { REGISTRATION_ROLES, ROLES, canAccessStaffConsole } from './roles';
 import { getAuthRedirectUrl } from './authRedirects';
 import type { ArtVaultRole } from './roles';
 
@@ -71,6 +71,7 @@ const DISPOSABLE_EMAIL_DOMAINS = new Set([
   'emailondeck.com',
   'moakt.com',
   'mohmal.com',
+  'portalmail.com',
 ]);
 
 const COMMON_EMAIL_DOMAINS = new Set([
@@ -182,7 +183,7 @@ export default function AuthForm({
 }: AuthFormProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdminRoute = location.pathname === '/admin';
+  const isStaffRoute = location.pathname === '/staff' || location.pathname === '/admin';
 
   // All form state is now LOCAL to this component — 
   // keystrokes no longer re-render the entire App tree
@@ -210,12 +211,10 @@ export default function AuthForm({
     }
   }, [location.search]);
 
-  const validateAdminAccess = (profile: any, isAdminLogin: boolean): string | null => {
-    if (isAdminLogin && profile?.role !== 'admin') {
-      return 'Access denied. Only administrators can log in here.';
-    }
-    if (!isAdminLogin && profile?.role === 'admin') {
-      return 'Admins must log in through the /admin portal.';
+  const validateStaffAccess = (profile: any, isStaffLogin: boolean): string | null => {
+    const hasStaffAccess = canAccessStaffConsole(profile?.role);
+    if (isStaffLogin && !hasStaffAccess) {
+      return 'Access denied. Only authorized staff members can log in through the /staff directory.';
     }
     return null;
   };
@@ -256,7 +255,7 @@ export default function AuthForm({
     return false;
   };
 
-  const handleLogin = async (e: React.FormEvent, isAdminLogin = false) => {
+  const handleLogin = async (e: React.FormEvent, isStaffLogin = false) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -288,11 +287,11 @@ export default function AuthForm({
           return;
         }
 
-        const adminError = validateAdminAccess(profile, isAdminLogin);
-        if (adminError) {
+        const staffError = validateStaffAccess(profile, isStaffLogin);
+        if (staffError) {
           await supabase.auth.signOut();
-          setError(adminError);
-          toast.error(adminError);
+          setError(staffError);
+          toast.error(staffError);
           setLoading(false);
           setIsValidatingLogin(false);
           return;
@@ -363,11 +362,11 @@ export default function AuthForm({
       return;
     }
 
-    const adminError = validateAdminAccess(profile, false);
-    if (adminError) {
+    const staffError = validateStaffAccess(profile, false);
+    if (staffError) {
       await supabase.auth.signOut();
-      setError(adminError);
-      toast.error(adminError);
+      setError(staffError);
+      toast.error(staffError);
       setLoading(false);
       setIsValidatingLogin(false);
       return;
@@ -386,7 +385,7 @@ export default function AuthForm({
   }, [onLoginComplete, setBanMessage, setIsValidatingLogin]);
 
   useEffect(() => {
-    if (isAdminRoute || showMfaChallenge) return;
+    if (isStaffRoute || showMfaChallenge) return;
 
     const target = activeForm === 'login' ? loginGoogleButtonRef.current : registerGoogleButtonRef.current;
     if (!target) return;
@@ -411,17 +410,14 @@ export default function AuthForm({
           width: Math.min(target.clientWidth || 360, 400),
         });
       })
-      .catch((err: Error) => {
-        if (!cancelled) {
-          setError(err.message);
-        }
+      .catch((err) => {
+        console.warn('Google identity initialization failed:', err);
       });
 
     return () => {
       cancelled = true;
-      target.innerHTML = '';
     };
-  }, [activeForm, handleGoogleCredential, isAdminRoute, showMfaChallenge]);
+  }, [activeForm, handleGoogleCredential, isStaffRoute, showMfaChallenge]);
 
   const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -517,7 +513,7 @@ export default function AuthForm({
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[1001] flex items-center justify-center bg-[#e5e0d8]/80 backdrop-blur-md p-4"
       >
-        {!isAdminRoute && (
+        {!isStaffRoute && (
           <button 
             onClick={() => navigate('/')} 
             className="absolute top-6 right-8 text-zinc-500 hover:text-zinc-900 text-3xl transition-colors z-50"
@@ -562,10 +558,10 @@ export default function AuthForm({
               />
             </div>
             <h2 className="text-4xl text-zinc-900 mb-2 mt-4" style={{ fontFamily: 'var(--font-heading)' }}>
-              {isAdminRoute ? 'Admin Portal' : activeForm === 'register' ? 'Join the Studio' : 'Welcome Back'}
+              {isStaffRoute ? 'Staff Portal' : activeForm === 'register' ? 'Join the Studio' : 'Welcome Back'}
             </h2>
             <p className="text-zinc-500 text-base font-medium">
-              {isAdminRoute ? 'Secure access to ArtVault administration.' : activeForm === 'register' ? 'Join the community and share your work.' : 'Access your creative portfolio.'}
+              {isStaffRoute ? 'Secure access to ArtVault staff directory & operations.' : activeForm === 'register' ? 'Join the community and share your work.' : 'Access your creative portfolio.'}
             </p>
           </div>
 
@@ -603,7 +599,7 @@ export default function AuthForm({
           </div>
         )}
         
-        {!isAdminRoute && activeForm === 'login' && !showMfaChallenge && (
+        {!isStaffRoute && activeForm === 'login' && !showMfaChallenge && (
           <div className="form-box active">
             {error && <div className="alert error">{error}</div>}
             {success && <div className="alert success">{success}</div>}
@@ -658,12 +654,12 @@ export default function AuthForm({
           </div>
         )}
 
-        {isAdminRoute && !showMfaChallenge && (
-          <div className="form-box active" style={{ borderTop: '4px solid #7494ec' }}>
-            <div style={{ fontSize: '42px', textAlign: 'center', marginBottom: '15px', fontWeight: 700 }}>AV</div>
+        {isStaffRoute && !showMfaChallenge && (
+          <div className="form-box active" style={{ borderTop: '4px solid #8e7450' }}>
+            <div style={{ fontSize: '42px', textAlign: 'center', marginBottom: '15px', fontWeight: 700, letterSpacing: '2px', color: '#1c1917' }}>AV</div>
             
-            <div style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(234, 179, 8, 0.2)', fontSize: '14px' }}>
-              <strong>Restricted Access:</strong> This area is for administrators only.
+            <div style={{ background: 'rgba(142, 116, 80, 0.12)', color: '#503d25', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(142, 116, 80, 0.25)', fontSize: '14px' }}>
+              <strong>Restricted Access:</strong> This directory is for authorized staff members only.
             </div>
 
             {error && <div className="alert error">{error}</div>}
@@ -671,41 +667,41 @@ export default function AuthForm({
 
             <form onSubmit={(e) => handleLogin(e, true)}>
               <div className="form-group">
-                <label htmlFor="admin_email">Admin Email</label>
+                <label htmlFor="staff_email">Staff Email</label>
                 <input 
                   type="email" 
-                  id="admin_email" 
+                  id="staff_email" 
                   className="form-control" 
-                  placeholder="Enter your admin email" 
+                  placeholder="Enter your staff email" 
                   required 
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  style={{ borderColor: 'rgba(116, 148, 236, 0.5)' }}
+                  style={{ borderColor: 'rgba(142, 116, 80, 0.5)' }}
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="admin_pass">Password</label>
+                <label htmlFor="staff_pass">Password</label>
                 <input 
                   type="password" 
-                  id="admin_pass" 
+                  id="staff_pass" 
                   className="form-control" 
                   placeholder="Enter your password" 
                   required 
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  style={{ borderColor: 'rgba(116, 148, 236, 0.5)' }}
+                  style={{ borderColor: 'rgba(142, 116, 80, 0.5)' }}
                 />
               </div>
 
-              <button type="submit" disabled={loading} style={{ background: '#7494ec', marginTop: '20px' }}>
-                {loading ? 'Authenticating...' : 'Login as Administrator'}
+              <button type="submit" disabled={loading} style={{ background: '#1c1917', color: '#f5f0e8', marginTop: '20px' }}>
+                {loading ? 'Authenticating...' : 'Authenticate Staff Access'}
               </button>
             </form>
           </div>
         )}
 
-        {!isAdminRoute && activeForm === 'register' && !showMfaChallenge && (
+        {!isStaffRoute && activeForm === 'register' && !showMfaChallenge && (
           <div className="form-box active">
 
             {error && <div className="alert error">{error}</div>}
