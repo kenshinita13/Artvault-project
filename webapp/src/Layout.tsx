@@ -282,6 +282,7 @@ export default function Layout({ user }: { user: any }) {
           onRestore={() => setCreatePanelOpen(true)}
           user={user}
           categories={categories}
+          adminMode={canAccessAdmin(profile?.role)}
           onArtworkCreated={() => window.dispatchEvent(new Event('artwork-created'))}
           onBoardCreated={() => window.dispatchEvent(new Event('board-created'))}
         />

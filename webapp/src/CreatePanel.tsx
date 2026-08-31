@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Check, Cloud, FolderPlus, ImagePlus, Link2, Minus, Search, Upload, X } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { checkImageIsSafe } from './nsfwHelper';
 import { extractGoogleDriveFileId, isGoogleDriveUrl, resolveArtworkImageUrl } from './imageUtils';
+import { canAccessAdmin } from './roles';
+import Avatar from './Avatar';
 import toast from 'react-hot-toast';
 import './CreatePanel.css';
 
@@ -182,27 +184,73 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const [activeTab, setActiveTab] = useState<'menu' | 'artwork' | 'board'>('menu');
   const [isMinimized, setIsMinimized] = useState(false);
   
+  const isAdmin = Boolean(adminMode || (user && (user.role === 'admin' || canAccessAdmin(user.role))));
+
   // Admin user selection
-  const [targetUserId, setTargetUserId] = useState<string>('');
+  const [fetchedUsers, setFetchedUsers] = useState<any[]>([]);
+  const [isPostingOnBehalf, setIsPostingOnBehalf] = useState(Boolean(defaultTargetUserId || adminMode));
+  const [targetUserId, setTargetUserId] = useState<string>(defaultTargetUserId || '');
+  const [selectedTargetUser, setSelectedTargetUser] = useState<any | null>(null);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
-    if (adminMode && defaultTargetUserId && allUsers.length > 0) {
-      setTargetUserId(defaultTargetUserId);
-      const targetUser = allUsers.find(u => u.id === defaultTargetUserId);
+    if (!isAdmin) return;
+    let active = true;
+    async function loadUsers() {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, name, username, email, avatar_url, role')
+        .order('name');
+      if (active && data) {
+        setFetchedUsers(data);
+      }
+    }
+    loadUsers();
+    return () => { active = false; };
+  }, [isAdmin]);
+
+  const combinedUsers = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const u of allUsers) {
+      if (u?.id) map.set(u.id, u);
+    }
+    for (const u of fetchedUsers) {
+      if (u?.id) map.set(u.id, u);
+    }
+    return Array.from(map.values());
+  }, [allUsers, fetchedUsers]);
+
+  useEffect(() => {
+    if (defaultTargetUserId && combinedUsers.length > 0) {
+      const targetUser = combinedUsers.find(u => u.id === defaultTargetUserId);
       if (targetUser) {
+        setTargetUserId(targetUser.id);
+        setSelectedTargetUser(targetUser);
+        setUserSearchQuery(targetUser.name || targetUser.username || targetUser.email || 'Unnamed');
+        setIsPostingOnBehalf(true);
+      }
+    }
+  }, [defaultTargetUserId, combinedUsers]);
+
+  useEffect(() => {
+    if (targetUserId && combinedUsers.length > 0 && (!selectedTargetUser || selectedTargetUser.id !== targetUserId)) {
+      const targetUser = combinedUsers.find(u => u.id === targetUserId);
+      if (targetUser) {
+        setSelectedTargetUser(targetUser);
         setUserSearchQuery(targetUser.name || targetUser.username || targetUser.email || 'Unnamed');
       }
     }
-  }, [adminMode, defaultTargetUserId, allUsers]);
+  }, [targetUserId, combinedUsers, selectedTargetUser]);
 
-  const filteredUsers = allUsers.filter(u => 
+  const filteredUsers = combinedUsers.filter(u => 
+    !userSearchQuery.trim() ||
     u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-    u.username?.toLowerCase().includes(userSearchQuery.toLowerCase())
+    u.username?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
   ).slice(0, 10);
 
-  const effectiveUserId = adminMode && targetUserId ? targetUserId : user.id;
+  const effectiveUserId = (isAdmin && isPostingOnBehalf && targetUserId) ? targetUserId : user?.id;
 
   // Board Selection
   const [userBoards, setUserBoards] = useState<any[]>([]);
@@ -333,16 +381,19 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       setCreationYear(typeof draft.creationYear === 'string' ? draft.creationYear : '');
       setDimensions(typeof draft.dimensions === 'string' ? draft.dimensions : '');
       setSelectedBoardId(typeof draft.selectedBoardId === 'string' ? draft.selectedBoardId : '');
-      if (adminMode) {
-        setTargetUserId(typeof draft.targetUserId === 'string' ? draft.targetUserId : '');
-        setUserSearchQuery(typeof draft.userSearchQuery === 'string' ? draft.userSearchQuery : '');
+      if (isAdmin) {
+        if (draft.isPostingOnBehalf || draft.targetUserId) {
+          setIsPostingOnBehalf(true);
+          setTargetUserId(typeof draft.targetUserId === 'string' ? draft.targetUserId : '');
+          setUserSearchQuery(typeof draft.userSearchQuery === 'string' ? draft.userSearchQuery : '');
+        }
       }
       setActiveTab('artwork');
       setIsMinimized(true);
     } catch {
       window.localStorage.removeItem(artworkDraftKey);
     }
-  }, [adminMode, artworkDraftKey, isMinimized, isOpen, publisherDockKey]);
+  }, [adminMode, artworkDraftKey, isAdmin, isMinimized, isOpen, publisherDockKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -382,7 +433,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
           setCreationYear(typeof draft.creationYear === 'string' ? draft.creationYear : '');
           setDimensions(typeof draft.dimensions === 'string' ? draft.dimensions : '');
           setSelectedBoardId(typeof draft.selectedBoardId === 'string' ? draft.selectedBoardId : '');
-          if (adminMode) {
+          if (isAdmin && (draft.isPostingOnBehalf || draft.targetUserId)) {
+            setIsPostingOnBehalf(true);
             setTargetUserId(typeof draft.targetUserId === 'string' ? draft.targetUserId : '');
             setUserSearchQuery(typeof draft.userSearchQuery === 'string' ? draft.userSearchQuery : '');
           }
@@ -405,7 +457,7 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
 
     void restoreArtworkDraft();
     return () => { active = false; };
-  }, [activeTab, adminMode, artworkDraftKey]);
+  }, [activeTab, adminMode, artworkDraftKey, isAdmin]);
 
   useEffect(() => {
     if (activeTab !== 'artwork' || !artworkDraftReady) return;
@@ -434,14 +486,15 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       creationYear,
       dimensions,
       selectedBoardId,
-      targetUserId: adminMode ? targetUserId : '',
-      userSearchQuery: adminMode ? userSearchQuery : '',
+      isPostingOnBehalf: Boolean(isAdmin && isPostingOnBehalf),
+      targetUserId: (isAdmin && isPostingOnBehalf) ? targetUserId : '',
+      userSearchQuery: (isAdmin && isPostingOnBehalf) ? userSearchQuery : '',
       hasFile: Boolean(file),
       fileName: file?.name || '',
       updatedAt: new Date().toISOString(),
     }));
     window.localStorage.setItem(publisherDockKey, 'artwork');
-  }, [activeTab, adminMode, artStyle, artistName, artworkDraftKey, artworkDraftReady, collector, creationYear, currentHashtag, description, dimensions, file, hasArtworkDraft, hashtags, imageSource, imageUrl, materialUsed, price, publisherDockKey, selectedBoardId, selectedCategories, targetUserId, title, userSearchQuery]);
+  }, [activeTab, adminMode, artStyle, artistName, artworkDraftKey, artworkDraftReady, collector, creationYear, currentHashtag, description, dimensions, file, hasArtworkDraft, hashtags, imageSource, imageUrl, isAdmin, isPostingOnBehalf, materialUsed, price, publisherDockKey, selectedBoardId, selectedCategories, targetUserId, title, userSearchQuery]);
 
   useEffect(() => {
     if (activeTab !== 'artwork' || !artworkDraftReady) return;
@@ -531,7 +584,13 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
     setCollector(''); setPrice(''); setCreationYear(''); setDimensions('');
     setBoardName(''); setBoardDesc(''); setIsPrivate(false);
     setSelectedCollageArtworkIds([]); setCollageSearch(''); setCollageArtworks([]);
-    setTargetUserId(''); setUserSearchQuery(''); setIsDropdownOpen(false);
+    if (!defaultTargetUserId) {
+      setTargetUserId('');
+      setSelectedTargetUser(null);
+      setUserSearchQuery('');
+      setIsPostingOnBehalf(Boolean(adminMode));
+    }
+    setIsDropdownOpen(false);
     setSelectedBoardId('');
     setIsMinimized(false);
     setArtworkDraftReady(false);
@@ -608,10 +667,10 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
       .some((value) => String(value).toLowerCase().includes(query));
   });
 
-  const extractColor = async (file: File): Promise<string> => {
+  const extractColor = async (imageFile: File): Promise<string> => {
     return new Promise((resolve) => {
-      const url = URL.createObjectURL(file);
       const img = new Image();
+      const url = URL.createObjectURL(imageFile);
       img.src = url;
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -651,8 +710,8 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || (imageSource === 'file' ? !file : !imageUrl.trim())) return;
-    if (adminMode && !targetUserId) {
-      toast.error('Please select an artist to post on behalf of.');
+    if (isAdmin && isPostingOnBehalf && !targetUserId) {
+      toast.error('Please select an artist to post on behalf of, or switch to "Post as Myself".');
       return;
     }
     if (imageSource === 'file' && file && file.size > MAX_UPLOAD_SIZE) {
@@ -706,9 +765,12 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
         }
       }
 
+      const registeredUserId = (isAdmin && isPostingOnBehalf && targetUserId) ? targetUserId : user.id;
+      const originalCreator = artistName.trim() || (selectedTargetUser ? (selectedTargetUser.name || selectedTargetUser.username || null) : null);
+
       const { data: artwork, error: dbError } = await supabase.from('artworks').insert({
-        title, description, image_url: finalImageUrl, user_id: effectiveUserId,
-        artist_name: artistName.trim() || null,
+        title, description, image_url: finalImageUrl, user_id: registeredUserId,
+        artist_name: originalCreator,
         tags: hashtags, material_used: materialUsed, art_style: artStyle,
         collector_or_pricing: collector, price: price ? Number(price) : null, creation_year: creationYear,
         dimensions,
@@ -934,40 +996,135 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 <span className="collage-autosave-status">Draft saved automatically</span>
               </div>
 
-              {adminMode && (
-                <div style={{ position: 'relative' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Post on behalf of (Artist)</label>
-                  <input 
-                    type="text" 
-                    value={userSearchQuery}
-                    onChange={e => {
-                      setUserSearchQuery(e.target.value);
-                      setIsDropdownOpen(true);
-                      if (targetUserId) setTargetUserId(''); // clear selection if they type again
-                    }}
-                    onFocus={() => setIsDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
-                    placeholder="Search name or username..."
-                    className="search-input"
-                    style={{ width: '100%' }}
-                  />
-                  {isDropdownOpen && userSearchQuery && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e0d8', borderRadius: '8px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: '4px' }}>
-                      {filteredUsers.length > 0 ? filteredUsers.map(u => (
-                        <div 
-                          key={u.id}
-                          onClick={() => {
-                            setTargetUserId(u.id);
-                            setUserSearchQuery(u.name || u.username || u.email || 'Unnamed');
-                            setIsDropdownOpen(false);
-                          }}
-                          style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
-                        >
-                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a' }}>{u.name || 'Unnamed'}</div>
-                          <div style={{ fontSize: '12px', color: '#888' }}>@{u.username || 'unknown'}</div>
+              {isAdmin && (
+                <div style={{ marginBottom: '16px', padding: '12px 14px', background: 'rgba(74, 52, 36, 0.04)', borderRadius: '12px', border: '1px solid #e5e0d8' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <label style={{ display: 'block', margin: 0, color: '#4a3424', fontSize: '13px', fontWeight: 700 }}>
+                      Publishing Authority
+                    </label>
+                    <div style={{ display: 'flex', gap: '4px', background: '#e8e2d8', padding: '2px', borderRadius: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPostingOnBehalf(false);
+                          setTargetUserId('');
+                          setSelectedTargetUser(null);
+                        }}
+                        style={{
+                          border: 0,
+                          borderRadius: '4px',
+                          padding: '4px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: !isPostingOnBehalf ? '#1c1917' : 'transparent',
+                          color: !isPostingOnBehalf ? '#fff' : '#6f6358',
+                        }}
+                      >
+                        Post as Myself
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsPostingOnBehalf(true)}
+                        style={{
+                          border: 0,
+                          borderRadius: '4px',
+                          padding: '4px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: isPostingOnBehalf ? '#1c1917' : 'transparent',
+                          color: isPostingOnBehalf ? '#fff' : '#6f6358',
+                        }}
+                      >
+                        Post on Behalf of Artist
+                      </button>
+                    </div>
+                  </div>
+
+                  {isPostingOnBehalf && (
+                    <div>
+                      {selectedTargetUser ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#fff', borderRadius: '8px', border: '1px solid #b89155', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Avatar userId={selectedTargetUser.id} name={selectedTargetUser.name || selectedTargetUser.username || 'User'} size={32} />
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: '13px', color: '#1a1a1a' }}>
+                                {selectedTargetUser.name || selectedTargetUser.username || 'Unnamed'}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#8c6e3d', fontWeight: 600 }}>
+                                @{selectedTargetUser.username || 'unknown'} · {selectedTargetUser.role || 'user'}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTargetUser(null);
+                              setTargetUserId('');
+                              setUserSearchQuery('');
+                              setIsDropdownOpen(true);
+                            }}
+                            style={{
+                              background: '#f5f0e8',
+                              border: '1px solid #d7d0c5',
+                              borderRadius: '6px',
+                              padding: '4px 10px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              color: '#4a3424',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Change Artist
+                          </button>
                         </div>
-                      )) : (
-                        <div style={{ padding: '10px 12px', color: '#888', fontSize: '13px' }}>No users found.</div>
+                      ) : (
+                        <div style={{ position: 'relative' }}>
+                          <input 
+                            type="text" 
+                            value={userSearchQuery}
+                            onChange={e => {
+                              setUserSearchQuery(e.target.value);
+                              setIsDropdownOpen(true);
+                            }}
+                            onFocus={() => setIsDropdownOpen(true)}
+                            placeholder="Search artist name or @username..."
+                            className="search-input"
+                            style={{ width: '100%', borderColor: '#b89155' }}
+                            autoFocus
+                          />
+                          {isDropdownOpen && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e0d8', borderRadius: '8px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: '4px' }}>
+                              {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                                <div 
+                                  key={u.id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setTargetUserId(u.id);
+                                    setSelectedTargetUser(u);
+                                    setUserSearchQuery(u.name || u.username || u.email || 'Unnamed');
+                                    if (!artistName.trim()) {
+                                      setArtistName(u.name || u.username || '');
+                                    }
+                                    setIsDropdownOpen(false);
+                                  }}
+                                  style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8', display: 'flex', alignItems: 'center', gap: '10px' }}
+                                >
+                                  <Avatar userId={u.id} name={u.name || u.username || 'User'} size={28} />
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#1a1a1a' }}>{u.name || 'Unnamed'}</div>
+                                    <div style={{ fontSize: '11px', color: '#888' }}>@{u.username || 'unknown'} · {u.role || 'user'}</div>
+                                  </div>
+                                </div>
+                              )) : (
+                                <div style={{ padding: '10px 12px', color: '#888', fontSize: '13px' }}>
+                                  {userSearchQuery ? 'No matching users found.' : 'Type a name or username to search...'}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
@@ -1215,40 +1372,131 @@ export default function CreatePanel({ isOpen, onClose, user, categories, onArtwo
                 <span className="collage-autosave-status">Draft saved automatically</span>
               </div>
               
-              {adminMode && (
-                <div style={{ position: 'relative' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#888', fontSize: '13px', fontWeight: 600 }}>Create for (Artist)</label>
-                  <input 
-                    type="text" 
-                    value={userSearchQuery}
-                    onChange={e => {
-                      setUserSearchQuery(e.target.value);
-                      setIsDropdownOpen(true);
-                      if (targetUserId) setTargetUserId(''); // clear selection if they type again
-                    }}
-                    onFocus={() => setIsDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
-                    placeholder="Search name or username..."
-                    className="search-input"
-                    style={{ width: '100%' }}
-                  />
-                  {isDropdownOpen && userSearchQuery && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e0d8', borderRadius: '8px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: '4px' }}>
-                      {filteredUsers.length > 0 ? filteredUsers.map(u => (
-                        <div 
-                          key={u.id}
-                          onClick={() => {
-                            setTargetUserId(u.id);
-                            setUserSearchQuery(u.name || u.username || u.email || 'Unnamed');
-                            setIsDropdownOpen(false);
-                          }}
-                          style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
-                        >
-                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a' }}>{u.name || 'Unnamed'}</div>
-                          <div style={{ fontSize: '12px', color: '#888' }}>@{u.username || 'unknown'}</div>
+              {isAdmin && (
+                <div style={{ marginBottom: '16px', padding: '12px 14px', background: 'rgba(74, 52, 36, 0.04)', borderRadius: '12px', border: '1px solid #e5e0d8' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <label style={{ display: 'block', margin: 0, color: '#4a3424', fontSize: '13px', fontWeight: 700 }}>
+                      Collage Owner
+                    </label>
+                    <div style={{ display: 'flex', gap: '4px', background: '#e8e2d8', padding: '2px', borderRadius: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPostingOnBehalf(false);
+                          setTargetUserId('');
+                          setSelectedTargetUser(null);
+                        }}
+                        style={{
+                          border: 0,
+                          borderRadius: '4px',
+                          padding: '4px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: !isPostingOnBehalf ? '#1c1917' : 'transparent',
+                          color: !isPostingOnBehalf ? '#fff' : '#6f6358',
+                        }}
+                      >
+                        Myself
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsPostingOnBehalf(true)}
+                        style={{
+                          border: 0,
+                          borderRadius: '4px',
+                          padding: '4px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: isPostingOnBehalf ? '#1c1917' : 'transparent',
+                          color: isPostingOnBehalf ? '#fff' : '#6f6358',
+                        }}
+                      >
+                        Artist
+                      </button>
+                    </div>
+                  </div>
+
+                  {isPostingOnBehalf && (
+                    <div>
+                      {selectedTargetUser ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#fff', borderRadius: '8px', border: '1px solid #b89155', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Avatar userId={selectedTargetUser.id} name={selectedTargetUser.name || selectedTargetUser.username || 'User'} size={32} />
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: '13px', color: '#1a1a1a' }}>
+                                {selectedTargetUser.name || selectedTargetUser.username || 'Unnamed'}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#8c6e3d', fontWeight: 600 }}>
+                                @{selectedTargetUser.username || 'unknown'} · {selectedTargetUser.role || 'user'}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTargetUser(null);
+                              setTargetUserId('');
+                              setUserSearchQuery('');
+                              setIsDropdownOpen(true);
+                            }}
+                            style={{
+                              background: '#f5f0e8',
+                              border: '1px solid #d7d0c5',
+                              borderRadius: '6px',
+                              padding: '4px 10px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              color: '#4a3424',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Change Artist
+                          </button>
                         </div>
-                      )) : (
-                        <div style={{ padding: '10px 12px', color: '#888', fontSize: '13px' }}>No users found.</div>
+                      ) : (
+                        <div style={{ position: 'relative' }}>
+                          <input 
+                            type="text" 
+                            value={userSearchQuery}
+                            onChange={e => {
+                              setUserSearchQuery(e.target.value);
+                              setIsDropdownOpen(true);
+                            }}
+                            onFocus={() => setIsDropdownOpen(true)}
+                            placeholder="Search artist name or @username..."
+                            className="search-input"
+                            style={{ width: '100%', borderColor: '#b89155' }}
+                          />
+                          {isDropdownOpen && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e0d8', borderRadius: '8px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: '4px' }}>
+                              {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                                <div 
+                                  key={u.id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setTargetUserId(u.id);
+                                    setSelectedTargetUser(u);
+                                    setUserSearchQuery(u.name || u.username || u.email || 'Unnamed');
+                                    setIsDropdownOpen(false);
+                                  }}
+                                  style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8', display: 'flex', alignItems: 'center', gap: '10px' }}
+                                >
+                                  <Avatar userId={u.id} name={u.name || u.username || 'User'} size={28} />
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#1a1a1a' }}>{u.name || 'Unnamed'}</div>
+                                    <div style={{ fontSize: '11px', color: '#888' }}>@{u.username || 'unknown'} · {u.role || 'user'}</div>
+                                  </div>
+                                </div>
+                              )) : (
+                                <div style={{ padding: '10px 12px', color: '#888', fontSize: '13px' }}>
+                                  {userSearchQuery ? 'No matching users found.' : 'Type a name or username to search...'}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
