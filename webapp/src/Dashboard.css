@@ -5186,21 +5186,21 @@
 .discover-content .museum-promenade-wall {
   min-width: 0;
   min-height: 0;
-  padding: clamp(30px, 4vw, 56px) clamp(24px, 3.4vw, 50px) clamp(38px, 5vw, 68px);
+  padding: clamp(28px, 4vw, 50px) clamp(20px, 3.4vw, 44px) clamp(32px, 5vw, 60px);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
-  gap: clamp(34px, 4vw, 62px) clamp(22px, 3vw, 44px);
-  background: #f2eee6;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-items: stretch;
+  gap: clamp(24px, 3vw, 40px);
+  background: #ede8df;
 }
 
 .discover-content .museum-promenade-piece,
 .discover-content .museum-promenade-piece-1,
 .discover-content .museum-promenade-piece-2 {
-  width: auto;
-  display: grid;
-  grid-template-rows: 300px auto;
-  gap: 18px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   scroll-snap-align: none;
 }
 
@@ -5208,34 +5208,56 @@
 .discover-content .museum-promenade-piece-1 .museum-promenade-frame,
 .discover-content .museum-promenade-piece-2 .museum-promenade-frame {
   width: 100%;
-  height: 300px;
-  padding: 16px;
+  height: 320px;
+  padding: 14px;
   border: 1px solid #cfc7bb;
-  border-radius: 2px;
-  background: #e5dfd4;
-  box-shadow: none;
+  border-radius: 4px;
+  background: #fdfbf7;
+  box-shadow: 0 4px 16px rgba(44, 38, 30, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  box-sizing: border-box;
 }
 
 .discover-content .museum-promenade-frame:hover,
 .discover-content .museum-promenade-frame:focus-visible {
   border-color: var(--discover-gold);
-  box-shadow: 0 14px 30px rgba(49, 42, 34, 0.1);
-  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(49, 42, 34, 0.12);
+  transform: translateY(-4px);
 }
 
 .discover-content .museum-promenade-mat {
   width: 100%;
   height: 100%;
-  padding: 0;
-  background: transparent;
+  padding: 8px;
+  background: #f5f0e7;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .discover-content .museum-promenade-mat img {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   object-position: center;
-  background: #191b18;
+  background: transparent !important;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.14));
+  transition: transform 300ms ease;
+  display: block;
+  margin: 0 auto;
+}
+
+.discover-content .museum-promenade-frame:hover .museum-promenade-mat img {
+  transform: scale(1.02);
 }
 
 .discover-content .museum-promenade-label {
@@ -6470,26 +6492,36 @@
 }
 
 .discover-content .museum-promenade-wall {
-  min-height: 370px;
-  gap: 44px;
-  padding: 30px 54px 32px;
-  background: #e2e9e4;
+  min-height: 0;
+  gap: clamp(24px, 3vw, 40px);
+  padding: clamp(28px, 4vw, 48px) clamp(20px, 3vw, 40px);
+  background: #ede8df;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-items: stretch;
 }
 
 .discover-content .museum-promenade-piece {
-  grid-template-rows: auto 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .discover-content .museum-promenade-frame {
-  height: 235px;
+  height: 300px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cfc7bb;
+  border-radius: 4px;
+  background: #fdfbf7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.discover-content .museum-promenade-piece-1 .museum-promenade-frame {
-  height: 280px;
-}
-
+.discover-content .museum-promenade-piece-1 .museum-promenade-frame,
 .discover-content .museum-promenade-piece-2 .museum-promenade-frame {
-  height: 205px;
+  height: 300px;
 }
 
 .discover-content .museum-promenade-floorline {
