@@ -117,7 +117,6 @@ export default function Lightbox({ artwork, artistName, onClose }: LightboxProps
       <div
         className="lightbox-content"
         onClick={e => e.stopPropagation()}
-        style={{ flexDirection: 'row', borderRadius: '4px', overflow: 'hidden', maxHeight: '90vh' }}
       >
 
         {/* ─── LEFT: Image ─── */}

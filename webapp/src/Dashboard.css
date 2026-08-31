@@ -6776,6 +6776,20 @@
 }
 
 @media (max-width: 767px) {
+  /* Layout & Navigation */
+  .main-content-wrapper {
+    padding-top: 60px !important;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: 100dvh;
+    box-sizing: border-box;
+  }
+
+  .top-navbar-desktop {
+    height: 60px !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
   .nav-actions > div {
     gap: 8px !important;
   }
@@ -6785,10 +6799,236 @@
   }
 
   .mobile-publish-fab {
-    display: inline-flex;
+    display: inline-flex !important;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 16px !important;
+    z-index: 998 !important;
+  }
+
+  .mobile-bottom-nav {
+    display: grid !important;
+    height: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    background: rgba(245, 240, 232, 0.96) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border-top: 1px solid #ded8ce !important;
+    z-index: 1000 !important;
+  }
+
+  .mobile-bottom-nav-item {
+    font-size: 10px !important;
+    padding: 6px 0 !important;
+    gap: 3px !important;
+  }
+
+  .mobile-bottom-nav-item svg {
+    width: 18px !important;
+    height: 18px !important;
   }
 
   .nav-avatar-btn {
     margin-left: 0;
+  }
+
+  /* Catalog & Discover Gallery on Mobile */
+  .catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    padding: 0 4px !important;
+  }
+
+  .catalog-card-image {
+    aspect-ratio: 1 / 1 !important;
+  }
+
+  .catalog-card-body {
+    padding: 12px 10px !important;
+  }
+
+  .catalog-title {
+    font-size: 15px !important;
+    line-height: 1.3 !important;
+  }
+
+  .catalog-artist {
+    font-size: 12px !important;
+  }
+
+  /* Discover Experience Sections */
+  .discover-content .discovery-portal {
+    padding: 20px 14px 28px !important;
+    gap: 20px !important;
+  }
+
+  .discover-content .discovery-portal-copy h1 {
+    font-size: clamp(28px, 8vw, 40px) !important;
+    line-height: 1.15 !important;
+  }
+
+  .discover-content .discovery-portal-intro {
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    margin-bottom: 16px !important;
+  }
+
+  .discover-content .discovery-lens-bar {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 8px !important;
+  }
+
+  .discover-content .museum-promenade {
+    padding: 28px 0 20px !important;
+  }
+
+  .discover-content .museum-promenade-header {
+    padding: 0 14px 14px !important;
+  }
+
+  .discover-content .museum-promenade-piece {
+    min-width: 220px !important;
+    max-width: 260px !important;
+  }
+
+  .discover-content .museum-promenade-wall {
+    gap: 14px !important;
+    padding: 0 14px 16px !important;
+    scroll-padding: 0 14px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .discover-content .artist-spotlight {
+    padding: 24px 14px !important;
+    gap: 20px !important;
+  }
+
+  .discover-content .artist-spotlight-info h2 {
+    font-size: 24px !important;
+  }
+
+  .discover-content .artist-spotlight-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .discover-content .artist-spotlight-metrics div {
+    padding: 10px 8px !important;
+  }
+
+  .discover-content .artist-spotlight-metrics strong {
+    font-size: 14px !important;
+  }
+
+  .discover-content .visual-dialogue {
+    padding: 24px 14px !important;
+  }
+
+  .discover-content .visual-dialogue-stage {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+  }
+
+  .discover-content .visual-dialogue-work {
+    width: 100% !important;
+  }
+
+  .discover-content .visual-dialogue-image {
+    height: 200px !important;
+  }
+
+  /* Lightbox on Mobile */
+  .lightbox-content {
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .lightbox-img-wrapper {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: 45vh !important;
+    min-height: 240px !important;
+    max-height: 48vh !important;
+    border-radius: 0 !important;
+  }
+
+  .lightbox-info {
+    width: 100% !important;
+    height: auto !important;
+    overflow-y: visible !important;
+    padding: 18px 16px calc(40px + env(safe-area-inset-bottom, 0px)) !important;
+    border-left: none !important;
+    border-top: 1px solid var(--beige) !important;
+    box-sizing: border-box !important;
+  }
+
+  .lightbox-title {
+    font-size: 22px !important;
+  }
+
+  /* Registry Search on Mobile */
+  .search-panel {
+    padding: 0 14px !important;
+  }
+
+  .search-panel-inner {
+    padding: 4px 6px !important;
+  }
+
+  .search-panel-btn {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+
+  .registry-masthead {
+    padding: 20px 14px 14px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .registry-masthead-stats {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .masthead-stat-value {
+    font-size: 18px !important;
+  }
+}
+
+@media (max-width: 440px) {
+  .catalog-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .catalog-card-image {
+    aspect-ratio: 4 / 3 !important;
+  }
+
+  .discover-content .discovery-portal-actions {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .discover-content .discovery-portal-actions button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .discover-content .artist-spotlight-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .discover-content .artist-spotlight-actions button {
+    width: 100% !important;
+    justify-content: center !important;
   }
 }

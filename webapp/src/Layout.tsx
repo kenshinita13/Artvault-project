@@ -131,8 +131,8 @@ export default function Layout({ user }: { user: any }) {
         style={{ background: 'rgba(245,240,232,0.95)', backdropFilter: 'blur(16px)', borderBottom: '1px solid #d6cfc3' }}
       >
         <div className="flex items-center gap-1 md:gap-4 shrink-0">
-          <Link to="/home" className="nav-logo flex items-center overflow-visible md:hidden">
-            <img src="/Artlogo.png" alt="ArtVault" className="h-[30px] scale-[1.8] origin-left ml-4 filter brightness-0 block" />
+          <Link to="/home" className="nav-logo flex items-center shrink-0 md:hidden" aria-label="ArtVault Home">
+            <img src="/Artlogo.png" alt="ArtVault" className="h-7 w-auto object-contain filter brightness-0 block" />
           </Link>
           <Link to="/home" className="app-brand hidden md:flex" aria-label="ArtVault Enterprise Edition">
             <img src="/Artlogo.png" alt="" className="app-brand-mark" aria-hidden="true" />
@@ -152,14 +152,14 @@ export default function Layout({ user }: { user: any }) {
           </nav>
         </div>
 
-        <div className="nav-actions shrink-0 hidden md:flex items-center">
+        <div className="nav-actions shrink-0 flex items-center gap-2 md:gap-4">
           {user ? (
-            <div ref={accountMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div ref={accountMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '12px' }}>
               {canAccessStaffConsole(profile?.role) && (
                 <Link
                   to="/staff_panel"
-                  className="btn staff-workspace-link whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
-                  style={{ border: '1px solid #8e7450', borderRadius: '4px', color: '#503d25', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '7px' }}
+                  className="btn staff-workspace-link whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm hidden md:inline-flex"
+                  style={{ border: '1px solid #8e7450', borderRadius: '4px', color: '#503d25', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', alignItems: 'center', gap: '7px' }}
                   aria-label="Open operations workspace"
                 >
                   <Shield size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -169,7 +169,7 @@ export default function Layout({ user }: { user: any }) {
               {canUpload(profile?.role) && (
                 <button
                   onClick={() => setCreatePanelOpen(true)}
-                  className="header-publish-btn"
+                  className="header-publish-btn hidden md:inline-flex"
                   aria-label="Register a new artwork"
                   title="Register artwork"
                 >
@@ -178,14 +178,14 @@ export default function Layout({ user }: { user: any }) {
                 </button>
               )}
               <button
-                className="nav-avatar-btn !w-9 !h-9 md:!w-11 md:!h-11"
+                className="nav-avatar-btn !w-8 !h-8 md:!w-11 md:!h-11"
                 onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
                 style={{ padding: 0 }}
                 aria-label="Open account menu"
                 aria-expanded={avatarMenuOpen}
                 aria-controls="account-menu"
               >
-                <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={36} />
+                <Avatar userId={user.id} name={user.user_metadata?.name || 'User'} size={32} />
               </button>
 
               <div id="account-menu" className={`avatar-dropdown ${avatarMenuOpen ? 'open' : ''}`} style={{ display: avatarMenuOpen ? 'flex' : 'none' }}>
@@ -232,7 +232,7 @@ export default function Layout({ user }: { user: any }) {
           ) : (
             <Link
               to="/login"
-              className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm"
+              className="btn btn-primary whitespace-nowrap !px-3 !py-1.5 md:!px-4 md:!py-2 !text-xs md:!text-sm inline-flex items-center"
               style={{ background: '#1c1917', border: '1px solid #1c1917', borderRadius: '4px', color: '#f5f0e8', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}
             >
               Sign In
